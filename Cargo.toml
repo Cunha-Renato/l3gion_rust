@@ -1,0 +1,19 @@
+[package]
+name = "l3gion_rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+image = "0.25.0"
+winit = "0.28"
+vulkanalia = { version = "=0.22.0", features = ["libloading", "provisional", "window"] }
+bytemuck = "1.14.1"
+tobj = { version = "3", features = ["log"] }
+vmm = { path = "../../vmm/vmm" }
+nalgebra-glm = "0.18.0"
+sllog = { path = "../../sllog" }
+
+[profile.dev]
+opt-level = 1

@@ -1,13 +1,10 @@
 use winit::window::Window;
 
-use crate::MyError;
+use crate::{utils::tools::to_radians, MyError};
 use super::{
-    input::Input,
-    renderer::{ 
-        Renderer, 
-        camera::Camera,
-    },
-    event::Event,
+    event::Event, input::Input, renderer::{ 
+        camera::Camera, Renderer
+    }
 };
 pub struct AppCore {
     window: Window,
@@ -21,17 +18,17 @@ pub struct Application {
 }
 impl Application {
     pub fn new(window: Window) -> Result<Self, MyError> {
-        let mut renderer = unsafe { Renderer::create(&window)? };
+        let mut renderer = Renderer::init(&window)?;
         let input = Input::new();
         let main_camera = Camera::new(
-            vmm::to_radians(45.0) as f32,
+            to_radians(45.0) as f32,
             window.inner_size().width as f32, 
             window.inner_size().height as f32, 
             0.1, 
             1000.0
         );
 
-        renderer.set_camera(main_camera.clone());
+        renderer.core.set_camera(&main_camera);
 
         let core = AppCore {
             window,
@@ -46,15 +43,15 @@ impl Application {
     }
     
     pub fn destroy(&mut self) {
-        unsafe { self.core.renderer.destroy() }
+        unsafe { self.core.renderer.core.destroy() }
     }
      
     pub fn on_update(&mut self) {
         self.main_camera.on_update(&self.core.input);
-        self.core.renderer.set_camera(self.main_camera);
+        self.core.renderer.core.set_camera(&self.main_camera);
 
         // Rendering
-        unsafe { self.core.renderer.render(&self.core.window).unwrap(); }
+        unsafe { self.core.renderer.core.render(&self.core.window).unwrap(); }
     }
 
     pub fn on_event(&mut self, event: &Event) {

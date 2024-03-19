@@ -11,7 +11,6 @@ winit = "0.28"
 vulkanalia = { version = "=0.22.0", features = ["libloading", "provisional", "window"] }
 bytemuck = "1.14.1"
 tobj = { version = "3", features = ["log"] }
-vmm = { path = "../../vmm/vmm" }
 nalgebra-glm = "0.18.0"
 sllog = { path = "../../sllog" }
 

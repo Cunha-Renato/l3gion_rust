@@ -1,8 +1,7 @@
 use nalgebra_glm as glm;
 use sllog::*;
-use vmm::SinCosTan;
 
-use crate::lg_core::{event::{Event, MouseEvent, VKeyCode, MouseButton}, input::Input};
+use crate::{lg_core::{event::{Event, MouseButton, MouseEvent, VKeyCode}, input::Input}, utils::tools::to_radians};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
@@ -132,7 +131,7 @@ impl Camera {
         self.aspect_ratio = self.viewport_width / self.viewport_height;
         self.projection_matrix = glm::perspective(
             self.aspect_ratio, 
-            vmm::to_radians(self.fov as f64) as f32, 
+            to_radians(self.fov as f64) as f32, 
             self.near_clip,
             self.far_clip
         );

@@ -628,6 +628,7 @@ dependencies = [
  "bytemuck",
  "image",
  "nalgebra-glm",
+ "rand",
  "sllog",
  "tobj",
  "vulkanalia",

@@ -5,7 +5,7 @@
 //  ...
     
 use crate::{utils::tools::to_radians, MyError};
-use super::camera::Camera;
+use super::{camera::Camera, texture::Texture};
 
 pub use nalgebra_glm as glm;
 use std::{
@@ -50,7 +50,7 @@ impl Vertex {
         Self { position, color, tex_coord }
     }
     
-    fn binding_description() -> vk::VertexInputBindingDescription {
+    pub fn binding_description() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(size_of::<Vertex>() as u32)
@@ -161,12 +161,6 @@ pub struct RCoreData {
     indices: Vec<u32>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RCoreInfo {
-    vsync: bool,
-    msaa: u16,
-}
-
 #[derive(Debug, Clone, Copy)]
 struct QueueFamilyIndices {
     graphics: u32,
@@ -255,24 +249,6 @@ pub struct RCore{
     camera: Camera,
 }
 impl RCore{
-    // PUBLIC
-    pub unsafe fn init(window: &Window, data: &mut RCoreData) -> Result<Self, MyError> {
-        let loader = LibloadingLoader::new(LIBRARY)?;
-        let entry = Entry::new(loader).map_err(|b| error!("{}", b)).unwrap();
-
-        let instance = create_instance(window, &entry, data)?;
-        data.surface = vk_window::create_surface(&instance, &window, &window)?;
-        pick_physical_device(&instance, data)?;
-        let device = create_logical_device(&entry, &instance, data)?;
-
-        create_swapchain(window, &instance, &device, data)?;
-        create_swapchain_image_views(&device, data)?;
-
-        create_render_pass(&instance, &device, data)?;
-
-        create_descriptor_set_layout(&device, data)?;
-        
-    }
     pub unsafe fn create(window: &Window, data: &mut RCoreData) -> Result<Self, MyError> {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| error!("{}", b)).unwrap();
@@ -1276,15 +1252,14 @@ unsafe fn generate_mipmaps(
 unsafe fn create_texture_image(
     instance: &Instance,
     device: &Device,
-    data: &mut RCoreData
+    data: &mut RCoreData,
+    texture: &Texture
 ) -> Result<(), MyError>
 {
-    let image = image::io::Reader::open("C:/users/renat/personal/learn_vk/learn_vk/assets/textures/viking_room.png")?.decode()?;
-    
-    let width = image.width();
-    let height = image.height();
-    let pixels = image.as_bytes();
-    let size = (pixels.len() * size_of::<u8>()) as u64;
+    let width = texture.width();
+    let height = texture.height();
+    let size = texture.size();
+    let pixels = texture.pixels();
     data.mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     // Create (staging)

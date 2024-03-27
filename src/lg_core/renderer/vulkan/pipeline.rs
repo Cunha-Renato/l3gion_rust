@@ -3,21 +3,23 @@ use vulkanalia:: {
     vk,
 };
 use crate::MyError;
-use super::shader::Shader;
+use super::{descriptor::DescriptorData, shader::Shader, uniform_buffer::UniformBuffer};
 
 pub struct VkPipeline {
-    layout: vk::PipelineLayout,
+    pub layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
-    descriptor_layout: vk::DescriptorSetLayout,
+    pub descriptor_data: DescriptorData,
+    uniform_buffer: UniformBuffer,
 }
 impl VkPipeline {
     pub unsafe fn new(
         device: &Device,
         mut vert_shader: Shader,
         mut frag_shader: Shader,
+        uniform_buffer: UniformBuffer,
         vertex_binding_descriptions: &[vk::VertexInputBindingDescription],
         vertex_attribute_descriptions: &[vk::VertexInputAttributeDescription],
-        descriptor_layout: vk::DescriptorSetLayout,
+        descriptor_data: DescriptorData,
         viewports: Vec<vk::Viewport>,
         scissors: Vec<vk::Rect2D>,
         msaa_samples: vk::SampleCountFlags,
@@ -78,7 +80,7 @@ impl VkPipeline {
         .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&[descriptor_layout]);
+            .set_layouts(&[descriptor_data.layout]);
 
         let layout = device.create_pipeline_layout(&layout_info, None)?;
 
@@ -111,7 +113,8 @@ impl VkPipeline {
         Ok(Self {
             layout,
             pipeline,
-            descriptor_layout
+            descriptor_data,
+            uniform_buffer
         })
     }
 }

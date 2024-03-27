@@ -7,7 +7,7 @@ use crate::MyError;
 use super::{buffer, command_buffer::VkCommandPool};
 
 pub struct VkIndexBuffer {
-    buffer: vk::Buffer,
+    pub buffer: vk::Buffer,
     memory: vk::DeviceMemory,
 }
 impl VkIndexBuffer {

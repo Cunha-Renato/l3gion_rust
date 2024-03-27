@@ -3,11 +3,12 @@ use vulkanalia:: {
     vk,
 };
 use crate::MyError;
-use super::queue_family::QueueFamilyIndices;
+use super::{queue_family::QueueFamilyIndices, swapchain::VkSwapchain};
 
 #[derive(Default)]
 pub struct VkCommandPool {
     pool: vk::CommandPool,
+    pub buffers: Vec<vk::CommandBuffer>,
 }
 impl VkCommandPool {
     pub unsafe fn new(
@@ -23,7 +24,51 @@ impl VkCommandPool {
         
         Ok(Self {
             pool,
+            buffers: Vec::new(),
         })
+    }
+    pub unsafe fn create_buffers(
+        &mut self,
+        device: &Device,
+        count: u32,
+    ) -> Result<(), MyError>
+    {
+        self.buffers = create_command_buffers(device, &self.pool, count)?;
+        Ok(())
+    }
+    pub unsafe fn get_render_pass_begin_info(
+        &self,
+        swapchain: &VkSwapchain,
+        render_pass: &vk::RenderPass,
+        framebuffer: &vk::Framebuffer,
+    ) -> vk::RenderPassBeginInfo
+    {
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(swapchain.extent);
+        
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.1, 0.0, 0.0, 1.0]
+            }
+        };
+
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            }
+        };
+        
+        let clear_values = &[color_clear_value, depth_clear_value];
+        let info = vk::RenderPassBeginInfo::builder()
+            .render_pass(*render_pass)
+            .framebuffer(*framebuffer)
+            .render_area(render_area)
+            .clear_values(clear_values)
+            .build();
+        
+        info
     }
     pub unsafe fn begin_single_time_commands(
         &self,
@@ -55,7 +100,7 @@ unsafe fn create_command_pool(
 ) -> Result<vk::CommandPool, MyError>
 {
     let info = vk::CommandPoolCreateInfo::builder()
-        .flags(vk::CommandPoolCreateFlags::empty())
+        .flags(vk::CommandPoolCreateFlags::TRANSIENT)
         .queue_family_index(indices.graphics);
     
     Ok(device.create_command_pool(&info, None)?)
@@ -98,4 +143,17 @@ unsafe fn end_single_time_commands(
     device.free_command_buffers(*command_pool, &[command_buffer]);
     
     Ok(())
+}
+unsafe fn create_command_buffers(
+    device: &Device,
+    pool: &vk::CommandPool,
+    count: u32,
+) -> Result<Vec<vk::CommandBuffer>, MyError>
+{
+    let allocate_info = vk::CommandBufferAllocateInfo::builder()
+        .command_pool(*pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(count);
+    
+    Ok(device.allocate_command_buffers(&allocate_info)?)
 }

@@ -9,16 +9,16 @@ use super::{vertex::Vertex, vulkan::{command_buffer::VkCommandPool, index_buffer
 
 // TODO: Maybe, just maybe could you please make the Vertex and UniformBuffer structs a fucking trait, so I dont have to create a milion structs for differend rendering styles. Thank you
 #[derive(Default)]
-pub struct Object {
+pub struct Object<V> {
     uuid: UUID,
-    vertices: Vec<Vertex>,
+    vertices: Vec<V>,
     indices: Vec<u32>,
     v_buffer: Option<VkVertexBuffer>,
     i_buffer: Option<VkIndexBuffer>,
 }
-impl Object {
+impl<V> Object<V> {
     pub fn new(
-        vertices: Vec<Vertex>,
+        vertices: Vec<V>,
         indices: Vec<u32>,
     ) -> Self 
     {
@@ -75,14 +75,23 @@ impl Object {
         Ok(())
     }
 
-    pub fn vertices(&self) -> &[Vertex] {
+    pub fn vertices(&self) -> &[V] {
         &self.vertices
     }
     pub fn indices(&self) -> &[u32] {
         &self.indices
     }
-    pub fn vertex_buffer(&self) -> &Option<VkVertexBuffer> {
-        &self.v_buffer 
+    pub fn vertex_buffer(&self) -> Result<&VkVertexBuffer, MyError> {
+        match self.v_buffer {
+            Some(buffer) => Ok(&buffer),
+            None => Err("No vertex buffer in object!".into())
+        }
+    }
+    pub fn index_buffer(&self) -> Result<&VkIndexBuffer, MyError> {
+        match self.i_buffer {
+            Some(buffer) => Ok(&buffer),
+            None => Err("No vertex buffer in object!".into())
+        }
     }
     pub fn vertex_size(&self) -> u64 {
         (size_of::<Vertex>() * self.vertices.len()) as u64

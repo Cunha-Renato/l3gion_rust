@@ -1,12 +1,10 @@
 use std::{collections::HashSet, ffi::CStr, os::raw::c_void};
-
 use sllog::*;
 use winit::window::Window;
 use vulkanalia:: {
     loader::{LibloadingLoader, LIBRARY}, prelude::v1_0::*, vk, window as vk_window, Entry, Instance, Version
 };
 use crate::{lg_core::renderer::vulkan::queue_family::QueueFamilyIndices, MyError};
-
 use super::vulkan::{command_buffer::VkCommandPool, image::ImageData, swapchain::VkSwapchain};
 
 // CONSTANTS
@@ -16,7 +14,7 @@ const VALIDATION_LAYER: vk::ExtensionName = vk::ExtensionName::from_bytes(b"VK_L
 const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name
 ];
-const MAX_FRAMES_IN_FLIGHT: usize = 2;
+pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 #[derive(Default)]
 pub struct RendererData {
@@ -32,9 +30,10 @@ pub struct RendererData {
     pub color_image: ImageData,
     pub depth_image: ImageData,
     pub framebuffers: Vec<vk::Framebuffer>,
-}
-impl RendererData {
-    
+    pub in_flight_fences: Vec<vk::Fence>,
+    pub images_in_flight: Vec<vk::Fence>,
+    pub image_available_semaphores: Vec<vk::Semaphore>,
+    pub render_finished_semaphores: Vec<vk::Semaphore>,
 }
 
 // Helper
@@ -220,6 +219,32 @@ unsafe fn get_supported_format(
         Some(result) => Ok(result),
         None => Err("Failed to find supported format!".into())
     }
+}
+
+unsafe fn create_sync_objects(
+    device: &Device, 
+    data: &mut RendererData,
+    swapchain: &VkSwapchain,
+) -> Result<(), MyError>
+{
+    let semaphore_info = vk::SemaphoreCreateInfo::builder();
+    
+    let fence_info = vk::FenceCreateInfo::builder()
+        .flags(vk::FenceCreateFlags::SIGNALED);
+    
+    for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        data.image_available_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
+        data.render_finished_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
+        
+        data.in_flight_fences.push(device.create_fence(&fence_info, None)?);
+    }
+    
+    data.images_in_flight = swapchain.image_data.images
+        .iter()
+        .map(|_| vk::Fence::null())
+        .collect();
+
+    Ok(())
 }
 
 extern "system" fn debug_callback(

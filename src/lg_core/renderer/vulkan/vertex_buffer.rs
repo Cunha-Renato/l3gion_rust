@@ -4,22 +4,22 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::{lg_core::renderer::vertex::Vertex, MyError};
+use crate::MyError;
 
 use super::{buffer, command_buffer::VkCommandPool};
 
 pub struct VkVertexBuffer {
-    buffer: vk::Buffer,
+    pub buffer: vk::Buffer,
     memory: vk::DeviceMemory,
 }
 impl VkVertexBuffer {
-    pub unsafe fn new(
+    pub unsafe fn new<T>(
         instance: &Instance,
         device: &Device,
         physical_device: &vk::PhysicalDevice,
         command_pool: &VkCommandPool,
         queue: &vk::Queue,
-        vertices: &[Vertex],
+        vertices: &[T],
         size: u64,
     ) -> Result<Self, MyError> 
     {

@@ -36,6 +36,27 @@ impl VkCommandPool {
         self.buffers = create_command_buffers(device, &self.pool, count)?;
         Ok(())
     }
+    pub unsafe fn reset_command_buffer(
+        &mut self,
+        device: &Device,
+        index: usize,
+    ) -> Result<(), MyError>
+    {
+        // Freeing the old one
+        let previous = self.buffers[index];
+        device.free_command_buffers(self.pool, &[previous]);
+
+        // Allocating a new one
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(self.pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        
+        let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
+        self.buffers[index] = command_buffer;
+        
+        Ok(())
+    }
     pub unsafe fn get_render_pass_begin_info(
         &self,
         swapchain: &VkSwapchain,
@@ -90,6 +111,10 @@ impl VkCommandPool {
         end_single_time_commands(device, queue, &self.pool, command_buffer);
         
         Ok(())
+    }
+    
+    pub unsafe fn free_buffers(&mut self, device: &Device) {
+        device.free_command_buffers(self.pool, &self.buffers);
     }
 }
 

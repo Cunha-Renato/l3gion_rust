@@ -9,7 +9,7 @@ use crate::MyError;
 use super::{buffer, swapchain::VkSwapchain};
 pub struct UniformBuffer {
     pub buffers: Vec<vk::Buffer>,
-    memories: Vec<vk::DeviceMemory>,
+    pub memories: Vec<vk::DeviceMemory>,
     pub ubo_size: u64,
 }
 impl UniformBuffer {

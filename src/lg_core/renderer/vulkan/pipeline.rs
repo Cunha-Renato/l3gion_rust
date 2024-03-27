@@ -7,9 +7,9 @@ use super::{descriptor::DescriptorData, shader::Shader, uniform_buffer::UniformB
 
 pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
+    pub pipeline: vk::Pipeline,
     pub descriptor_data: DescriptorData,
-    uniform_buffer: UniformBuffer,
+    pub uniform_buffer: UniformBuffer,
 }
 impl VkPipeline {
     pub unsafe fn new(

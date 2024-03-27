@@ -8,8 +8,6 @@ pub mod object;
 pub mod helper;
 pub mod uniform_buffer_object;
 
-use std::collections::HashMap;
-
 use nalgebra_glm as glm;
 use winit::window::Window;
 use vulkanalia::{
@@ -27,8 +25,6 @@ use helper::RendererData;
 
 use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{command_buffer::VkCommandPool, descriptor::DescriptorData, framebuffer, image::ImageData, physical_device, pipeline::VkPipeline, render_pass, shader::Shader, swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture}};
 
-use super::uuid::UUID;
-
 pub struct Renderer {
     entry: Entry,
     instance: Instance,
@@ -36,7 +32,7 @@ pub struct Renderer {
     device: Device,
     test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
     texture: VkTexture, // The textures also need to be in a hash map (probably)
-    objects: HashMap<UUID, Object<Vertex>>,
+    objects: Vec<Object<Vertex>>,
     frame: usize,
     resized: bool,
 }
@@ -198,7 +194,7 @@ impl Renderer {
             device,
             test_pipeline,
             texture,
-            objects: HashMap::default(),
+            objects: Vec::default(),
             frame: 0,
             resized: false,
         })
@@ -215,84 +211,33 @@ impl Renderer {
     // I belive that, as an argument this function should have a single struct with data for:
     //  object's position, rotation, scale, and maybe other things relevant to drawing
     //  It is ok to send those informations as an uniform buffer because it is not batched, on the contrary the transform should be aplied in the cpu side??
+    //  Talking about uniform buffer, for every draw call I need to bind a different uniform buffer, (YAY I love this api (i don't))
     pub unsafe fn draw(&mut self, mut object: Object<Vertex>) -> Result<(), MyError> {
         // Vertex and Index buffers are inside the Object, should I put the uniforms to??
         // Update the uniform buffer????
         // In case of updating the vertices or indices recreate the buffers, (Object's function)
+        // So, change of plans, instead of sending the commands themselfs, I will store the object's key so they can be draw later. (need to free the keys array after drawing). Question more expensive???? IDK
+        // I will iterate the keys and search the Object HashMap, and for every object I will send those commands,
+        // it is also necessary to create a seperate function to record those commands
+        // I may lose control over the object itself, I don't like the idea to send a reference back, I think I should reset the objects queue every frame
 
-        if !self.objects.contains_key(&object.uuid()) {
-            object.create_vertex_buffer(
-                &self.instance, 
-                &self.device, 
-                &self.data.physical_device, 
-                &self.data.command_pool, 
-                &self.data.graphics_queue
-            )?;
-            object.create_index_buffer(
-                &self.instance, 
-                &self.device, 
-                &self.data.physical_device, 
-                &self.data.command_pool, 
-                &self.data.graphics_queue
-            )?;
+        object.create_vertex_buffer(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            &self.data.command_pool, 
+            &self.data.graphics_queue
+        )?;
+        object.create_index_buffer(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            &self.data.command_pool, 
+            &self.data.graphics_queue
+        )?;
 
-            self.objects.insert(object.uuid(), object);
-        }
+        self.objects.push(object);
         
-        // Send commands to bind the vertex, index and uniform buffers
-        // Send command do draw indexed
-        for (i, command_buffer) in self.data.command_pool.buffers.iter().enumerate() {
-            let info = vk::CommandBufferBeginInfo::builder(); 
-            
-            // Prepare to submit commands
-            self.device.begin_command_buffer(*command_buffer, &info)?;
-            
-            // Begin render pass
-            let begin_info = self.data.command_pool.get_render_pass_begin_info(
-                &self.data.swapchain, 
-                &self.data.render_pass, 
-                &self.data.framebuffers[i]
-            );
-            self.device.cmd_begin_render_pass(*command_buffer, &begin_info, vk::SubpassContents::INLINE);
-
-            self.device.cmd_bind_vertex_buffers(
-                *command_buffer, 
-                0, 
-                &[object.vertex_buffer()?.buffer], 
-                &[0]
-            );
-            self.device.cmd_bind_index_buffer(
-                *command_buffer, 
-                object.index_buffer()?.buffer, 
-                0, 
-                vk::IndexType::UINT32
-            );
-            self.device.cmd_bind_descriptor_sets(
-                *command_buffer, 
-                vk::PipelineBindPoint::GRAPHICS, 
-                self.test_pipeline.layout, 
-                0, 
-                &[self.test_pipeline.descriptor_data.sets[i]], 
-                &[]
-            );
-            
-            // Draw call
-            self.device.cmd_draw_indexed(
-                *command_buffer, 
-                object.indices().len() as u32, 
-                1, 
-                0, 
-                0, 
-                0
-            );
-            
-            // End renderpass
-            self.device.cmd_end_render_pass(*command_buffer);
-            
-            // End command submit
-            self.device.end_command_buffer(*command_buffer)?;
-        }
-
         Ok(())
     }
     pub unsafe fn render(
@@ -326,6 +271,8 @@ impl Renderer {
         
         self.data.images_in_flight[image_index] = in_flight_fence;
         
+        self.data.command_pool.reset_command_buffer(&self.device, image_index)?;
+        self.prepare_cmd_buffer(image_index)?;
         // Update uniform buffer
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
@@ -364,12 +311,95 @@ impl Renderer {
         }
         
         self.frame = (self.frame + 1) % helper::MAX_FRAMES_IN_FLIGHT;
+        self.objects.clear();
 
         Ok(())
     }
     
-    pub fn destroy(&mut self) -> Result<(), MyError> {
-        todo!()
+    pub unsafe fn destroy(&mut self) -> Result<(), MyError> {
+        self.device.device_wait_idle().unwrap();
+        
+
+        Ok(())        
+    }
+    
+    // Private
+    unsafe fn prepare_cmd_buffers(&mut self) -> Result<(), MyError>
+    {
+        for (i, _) in self.data.command_pool.buffers.iter().enumerate() {
+            self.prepare_cmd_buffer(i)?;
+        }
+
+        Ok(())
+    }
+    unsafe fn prepare_cmd_buffer(&mut self, index: usize) -> Result<(), MyError>
+    {
+        let info = vk::CommandBufferBeginInfo::builder(); 
+        let command_buffer = &self.data.command_pool.buffers[index];
+        
+        // Prepare to submit commands
+        self.device.begin_command_buffer(*command_buffer, &info)?;
+        
+        // Begin render pass
+        let begin_info = self.data.command_pool.get_render_pass_begin_info(
+            &self.data.swapchain, 
+            &self.data.render_pass, 
+            &self.data.framebuffers[index]
+        );
+
+        self.device.cmd_begin_render_pass(*command_buffer, &begin_info, vk::SubpassContents::INLINE);
+        
+        self.device.cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
+
+        for object in &self.objects {
+            self.device.cmd_bind_vertex_buffers(
+                *command_buffer, 
+                0, 
+                &[object.vertex_buffer()?.buffer], 
+                &[0]
+            );
+            self.device.cmd_bind_index_buffer(
+                *command_buffer, 
+                object.index_buffer()?.buffer, 
+                0, 
+                vk::IndexType::UINT32
+            );
+            self.device.cmd_bind_descriptor_sets(
+                *command_buffer, 
+                vk::PipelineBindPoint::GRAPHICS, 
+                self.test_pipeline.layout, 
+                0, 
+                &[self.test_pipeline.descriptor_data.sets[index]], 
+                &[]
+            );
+            
+            // Draw call
+            self.device.cmd_draw_indexed(
+                *command_buffer, 
+                object.indices().len() as u32, 
+                1, 
+                0, 
+                0, 
+                0
+            );
+        }
+
+        // End renderpass
+        self.device.cmd_end_render_pass(*command_buffer);
+        
+        // End command submit
+        self.device.end_command_buffer(*command_buffer)?;
+        
+        Ok(())
+    }
+    unsafe fn destroy_swapchain(&mut self) {
+        self.data.command_pool.free_buffers(&self.device);
+        self.test_pipeline.descriptor_data.destroy_pool(&self.device);
+        
+        self.test_pipeline.uniform_buffer.memories.iter().for_each(|m| self.device.free_memory(*m, None));
+        self.test_pipeline.uniform_buffer.buffers.iter().for_each(|u| self.device.destroy_buffer(*u, None));
+        
+        
     }
 }
 pub struct DrawInfo {

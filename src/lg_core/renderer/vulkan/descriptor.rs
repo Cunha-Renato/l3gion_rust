@@ -43,6 +43,10 @@ impl DescriptorData {
     {
         update_default_descriptor_sets(device, &self.sets, uniform_buffer, texture)
     }
+    
+    pub unsafe fn destroy_pool(&mut self, device: &Device) {
+        device.destroy_descriptor_pool(self.pool, None);
+    }
 }
 
 pub unsafe fn create_default_descriptor_set_layout(

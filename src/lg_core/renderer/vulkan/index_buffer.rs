@@ -8,7 +8,7 @@ use super::{buffer, command_buffer::VkCommandPool};
 
 pub struct VkIndexBuffer {
     pub buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    pub memory: vk::DeviceMemory,
 }
 impl VkIndexBuffer {
     pub unsafe fn new(

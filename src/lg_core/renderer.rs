@@ -12,7 +12,7 @@ use nalgebra_glm as glm;
 use winit::window::Window;
 use vulkanalia::{
     vk::{
-        self, DeviceV1_0, Handle, HasBuilder, KhrSwapchainExtension
+        self, DeviceV1_0, ExtDebugUtilsExtension, Handle, HasBuilder, InstanceV1_0, KhrSurfaceExtension, KhrSwapchainExtension
     }, 
     window as vk_window, 
     Device, 
@@ -26,6 +26,7 @@ use helper::RendererData;
 use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{command_buffer::VkCommandPool, descriptor::DescriptorData, framebuffer, image::ImageData, physical_device, pipeline::VkPipeline, render_pass, shader::Shader, swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture}};
 
 pub struct Renderer {
+    window: Window,
     entry: Entry,
     instance: Instance,
     data: RendererData,
@@ -37,10 +38,10 @@ pub struct Renderer {
     resized: bool,
 }
 impl Renderer {
-    pub unsafe fn init(window: &Window) -> Result<Self, MyError> {
+    pub unsafe fn init(window: Window) -> Result<Self, MyError> {
         let mut data = RendererData::default();
-        let entry = helper::create_entry(window)?; 
-        let instance = helper::create_instance(window, &entry)?;
+        let entry = helper::create_entry(&window)?; 
+        let instance = helper::create_instance(&window, &entry, &mut data.messenger)?;
         
         data.surface = vk_window::create_surface(&instance, &window, &window)?;
         let (physical_device, indices) = physical_device::pick_physical_device(
@@ -59,7 +60,7 @@ impl Renderer {
         data.graphics_queue = queues.0;
         data.present_queue = queues.1;
         data.swapchain = VkSwapchain::new(
-            window, 
+            &window, 
             &instance, 
             &data.surface, 
             &physical_device, 
@@ -188,6 +189,7 @@ impl Renderer {
         data.command_pool.create_buffers(&device, data.framebuffers.len() as u32);
 
         Ok(Self {
+            window,
             entry,
             instance,
             data,
@@ -273,6 +275,7 @@ impl Renderer {
         
         self.data.command_pool.reset_command_buffer(&self.device, image_index)?;
         self.prepare_cmd_buffer(image_index)?;
+
         // Update uniform buffer
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
@@ -304,14 +307,14 @@ impl Renderer {
         
         if self.resized || changed {
             self.resized = false;
-            // TODO: Recreate swapchain
+            self.recreate_swapchain()?;
         }
         else if let Err(e) = result {
             return Err(e.into());
         }
         
         self.frame = (self.frame + 1) % helper::MAX_FRAMES_IN_FLIGHT;
-        self.objects.clear();
+        self.clear_objects()?;
 
         Ok(())
     }
@@ -319,11 +322,56 @@ impl Renderer {
     pub unsafe fn destroy(&mut self) -> Result<(), MyError> {
         self.device.device_wait_idle().unwrap();
         
+        self.destroy_swapchain();
+        
+        // Texture
+        self.device.destroy_sampler(self.texture.sampler, None);
+        self.device.destroy_image_view(self.texture.image_data.views[0], None);
+        self.device.destroy_image(self.texture.image_data.images[0], None);
+        self.device.free_memory(self.texture.image_data.memories.unwrap()[0], None);
 
-        Ok(())        
+        self.device.destroy_descriptor_set_layout(self.test_pipeline.descriptor_data.layout, None);
+
+        // Vertices
+        self.clear_objects(); 
+        
+        for i in 0..helper::MAX_FRAMES_IN_FLIGHT {
+            self.device.destroy_fence(self.data.in_flight_fences[i], None);
+            
+            self.device.destroy_semaphore(self.data.image_available_semaphores[i], None);
+            
+            self.device.destroy_semaphore(self.data.render_finished_semaphores[i], None);
+        }
+
+        self.data.command_pool.destroy(&self.device);
+        self.device.destroy_device(None);
+        self.instance.destroy_surface_khr(self.data.surface, None);
+
+        if helper::VALIDATION_ENABLED {
+            self.instance.destroy_debug_utils_messenger_ext(self.data.messenger, None);
+        }
+        
+        self.instance.destroy_instance(None);
+
+        Ok(())
     }
     
     // Private
+    unsafe fn clear_objects(&mut self) -> Result<(), MyError> {
+        for object in self.objects {
+            // Clearing Vertices
+            self.device.destroy_buffer(object.vertex_buffer()?.buffer, None);
+            self.device.free_memory(object.vertex_buffer()?.memory, None);
+            
+            // Clearing Indices
+            self.device.destroy_buffer(object.index_buffer()?.buffer, None);
+            self.device.free_memory(object.index_buffer()?.memory, None);
+        }
+        
+        self.objects.clear();
+
+        Ok(())
+    }
     unsafe fn prepare_cmd_buffers(&mut self) -> Result<(), MyError>
     {
         for (i, _) in self.data.command_pool.buffers.iter().enumerate() {
@@ -396,10 +444,102 @@ impl Renderer {
         self.data.command_pool.free_buffers(&self.device);
         self.test_pipeline.descriptor_data.destroy_pool(&self.device);
         
+        // Uniform buffer
         self.test_pipeline.uniform_buffer.memories.iter().for_each(|m| self.device.free_memory(*m, None));
         self.test_pipeline.uniform_buffer.buffers.iter().for_each(|u| self.device.destroy_buffer(*u, None));
+
+        // Depth images        
+        self.device.destroy_image_view(self.data.depth_image.views[0], None);
+        self.device.free_memory(self.data.depth_image.memories.unwrap()[0], None);
+        self.device.destroy_image(self.data.depth_image.images[0], None);
         
+        // Color images
+        self.device.destroy_image_view(self.data.color_image.views[0], None);
+        self.device.free_memory(self.data.color_image.memories.unwrap()[0], None);
+        self.device.destroy_image(self.data.color_image.images[0], None);
         
+        self.data.framebuffers.iter().for_each(|f| self.device.destroy_framebuffer(*f, None));
+        
+        self.device.destroy_pipeline(self.test_pipeline.pipeline, None);
+    
+        self.device.destroy_render_pass(self.data.render_pass, None);
+        
+        self.data.swapchain.image_data.views.iter().for_each(|v| self.device.destroy_image_view(*v, None));
+        
+        self.device.destroy_swapchain_khr(self.data.swapchain.swapchain, None);
+    }
+    unsafe fn recreate_swapchain(&mut self) -> Result<(), MyError> {
+        self.device.device_wait_idle()?;
+        
+        self.destroy_swapchain();
+        self.data.swapchain = VkSwapchain::new(
+            &self.window, 
+            &self.instance, 
+            &self.data.surface, 
+            &self.data.physical_device, 
+            &self.device
+        )?;
+        self.data.render_pass = render_pass::create_render_pass(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            self.data.swapchain.format, 
+            self.data.msaa_samples
+        )?;
+
+        // Shaders
+        let vert_shader = Shader::new(
+            &self.device, 
+            vk::ShaderStageFlags::VERTEX, 
+            include_bytes!("../../assets/shaders/compiled/vertex.spv")
+        )?;
+        let frag_shader = Shader::new(
+            &self.device, 
+            vk::ShaderStageFlags::FRAGMENT, 
+            include_bytes!("../../assets/shaders/compiled/fragment.spv")
+        )?;
+        let ubo = UniformBuffer::new::<UniformBufferObject>(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            &self.data.swapchain
+        )?;
+        // Viewport and Scissor
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(self.data.swapchain.extent.width as f32)
+            .height(self.data.swapchain.extent.width as f32)
+            .min_depth(0.0)
+            .max_depth(1.0)
+            .build();
+        
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(self.data.swapchain.extent)
+            .build();
+
+
+
+        self.test_pipeline = VkPipeline::new(
+            &self.device, 
+            vert_shader, 
+            frag_shader, 
+            ubo,
+            &[Vertex::binding_description()],
+            &Vertex::attribute_descritptions(), 
+            DescriptorData::new_default(
+                &self.device, 
+                &self.data.swapchain, 
+                &ubo, 
+            )?,// Setup for normal rendering, change later
+            vec![viewport], 
+            vec![scissor], 
+            self.data.msaa_samples, 
+            self.data.render_pass
+        )?;
+
+        Ok(())
     }
 }
 pub struct DrawInfo {

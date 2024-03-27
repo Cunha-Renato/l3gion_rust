@@ -10,7 +10,7 @@ use super::{buffer, command_buffer::VkCommandPool};
 
 pub struct VkVertexBuffer {
     pub buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    pub memory: vk::DeviceMemory,
 }
 impl VkVertexBuffer {
     pub unsafe fn new<T>(

@@ -116,6 +116,9 @@ impl VkCommandPool {
     pub unsafe fn free_buffers(&mut self, device: &Device) {
         device.free_command_buffers(self.pool, &self.buffers);
     }
+    pub unsafe fn destroy(&mut self, device: &Device) {
+        device.destroy_command_pool(self.pool, None);
+    }
 }
 
 unsafe fn create_command_pool(

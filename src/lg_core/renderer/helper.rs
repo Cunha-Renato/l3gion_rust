@@ -2,14 +2,14 @@ use std::{collections::HashSet, ffi::CStr, os::raw::c_void};
 use sllog::*;
 use winit::window::Window;
 use vulkanalia:: {
-    loader::{LibloadingLoader, LIBRARY}, prelude::v1_0::*, vk, window as vk_window, Entry, Instance, Version
+    loader::{LibloadingLoader, LIBRARY}, prelude::v1_0::*, vk::{self, ExtDebugUtilsExtension}, window as vk_window, Entry, Instance, Version
 };
 use crate::{lg_core::renderer::vulkan::queue_family::QueueFamilyIndices, MyError};
 use super::vulkan::{command_buffer::VkCommandPool, image::ImageData, swapchain::VkSwapchain};
 
 // CONSTANTS
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
-const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
+pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
 const VALIDATION_LAYER: vk::ExtensionName = vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name
@@ -34,6 +34,7 @@ pub struct RendererData {
     pub images_in_flight: Vec<vk::Fence>,
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finished_semaphores: Vec<vk::Semaphore>,
+    pub messenger: vk::DebugUtilsMessengerEXT,
 }
 
 // Helper
@@ -46,6 +47,7 @@ pub unsafe fn create_entry(window: &Window) -> Result<Entry, MyError> {
 pub unsafe fn create_instance(
         window: &Window,
         entry: &Entry,
+        messenger: &mut vk::DebugUtilsMessengerEXT,
 ) -> Result<Instance, MyError> 
 {
     let application_info = vk::ApplicationInfo::builder()
@@ -110,6 +112,11 @@ pub unsafe fn create_instance(
     }
     
     let instance = entry.create_instance(&info, None)?;
+    
+    if VALIDATION_ENABLED {
+        *messenger = instance.create_debug_utils_messenger_ext(&debug_info, None)?;
+    }
+
     Ok(instance)
 }
 

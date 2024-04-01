@@ -4,7 +4,7 @@ use vulkanalia:: {
 };
 use crate::MyError;
 
-use super::{swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture};
+use super::{uniform_buffer::UniformBuffer, vk_device::VkDevice, vk_swapchain::VkSwapchain, vk_texture::VkTexture};
 
 #[derive(Default)]
 pub struct DescriptorData {
@@ -44,8 +44,8 @@ impl DescriptorData {
         update_default_descriptor_sets(device, &self.sets, uniform_buffer, texture)
     }
     
-    pub unsafe fn destroy_pool(&mut self, device: &Device) {
-        device.destroy_descriptor_pool(self.pool, None);
+    pub unsafe fn destroy_pool(&mut self, device: &VkDevice) {
+        device.get_device().destroy_descriptor_pool(self.pool, None);
     }
 }
 
@@ -75,7 +75,7 @@ unsafe fn create_descriptor_pool(
     swapchain: &VkSwapchain,
 ) -> Result<vk::DescriptorPool, MyError>
 {
-    let sw_images_len = swapchain.image_data.images.len() as u32;
+    let sw_images_len = swapchain.images.len() as u32;
     let ubo_size = vk::DescriptorPoolSize::builder()
         .type_(vk::DescriptorType::UNIFORM_BUFFER)
         .descriptor_count(sw_images_len);
@@ -99,10 +99,9 @@ unsafe fn create_default_descriptor_sets(
 ) -> Result<Vec<vk::DescriptorSet>, MyError>
 {
     // Allocate
-
     let layouts = vec![
         *layout; 
-        swapchain.image_data.images.len()
+        swapchain.images.len()
     ];
     let info = vk::DescriptorSetAllocateInfo::builder()
         .descriptor_pool(*pool)
@@ -134,7 +133,7 @@ pub unsafe fn update_default_descriptor_sets(
 
         let info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(texture.image_data.views[0])
+            .image_view(texture.image.view)
             .sampler(texture.sampler);
 
         let image_info = &[info];

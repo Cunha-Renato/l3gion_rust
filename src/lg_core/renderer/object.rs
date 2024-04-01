@@ -1,14 +1,10 @@
 use std::mem::size_of;
 
-use vulkanalia:: {
-    prelude::v1_0::*, 
-    vk,
-};
 use crate::{lg_core::uuid::UUID, MyError};
-use super::{vertex::Vertex, vulkan::{command_buffer::VkCommandPool, index_buffer::VkIndexBuffer, vertex_buffer::VkVertexBuffer}};
+use super::{vertex::Vertex, vulkan::{index_buffer::VkIndexBuffer, vertex_buffer::VkVertexBuffer, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice}};
 
 // TODO: Maybe, just maybe could you please make the Vertex and UniformBuffer structs a fucking trait, so I dont have to create a milion structs for differend rendering styles. Thank you
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Object<V> {
     uuid: UUID,
     vertices: Vec<V>,
@@ -32,11 +28,9 @@ impl<V> Object<V> {
     }
     pub fn create_vertex_buffer(
         &mut self,
-        instance: &Instance,
-        device: &Device,
-        physical_device: &vk::PhysicalDevice,
-        command_pool: &VkCommandPool,
-        queue: &vk::Queue,
+        instance: &VkInstance,
+        device: &VkDevice,
+        physical_device: &VkPhysicalDevice,
     ) -> Result<(), MyError> 
     {
         unsafe { 
@@ -44,8 +38,6 @@ impl<V> Object<V> {
             instance, 
             device, 
             physical_device, 
-            command_pool, 
-            queue, 
             self.vertices(), 
             self.vertex_size(),
         )?);}
@@ -54,11 +46,9 @@ impl<V> Object<V> {
     }
     pub fn create_index_buffer(
         &mut self,
-        instance: &Instance,
-        device: &Device,
-        physical_device: &vk::PhysicalDevice,
-        command_pool: &VkCommandPool,
-        queue: &vk::Queue
+        instance: &VkInstance,
+        device: &VkDevice,
+        physical_device: &VkPhysicalDevice,
     ) -> Result<(), MyError>
     {
         unsafe { 
@@ -66,8 +56,6 @@ impl<V> Object<V> {
             instance, 
             device, 
             physical_device, 
-            command_pool, 
-            queue, 
             self.indices(), 
             self.index_size(),
         )?);}
@@ -82,13 +70,13 @@ impl<V> Object<V> {
         &self.indices
     }
     pub fn vertex_buffer(&self) -> Result<&VkVertexBuffer, MyError> {
-        match self.v_buffer {
+        match &self.v_buffer {
             Some(buffer) => Ok(&buffer),
             None => Err("No vertex buffer in object!".into())
         }
     }
     pub fn index_buffer(&self) -> Result<&VkIndexBuffer, MyError> {
-        match self.i_buffer {
+        match &self.i_buffer {
             Some(buffer) => Ok(&buffer),
             None => Err("No vertex buffer in object!".into())
         }
@@ -100,6 +88,6 @@ impl<V> Object<V> {
         (size_of::<u32>() * self.indices.len()) as u64
     }
     pub fn uuid(&self) -> UUID {
-        self.uuid
+        self.uuid.clone()
     }
 }

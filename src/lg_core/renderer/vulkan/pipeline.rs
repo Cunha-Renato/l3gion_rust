@@ -3,7 +3,7 @@ use vulkanalia:: {
     vk,
 };
 use crate::MyError;
-use super::{descriptor::DescriptorData, shader::Shader, uniform_buffer::UniformBuffer};
+use super::{descriptor::DescriptorData, shader::Shader, uniform_buffer::UniformBuffer, vk_device::VkDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain};
 
 pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
@@ -13,19 +13,21 @@ pub struct VkPipeline {
 }
 impl VkPipeline {
     pub unsafe fn new(
-        device: &Device,
+        device: &VkDevice,
+        swapchain: &VkSwapchain,
         mut vert_shader: Shader,
         mut frag_shader: Shader,
         uniform_buffer: UniformBuffer,
         vertex_binding_descriptions: &[vk::VertexInputBindingDescription],
         vertex_attribute_descriptions: &[vk::VertexInputAttributeDescription],
-        descriptor_data: DescriptorData,
         viewports: Vec<vk::Viewport>,
         scissors: Vec<vk::Rect2D>,
         msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass
+        render_pass: &VkRenderPass
     ) -> Result<Self, MyError> 
     {
+        let device = device.get_device();
+
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
         .vertex_binding_descriptions(vertex_binding_descriptions)
         .vertex_attribute_descriptions(vertex_attribute_descriptions);
@@ -79,8 +81,14 @@ impl VkPipeline {
         .attachments(attachments)
         .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
+        let descriptor_data = DescriptorData::new_default(
+            device, 
+            swapchain, 
+            &uniform_buffer
+        )?;
+        let layouts = [descriptor_data.layout];
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&[descriptor_data.layout]);
+            .set_layouts(&layouts);
 
         let layout = device.create_pipeline_layout(&layout_info, None)?;
 
@@ -98,7 +106,7 @@ impl VkPipeline {
             .depth_stencil_state(&depth_stencil_state)
             .color_blend_state(&color_blend_state)
             .layout(layout)
-            .render_pass(render_pass)
+            .render_pass(*render_pass.get_render_pass())
             .subpass(0);
 
         let pipeline = device.create_graphics_pipelines(

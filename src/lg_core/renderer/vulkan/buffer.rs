@@ -3,17 +3,18 @@ use vulkanalia:: {
     vk,
 };
 use crate::MyError;
-use super::{command_buffer::VkCommandPool, memory::get_memory_type_index};
+use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_memory_allocator, vk_physical_device::VkPhysicalDevice};
 
 pub unsafe fn create_buffer(
-    instance: &Instance,
-    device: &Device,
-    physical_device: &vk::PhysicalDevice,
+    instance: &VkInstance,
+    device: &VkDevice,
+    physical_device: &VkPhysicalDevice,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
     properties: vk::MemoryPropertyFlags,
 ) -> Result<(vk::Buffer, vk::DeviceMemory), MyError>
 {
+    let device = device.get_device();
     let buffer_info = vk::BufferCreateInfo::builder()
         .size(size)
         .usage(usage)
@@ -25,7 +26,7 @@ pub unsafe fn create_buffer(
     
     let memory_info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
-        .memory_type_index(get_memory_type_index(
+        .memory_type_index(vk_memory_allocator::get_memory_type_index(
             instance, 
             physical_device, 
             properties, 
@@ -40,16 +41,14 @@ pub unsafe fn create_buffer(
 }
 
 pub unsafe fn copy_buffer_to_image(
-    device: &Device,
-    command_pool: &VkCommandPool,
-    queue: &vk::Queue,
+    device: &VkDevice,
     buffer: vk::Buffer,
     image: vk::Image,
     width: u32,
     height: u32,
 ) -> Result<(), MyError>
 {
-    let command_buffer = command_pool.begin_single_time_commands(device)?;
+    let command_buffer = device.get_transfer_queue().begin_single_time_commands(device)?;
 
     let subresource = vk::ImageSubresourceLayers::builder()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -69,7 +68,7 @@ pub unsafe fn copy_buffer_to_image(
             depth: 1,
         });
 
-    device.cmd_copy_buffer_to_image(
+    device.get_device().cmd_copy_buffer_to_image(
         command_buffer,
         buffer,
         image,
@@ -77,26 +76,24 @@ pub unsafe fn copy_buffer_to_image(
         &[region],
     );
 
-    command_pool.end_single_time_commands(device, queue, command_buffer)?;
+    device.get_transfer_queue().end_single_time_commands(device, command_buffer)?;
 
     Ok(())
 }
 pub unsafe fn copy_buffer(
-    device: &Device,
-    command_pool: &VkCommandPool,
-    queue: &vk::Queue,
+    device: &VkDevice,
     source: vk::Buffer,
     destination: vk::Buffer,
     size: vk::DeviceSize,
 ) -> Result<(), MyError>
 {
-    let command_buffer = command_pool.begin_single_time_commands(device)?;
+    let command_buffer = device.get_transfer_queue().begin_single_time_commands(device)?;
     
     let regions = vk::BufferCopy::builder().size(size);
     
-    device.cmd_copy_buffer(command_buffer, source, destination, &[regions]);
+    device.get_device().cmd_copy_buffer(command_buffer, source, destination, &[regions]);
     
-    command_pool.end_single_time_commands(device, queue, command_buffer)?;
+    device.get_transfer_queue().end_single_time_commands(device, command_buffer)?;
     
     Ok(())
 }

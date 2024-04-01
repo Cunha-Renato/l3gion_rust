@@ -2,6 +2,7 @@ use vulkanalia:: {
     bytecode::Bytecode, prelude::v1_0::*, vk::{self, ShaderModule}
 };
 use crate::MyError;
+use super::vk_device::VkDevice;
 
 pub struct Shader {
     module: vk::ShaderModule,
@@ -10,11 +11,13 @@ pub struct Shader {
 impl Shader {
     // Public
     pub unsafe fn new(
-        device: &Device,
+        device: &VkDevice,
         stage: vk::ShaderStageFlags,
         bytes: &[u8],
     ) -> Result<Self, MyError> 
     {
+        let device = device.get_device();
+
         let module = Self::create_module(device, bytes)?;
         let info = Self::get_stage_info(&module, stage);
 

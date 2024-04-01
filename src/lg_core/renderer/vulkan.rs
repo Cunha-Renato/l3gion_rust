@@ -1,16 +1,20 @@
-pub mod swapchain;
-pub mod queue_family;
-pub mod image;
-pub mod render_pass;
 pub mod descriptor;
 pub mod shader;
 pub mod pipeline;
-pub mod command_buffer;
 pub mod memory;
-pub mod physical_device;
 pub mod framebuffer;
 pub mod buffer;
 pub mod vk_texture;
 pub mod vertex_buffer;
 pub mod index_buffer;
 pub mod uniform_buffer;
+
+pub mod vk_swapchain;
+pub mod vk_instance;
+pub mod vk_device;
+pub mod vk_physical_device;
+pub mod vk_queue;
+pub mod vk_command_pool;
+pub mod vk_image;
+pub mod vk_memory_allocator;
+pub mod vk_renderpass;

@@ -1,12 +1,11 @@
 use std::mem::size_of;
 use vulkanalia:: {
-    prelude::v1_0::*, 
     vk,
 };
 
 use crate::MyError;
 
-use super::{buffer, swapchain::VkSwapchain};
+use super::{buffer, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain};
 pub struct UniformBuffer {
     pub buffers: Vec<vk::Buffer>,
     pub memories: Vec<vk::DeviceMemory>,
@@ -14,9 +13,9 @@ pub struct UniformBuffer {
 }
 impl UniformBuffer {
     pub unsafe fn new<T>(
-        instance: &Instance,
-        device: &Device,
-        physical_device: &vk::PhysicalDevice,
+        instance: &VkInstance,
+        device: &VkDevice,
+        physical_device: &VkPhysicalDevice,
         swapchain: &VkSwapchain,
     ) -> Result<Self, MyError> 
     {
@@ -37,16 +36,16 @@ impl UniformBuffer {
     }
 }
 unsafe fn create_uniform_buffers(
-    instance: &Instance,
-    device: &Device,
-    physical_device: &vk::PhysicalDevice,
+    instance: &VkInstance,
+    device: &VkDevice,
+    physical_device: &VkPhysicalDevice,
     swapchain: &VkSwapchain,
     size: u64,
 ) -> Result<(Vec<vk::Buffer>, Vec<vk::DeviceMemory>), MyError>
 {
     let mut buffers = Vec::new();
     let mut memories = Vec::new();
-    for _ in 0..swapchain.image_data.images.len() {
+    for _ in 0..swapchain.images.len() {
         let (uniform_buffer, uniform_buffer_memory) = buffer::create_buffer(
             instance, 
             device, 

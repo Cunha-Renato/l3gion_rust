@@ -6,19 +6,18 @@ use vulkanalia:: {
 
 use crate::MyError;
 
-use super::{buffer, command_buffer::VkCommandPool};
+use super::{buffer, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 
+#[derive(Clone)]
 pub struct VkVertexBuffer {
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,
 }
 impl VkVertexBuffer {
     pub unsafe fn new<T>(
-        instance: &Instance,
-        device: &Device,
-        physical_device: &vk::PhysicalDevice,
-        command_pool: &VkCommandPool,
-        queue: &vk::Queue,
+        instance: &VkInstance,
+        device: &VkDevice,
+        physical_device: &VkPhysicalDevice,
         vertices: &[T],
         size: u64,
     ) -> Result<Self, MyError> 
@@ -35,7 +34,7 @@ impl VkVertexBuffer {
 
         // Copy (staging)
 
-        let memory = device.map_memory(
+        let memory = device.get_device().map_memory(
             staging_buffer_memory, 
             0, 
             size, 
@@ -44,7 +43,7 @@ impl VkVertexBuffer {
 
         memcpy(vertices.as_ptr(), memory.cast(), vertices.len());
 
-        device.unmap_memory(staging_buffer_memory);
+        device.get_device().unmap_memory(staging_buffer_memory);
 
         // Create (vertex)
 
@@ -62,8 +61,6 @@ impl VkVertexBuffer {
 
         buffer::copy_buffer(
             device, 
-            command_pool, 
-            queue, 
             staging_buffer, 
             vertex_buffer, 
             size
@@ -71,8 +68,8 @@ impl VkVertexBuffer {
 
         // Cleanup
 
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_buffer_memory, None);
+        device.get_device().destroy_buffer(staging_buffer, None);
+        device.get_device().free_memory(staging_buffer_memory, None);
 
         Ok(Self {
             buffer: vertex_buffer,

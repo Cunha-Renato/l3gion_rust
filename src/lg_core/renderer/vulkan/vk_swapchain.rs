@@ -4,11 +4,8 @@ use vulkanalia:: {
     vk::{KhrSurfaceExtension, KhrSwapchainExtension, SurfaceKHR},
 };
 use crate::MyError;
-use super::{
-    queue_family::QueueFamilyIndices,
-    image::ImageData
-};
 
+use super::{vk_device::{QueueFamilyIndices, VkDevice}, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 #[derive(Clone, Debug)]
 pub struct SwapchainSupport {
     pub capabilities: vk::SurfaceCapabilitiesKHR,
@@ -47,17 +44,22 @@ pub struct VkSwapchain {
     pub swapchain: vk::SwapchainKHR,
     pub format: vk::Format,
     pub extent: vk::Extent2D,
-    pub image_data: ImageData,   
+    pub images: Vec<vk::Image>,   
+    pub views: Vec<vk::ImageView>,
 }
 impl VkSwapchain {
     pub unsafe fn new(
         window: &Window,
-        instance: &Instance,
+        instance: &VkInstance,
         surface: &SurfaceKHR,
-        physical_device: &vk::PhysicalDevice,
-        device: &Device,
+        physical_device: &VkPhysicalDevice,
+        device: &VkDevice,
     ) -> Result<Self, MyError> 
     {
+        let instance = instance.get_instance();
+        let device = device.get_device();
+        let physical_device = physical_device.get_device();
+
         let indices = QueueFamilyIndices::get(
             instance,
             surface,
@@ -105,20 +107,35 @@ impl VkSwapchain {
         
         let swapchain = device.create_swapchain_khr(&info, None)?;
         
-        let image_data = ImageData::new(
-            device.get_swapchain_images_khr(swapchain)?,
-            device,
-            surface_format.format,
-            vk::ImageViewType::_2D,
-            vk::ImageAspectFlags::COLOR,
-            1
-        )?;
+        let images = device.get_swapchain_images_khr(swapchain)?;
+        
+        let views = images
+        .iter()
+        .map(|image| {
+            // View
+            let subresource_range = vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1);
+        
+            let info = vk::ImageViewCreateInfo::builder()
+                .image(*image)
+                .view_type(vk::ImageViewType::_2D)
+                .format(vk::Format::R8G8B8A8_SRGB)
+                .subresource_range(subresource_range);
+        
+            device.create_image_view(&info, None).unwrap()
+        })
+        .collect();
         
         Ok(Self {
             swapchain,
             format: surface_format.format,
             extent,
-            image_data, 
+            images,
+            views,
         })
     }
     
@@ -128,7 +145,7 @@ impl VkSwapchain {
             .iter()
             .cloned()
             .find(|f| {
-                f.format == vk::Format::B8G8R8A8_SRGB && f.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+                f.format == vk::Format::R8G8B8A8_SRGB && f.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
             })
         .unwrap_or_else(|| formats[0])
     }

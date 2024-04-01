@@ -3,7 +3,7 @@ use nalgebra_glm as glm;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct UniformBufferObject {
-    model: glm::Mat4,
-    view: glm::Mat4,
-    proj: glm::Mat4,
+    pub model: glm::Mat4,
+    pub view: glm::Mat4,
+    pub proj: glm::Mat4,
 }

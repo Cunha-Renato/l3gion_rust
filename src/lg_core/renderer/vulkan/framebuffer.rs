@@ -5,34 +5,34 @@ use vulkanalia:: {
 
 use crate::MyError;
 
-use super::image::ImageData;
+use super::{vk_device::VkDevice, vk_image::VkImage, vk_renderpass::VkRenderPass};
 
 pub unsafe fn create_framebuffers(
-    device: &Device,
-    render_pass: &vk::RenderPass,
-    swapchain_image_data: &ImageData,
-    color_image_data: &ImageData,
-    depth_image_data: &ImageData,
+    device: &VkDevice,
+    render_pass: &VkRenderPass,
+    swapchain_image_views: &Vec<vk::ImageView>,
+    color_image_data: &VkImage,
+    depth_image_data: &VkImage,
     width: u32,
     height: u32,
 ) -> Result<Vec<vk::Framebuffer>, MyError>
 {
-    let framebuffers = swapchain_image_data.views
+    let framebuffers = swapchain_image_views
         .iter()
         .map(|i| {
             let attachments = &[
-                color_image_data.views[0],
-                depth_image_data.views[0],
+                color_image_data.view,
+                depth_image_data.view,
                 *i,
             ];
             let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(*render_pass)
+                .render_pass(*render_pass.get_render_pass())
                 .attachments(attachments)
                 .width(width)
                 .height(height)
                 .layers(1);
 
-            device.create_framebuffer(&create_info, None)
+            device.get_device().create_framebuffer(&create_info, None)
         })
         .collect::<Result<Vec<_>, _>>()?;
 

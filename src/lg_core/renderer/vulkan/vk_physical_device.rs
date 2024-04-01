@@ -1,22 +1,43 @@
 use std::collections::HashSet;
 
-use crate::{lg_core::renderer::vulkan::{queue_family::QueueFamilyIndices, swapchain::SwapchainSupport}, MyError};
+use crate::{lg_core::renderer::vulkan::vk_swapchain::SwapchainSupport, MyError};
 use sllog::*;
 use vulkanalia::{
-    vk::{self, InstanceV1_0},
+    prelude::v1_2::*,
+    vk,
     Instance,
 };
+use super::vk_instance::VkInstance;
 
 const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name
 ];
 
+#[derive(Default)]
+pub struct VkPhysicalDevice {
+    device: vk::PhysicalDevice,
+}
+impl VkPhysicalDevice {
+    pub unsafe fn new(
+        instance_data: &VkInstance,
+        surface: &vk::SurfaceKHR,
+    ) -> Result<Self, MyError>
+    {
+        Ok(Self {
+            device: pick_physical_device(instance_data.get_instance(), surface)?
+        })
+    }
+    pub fn get_device(&self) -> &vk::PhysicalDevice {
+        &self.device
+    }
+}
+
 pub unsafe fn pick_physical_device(
     instance: &Instance, 
     surface: &vk::SurfaceKHR,
-) -> Result<(vk::PhysicalDevice, QueueFamilyIndices), MyError> 
+) -> Result<vk::PhysicalDevice, MyError> 
 {
-    if let Some((indices, physical_device)) = instance.enumerate_physical_devices()?
+    if let Some((_, physical_device)) = instance.enumerate_physical_devices()?
         .iter()
         .map(|pd| 
             (check_physical_device(
@@ -29,7 +50,7 @@ pub unsafe fn pick_physical_device(
             val.is_ok()
         )
         .min_by_key(|(val, _)| {
-            val.as_ref().unwrap().0
+            *val.as_ref().unwrap()
         })
     {
         let properties = instance.get_physical_device_properties(*physical_device);
@@ -37,7 +58,7 @@ pub unsafe fn pick_physical_device(
         let physical_device = *physical_device;
         // data.msaa_samples = get_max_msaa_samples(instance, data);
 
-        return Ok((physical_device, indices.unwrap().1));
+        return Ok(physical_device);
     }
 
     Err("Failed to find any suitable Physical Device!".into())
@@ -47,13 +68,8 @@ unsafe fn check_physical_device(
     instance: &Instance,
     surface: &vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
-) -> Result<(usize, QueueFamilyIndices), MyError>
+) -> Result<usize, MyError>
 {
-    let indices = QueueFamilyIndices::get(
-        instance,
-        surface,
-        physical_device
-    )?;
     check_physical_device_extensions(
         instance,
         physical_device
@@ -88,7 +104,7 @@ unsafe fn check_physical_device(
     
     info!("Checking Physical Device:\n  Name: {}\n  Type: {:?}", properties.device_name, properties.device_type);
 
-    if result < 4 { return Ok((result, indices)); }
+    if result < 4 { return Ok(result); }
     
     Err("Could not find suitable device!".into())
 }

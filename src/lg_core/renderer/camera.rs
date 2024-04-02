@@ -109,6 +109,7 @@ impl Camera {
     }
     
     pub fn on_update(&mut self, input: &Input) {
+        optick::event!();
         if input.is_key_pressed(VKeyCode::LAlt)
         {
             let mouse = input.get_mouse_position();

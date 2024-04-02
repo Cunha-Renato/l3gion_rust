@@ -213,6 +213,7 @@ impl Renderer {
     //  It is ok to send those informations as an uniform buffer because it is not batched, on the contrary the transform should be aplied in the cpu side??
     //  Talking about uniform buffer, for every draw call I need to bind a different uniform buffer, (YAY I love this api (i don't))
     pub unsafe fn draw(&mut self, mut object: Object<Vertex>) -> Result<(), MyError> {
+        optick::event!();
         // Vertex and Index buffers are inside the Object, should I put the uniforms to??
         // Update the uniform buffer????
         // In case of updating the vertices or indices recreate the buffers, (Object's function)
@@ -240,8 +241,8 @@ impl Renderer {
         &mut self,
     ) -> Result<(), MyError>
     {
+        optick::event!();
         let in_flight_fence = self.data.in_flight_fences[self.frame];
-        
         self.device.get_device().wait_for_fences(&[in_flight_fence], true, u64::MAX)?;
         
         let result = self.device

@@ -155,7 +155,7 @@ impl VkSwapchain {
         present_modes
             .iter()
             .cloned()
-            .find(|m| *m == vk::PresentModeKHR::MAILBOX)
+            .find(|m| *m == vk::PresentModeKHR::IMMEDIATE)
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
     fn get_extent(

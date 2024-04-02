@@ -23,6 +23,9 @@ pub struct Application {
 }
 impl Application {
     pub fn new(window: Window) -> Result<Self, MyError> {
+        optick::start_capture();
+        optick::event!();
+        
         let (mut renderer, window) = unsafe {Renderer::init(window)?};
         let input = Input::new();
         let main_camera = Rc::new(RefCell::new(Camera::new(
@@ -48,11 +51,18 @@ impl Application {
     }
     
     pub fn destroy(&mut self) {
+        optick::event!();
         unsafe { self.core.renderer.destroy().unwrap() }
+        optick::stop_capture("profiling");
     }
      
     pub fn on_update(&mut self) {
+        optick::next_frame();
+        optick::event!();
+        
         self.core.renderer.resized = self.resized;
+        self.resized = false;
+
         self.main_camera.borrow_mut().on_update(&self.core.input);
 
         let vertices = [
@@ -92,6 +102,7 @@ impl Application {
     }
 
     pub fn on_event(&mut self, event: &Event) {
+        optick::event!();
         self.main_camera.borrow_mut().on_event(event);
     }
 }

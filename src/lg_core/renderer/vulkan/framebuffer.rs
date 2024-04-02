@@ -1,5 +1,5 @@
 use vulkanalia:: {
-    prelude::v1_0::*, 
+    prelude::v1_2::*, 
     vk,
 };
 

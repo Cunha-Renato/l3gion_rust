@@ -16,4 +16,4 @@ nalgebra-glm = "0.18.0"
 sllog = { path = "../../sllog" }
 
 [profile.dev]
-opt-level = 1
+opt_level = 1

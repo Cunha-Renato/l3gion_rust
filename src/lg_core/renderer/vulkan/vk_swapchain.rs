@@ -1,6 +1,6 @@
 use winit::window::Window;
 use vulkanalia:: {
-    prelude::v1_0::*, 
+    prelude::v1_2::*, 
     vk::{KhrSurfaceExtension, KhrSwapchainExtension, SurfaceKHR},
 };
 use crate::MyError;
@@ -155,7 +155,7 @@ impl VkSwapchain {
         present_modes
             .iter()
             .cloned()
-            .find(|m| *m == vk::PresentModeKHR::IMMEDIATE)
+            .find(|m| *m == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
     fn get_extent(
@@ -182,7 +182,6 @@ impl VkSwapchain {
                     size.height
                 ))
                 .build()
-        
         }
     }
 }

@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use sllog::*;
-use winit::window::Window;
 use vulkanalia:: {
     loader::{LibloadingLoader, LIBRARY}, prelude::v1_2::*, vk, Entry, Instance, Version
 };
@@ -30,11 +29,10 @@ pub struct RendererData {
     pub images_in_flight: Vec<vk::Fence>,
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finished_semaphores: Vec<vk::Semaphore>,
-    pub messenger: vk::DebugUtilsMessengerEXT,
 }
 
 // Helper
-pub unsafe fn create_entry(window: &Window) -> Result<Entry, MyError> {
+pub unsafe fn create_entry() -> Result<Entry, MyError> {
     let loader = LibloadingLoader::new(LIBRARY)?;
     let entry = Entry::new(loader).map_err(|b| error!("{}", b)).unwrap();
 

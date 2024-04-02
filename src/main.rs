@@ -66,7 +66,7 @@ fn main() -> Result<(), MyError> {
                         }
                         else {
                             minimized = false;
-                            // app.resized = true;
+                            app.resized = true;
                         }
                     },
                     WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {

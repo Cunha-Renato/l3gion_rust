@@ -1,5 +1,5 @@
 use vulkanalia:: {
-    prelude::v1_0::*, 
+    prelude::v1_2::*, 
     vk::{self, DescriptorSet},
 };
 use crate::MyError;
@@ -16,7 +16,6 @@ impl DescriptorData {
     pub unsafe fn new_default(
         device: &Device, 
         swapchain: &VkSwapchain,
-        uniform_buffer: &UniformBuffer,
     ) -> Result<Self, MyError> 
     {
         let layout = create_default_descriptor_set_layout(device)?;
@@ -46,6 +45,9 @@ impl DescriptorData {
     
     pub unsafe fn destroy_pool(&mut self, device: &VkDevice) {
         device.get_device().destroy_descriptor_pool(self.pool, None);
+    }
+    pub unsafe fn destroy_layout(&mut self, device: &VkDevice) {
+        device.get_device().destroy_descriptor_set_layout(self.layout, None);
     }
 }
 

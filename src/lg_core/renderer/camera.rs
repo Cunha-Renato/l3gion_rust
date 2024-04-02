@@ -3,7 +3,7 @@ use sllog::*;
 
 use crate::{lg_core::{event::{Event, MouseButton, MouseEvent, VKeyCode}, input::Input}, utils::tools::to_radians};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct Camera {
     projection_matrix: glm::Mat4,
     view_matrix: glm::Mat4,

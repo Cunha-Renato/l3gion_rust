@@ -14,7 +14,7 @@ const VALIDATION_LAYER: vk::ExtensionName = vk::ExtensionName::from_bytes(b"VK_L
 
 pub struct VkInstance {
     instance: Instance,
-    messenger: vk::DebugUtilsMessengerEXT,
+    pub messenger: Option<vk::DebugUtilsMessengerEXT>,
 }
 impl VkInstance {
     pub unsafe fn new(
@@ -37,12 +37,10 @@ impl VkInstance {
             return Err("Validation layer requested but not supported!".into());
         }
         
-        let layers = if VALIDATION_ENABLED {
-            vec![VALIDATION_LAYER.as_ptr()]
+        let mut layers = Vec::new();
+        if VALIDATION_ENABLED {
+            layers.push(VALIDATION_LAYER.as_ptr());
         }
-        else {
-            Vec::new()
-        };
 
         let mut extensions = vk_window::get_required_instance_extensions(window)
             .iter()
@@ -85,9 +83,9 @@ impl VkInstance {
         
         let instance = entry.create_instance(&info, None)?;
         
-        let mut messenger = vk::DebugUtilsMessengerEXT::default();
+        let mut messenger = None;
         if VALIDATION_ENABLED {
-            messenger = instance.create_debug_utils_messenger_ext(&debug_info, None)?;
+            messenger = Some(instance.create_debug_utils_messenger_ext(&debug_info, None)?);
         }
 
         Ok(Self {

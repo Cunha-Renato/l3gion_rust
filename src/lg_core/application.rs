@@ -7,7 +7,7 @@ use nalgebra_glm as glm;
 use crate::{utils::tools::to_radians, MyError};
 use super::{
     event::Event, input::Input, renderer::{ 
-        camera::Camera, object::Object, vertex::Vertex, Renderer
+        camera::Camera, object::{self, Object}, vertex::Vertex, Renderer
     }
 };
 pub struct AppCore {
@@ -17,6 +17,7 @@ pub struct AppCore {
 }
 
 pub struct Application {
+    pub resized: bool,
     pub core: AppCore,
     main_camera: Rc<RefCell<Camera>>,
 }
@@ -32,8 +33,7 @@ impl Application {
             1000.0
         )));
 
-        // set camera as a Rc
-
+        renderer.set_camera(main_camera.clone());
         let core = AppCore {
             window,
             renderer,
@@ -41,6 +41,7 @@ impl Application {
         };
         
         Ok(Self {
+            resized: false,
             core,
             main_camera,
         })
@@ -51,18 +52,30 @@ impl Application {
     }
      
     pub fn on_update(&mut self) {
+        self.core.renderer.resized = self.resized;
         self.main_camera.borrow_mut().on_update(&self.core.input);
-        //update camera
+
         let vertices = [
             Vertex::new(glm::vec3(-0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
             Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
             Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
             Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
         ];
-        let indices = [0, 1, 2, 3, 4];
+        let vertices2 = [
+            Vertex::new(glm::vec3(-0.3, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
+            Vertex::new(glm::vec3(0.8, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
+            Vertex::new(glm::vec3(0.8, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3(-0.3, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+        ];
+        let indices = [0, 1, 2, 2, 3, 0];
         let object = Object::new(vertices.to_vec(), indices.to_vec());
 
         unsafe {
+            match self.core.renderer.draw(object) {
+                Ok(_) => (),
+                Err(e) => error!("{:?}", e),
+            }
+            let object = Object::new(vertices2.to_vec(), indices.to_vec());
             match self.core.renderer.draw(object) {
                 Ok(_) => (),
                 Err(e) => error!("{:?}", e),

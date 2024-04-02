@@ -84,6 +84,8 @@ impl VkQueue {
         device.get_device().destroy_command_pool(self.command_pool, None);
     }
     pub unsafe fn free_command_buffers(&self, device: &VkDevice) {
-        device.get_device().free_command_buffers(self.command_pool, &self.command_buffers);
+        if self.command_buffers.len() > 0 {
+            device.get_device().free_command_buffers(self.command_pool, &self.command_buffers);
+        }
     }
 }

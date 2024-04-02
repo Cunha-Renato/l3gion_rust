@@ -1,7 +1,5 @@
 use std::mem::size_of;
-use vulkanalia:: {
-    vk,
-};
+use vulkanalia::vk;
 
 use crate::MyError;
 

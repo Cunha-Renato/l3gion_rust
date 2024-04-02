@@ -8,6 +8,7 @@ pub mod object;
 pub mod helper;
 pub mod uniform_buffer_object;
 
+use std::cell::RefCell;
 use std::{mem::size_of, rc::Rc};
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -20,12 +21,12 @@ use vulkanalia::{
         self, DeviceV1_0, Handle, HasBuilder, KhrSwapchainExtension
     }, 
     window as vk_window, 
-    Device, 
     Entry, 
 };
 use crate::MyError;
 use texture::Texture;
 use helper::RendererData;
+use self::camera::Camera;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
 use self::vulkan::vk_image::VkImage;
 use self::vulkan::vk_instance::VkInstance;
@@ -41,14 +42,16 @@ pub struct Renderer {
     device: VkDevice,
     test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
     texture: VkTexture, // The textures also need to be in a hash map (probably)
-    objects: Vec<Object<Vertex>>,
+    objects: [Vec<Object<Vertex>>; 2],
+    objects_index: usize,
     frame: usize,
-    resized: bool,
+    pub resized: bool,
+    camera: Rc<RefCell<Camera>>,
 }
 impl Renderer {
     pub unsafe fn init(window: Window) -> Result<(Self, Rc<Window>), MyError> {
         let mut data = RendererData::default();
-        let entry = helper::create_entry(&window)?; 
+        let entry = helper::create_entry()?; 
         let instance = VkInstance::new(&entry, &window)?;
 
         data.msaa_samples = vk::SampleCountFlags::_8;
@@ -56,7 +59,6 @@ impl Renderer {
         data.physical_device = VkPhysicalDevice::new(&instance, &data.surface)?;
 
         let mut device = VkDevice::new(
-            &entry, 
             &instance, 
             &data.physical_device, 
             &data.surface
@@ -86,12 +88,12 @@ impl Renderer {
         let vert_shader = Shader::new(
             &device, 
             vk::ShaderStageFlags::VERTEX, 
-            include_bytes!("../../assets/shaders/compiled/vertex.spv")
+            include_bytes!("../../assets/shaders/compiled/2DShader.spv")
         )?;
         let frag_shader = Shader::new(
             &device, 
             vk::ShaderStageFlags::FRAGMENT, 
-            include_bytes!("../../assets/shaders/compiled/fragment.spv")
+            include_bytes!("../../assets/shaders/compiled/shader.spv")
         )?;
         
         // Viewport and Scissor
@@ -172,7 +174,7 @@ impl Renderer {
             &instance, 
             &device, 
             &data.physical_device, 
-            Texture::new("assets/textures/viking_room.png")?,
+            Texture::new("assets/textures/grid.png")?,
         )?;
         let window = Rc::new(window);
 
@@ -186,9 +188,11 @@ impl Renderer {
             device,
             test_pipeline,
             texture,
-            objects: Vec::default(),
+            objects: [Vec::new(), Vec::new()],
+            objects_index: 0,
             frame: 0,
             resized: false,
+            camera: Rc::default()
         },
         window.clone()))
     }
@@ -198,6 +202,9 @@ impl Renderer {
     }
     pub fn msaa(&mut self, value: u32) {
         todo!()
+    }
+    pub fn set_camera(&mut self, camera: Rc<RefCell<Camera>>) {
+        self.camera = camera;        
     }
     
     // TODO: Review all of this shit below!!!!
@@ -225,7 +232,7 @@ impl Renderer {
             &self.data.physical_device, 
         )?;
 
-        self.objects.push(object);
+        self.objects[self.objects_index].push(object);
         
         Ok(())
     }
@@ -236,7 +243,6 @@ impl Renderer {
         let in_flight_fence = self.data.in_flight_fences[self.frame];
         
         self.device.get_device().wait_for_fences(&[in_flight_fence], true, u64::MAX)?;
-        self.device.get_device().reset_fences(&[in_flight_fence])?;
         
         let result = self.device
             .get_device()
@@ -261,10 +267,10 @@ impl Renderer {
             self.device.get_device().wait_for_fences(&[image_in_flight], true, u64::MAX)?;
         }
         
-        self.data.images_in_flight[image_index] = image_in_flight;
+        self.data.images_in_flight[image_index] = in_flight_fence;
         
         self.update_uniform_buffer(image_index)?;
-        self.prepare_cmd_buffer(image_index)?;
+        self.prepare_cmd_buffers()?;
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -277,6 +283,7 @@ impl Renderer {
             .command_buffers(command_buffers)
             .signal_semaphores(signal_semaphores);
         
+        self.device.get_device().reset_fences(&[in_flight_fence])?;
         self.device.get_device().queue_submit(self.device.get_graphics_queue().queue, &[submit_info], in_flight_fence)?;
         
         let swapchains = &[self.data.swapchain.swapchain];
@@ -291,6 +298,15 @@ impl Renderer {
         let changed = result == Ok(vk::SuccessCode::SUBOPTIMAL_KHR)
             || result == Err(vk::ErrorCode::OUT_OF_DATE_KHR);
         
+        if self.objects_index == 0 {
+            self.objects_index = 1;
+            self.clear_objects(1)?;
+        }
+        else { 
+            self.objects_index = 0;
+            self.clear_objects(0)?;
+        }
+
         if self.resized || changed {
             self.resized = false;
             self.recreate_swapchain()?;
@@ -301,16 +317,13 @@ impl Renderer {
         
         self.frame = (self.frame + 1) % helper::MAX_FRAMES_IN_FLIGHT;
 
-        self.device.get_device().wait_for_fences(&[self.data.images_in_flight[image_index]], true, u64::MAX)?;
-        self.clear_objects()?;
-
         Ok(())
     }
     unsafe fn update_uniform_buffer(&self, image_index: usize) -> Result<(), MyError>
     {
         let model = glm::Mat4::identity();
-        let view = glm::Mat4::identity();
-        let proj = glm::Mat4::identity();
+        let view = *self.camera.borrow().get_view_matrix();
+        let proj = self.camera.borrow().get_projection_matrix();
         
         let ubo = UniformBufferObject { model, view, proj };
 
@@ -326,6 +339,11 @@ impl Renderer {
         memcpy(&ubo, memory.cast(), 1);
 
         self.device.get_device().unmap_memory(self.test_pipeline.uniform_buffer.memories[image_index]);
+        self.test_pipeline.descriptor_data.update_default(
+            self.device.get_device(), 
+            &self.test_pipeline.uniform_buffer, 
+            &self.texture
+        );
 
         Ok(())
     }
@@ -336,11 +354,10 @@ impl Renderer {
         
         // Texture
         self.texture.destroy(&self.device);
-
-        self.device.get_device().destroy_descriptor_set_layout(self.test_pipeline.descriptor_data.layout, None);
-
+    
         // Vertices
-        self.clear_objects()?; 
+        self.clear_objects(0)?; 
+        self.clear_objects(1)?;
         
         for i in 0..helper::MAX_FRAMES_IN_FLIGHT {
             self.device.get_device().destroy_fence(self.data.in_flight_fences[i], None);
@@ -349,23 +366,22 @@ impl Renderer {
             
             self.device.get_device().destroy_semaphore(self.data.render_finished_semaphores[i], None);
         }
-
+    
+        if helper::VALIDATION_ENABLED {
+            self.instance.get_instance().destroy_debug_utils_messenger_ext(self.instance.messenger.unwrap(), None);
+        }
+        
         self.device.destroy_command_pools();
         self.device.get_device().destroy_device(None);
         self.instance.get_instance().destroy_surface_khr(self.data.surface, None);
-
-        if helper::VALIDATION_ENABLED {
-            self.instance.get_instance().destroy_debug_utils_messenger_ext(self.data.messenger, None);
-        }
-        
         self.instance.get_instance().destroy_instance(None);
-
+    
         Ok(())
     }
     
     // Private
-    unsafe fn clear_objects(&mut self) -> Result<(), MyError> {
-        for object in self.objects.clone() {
+    unsafe fn clear_objects(&mut self, index: usize) -> Result<(), MyError> {
+        for object in self.objects[index].clone() {
             // Clearing Vertices
             self.device.get_device().destroy_buffer(object.vertex_buffer()?.buffer, None);
             self.device.get_device().free_memory(object.vertex_buffer()?.memory, None);
@@ -375,7 +391,7 @@ impl Renderer {
             self.device.get_device().free_memory(object.index_buffer()?.memory, None);
         }
         
-        self.objects.clear();
+        self.objects[index].clear();
 
         Ok(())
     }
@@ -421,7 +437,7 @@ impl Renderer {
         
         self.device.get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
 
-        for object in &self.objects {
+        for object in &self.objects[self.objects_index] {
             self.device.get_device().cmd_bind_vertex_buffers(
                 *command_buffer, 
                 0, 
@@ -465,16 +481,13 @@ impl Renderer {
     unsafe fn destroy_swapchain(&mut self) {
         self.device.free_command_buffers();
         self.test_pipeline.descriptor_data.destroy_pool(&self.device);
+        self.test_pipeline.descriptor_data.destroy_layout(&self.device);
         
         // Uniform buffer
         self.test_pipeline.uniform_buffer.memories.iter().for_each(|m| self.device.get_device().free_memory(*m, None));
         self.test_pipeline.uniform_buffer.buffers.iter().for_each(|u| self.device.get_device().destroy_buffer(*u, None));
-
-        // Depth images        
-        self.data.depth_image.destroy(&self.device);
-        
-        // Color images
         self.data.color_image.destroy(&self.device);
+        self.data.depth_image.destroy(&self.device);
         
         self.data.framebuffers.iter().for_each(|f| self.device.get_device().destroy_framebuffer(*f, None));
         
@@ -510,12 +523,12 @@ impl Renderer {
         let vert_shader = Shader::new(
             &self.device, 
             vk::ShaderStageFlags::VERTEX, 
-            include_bytes!("../../assets/shaders/compiled/vertex.spv")
+            include_bytes!("../../assets/shaders/compiled/2DShader.spv")
         )?;
         let frag_shader = Shader::new(
             &self.device, 
             vk::ShaderStageFlags::FRAGMENT, 
-            include_bytes!("../../assets/shaders/compiled/fragment.spv")
+            include_bytes!("../../assets/shaders/compiled/shader.spv")
         )?;
         let ubo = UniformBuffer::new::<UniformBufferObject>(
             &self.instance, 
@@ -538,8 +551,6 @@ impl Renderer {
             .extent(self.data.swapchain.extent)
             .build();
 
-
-
         self.test_pipeline = VkPipeline::new(
             &self.device, 
             &self.data.swapchain,
@@ -553,6 +564,49 @@ impl Renderer {
             self.data.msaa_samples, 
             &self.data.render_pass
         )?;
+
+        self.data.color_image = VkImage::new(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            self.data.swapchain.extent.width, 
+            self.data.swapchain.extent.height, 
+            self.data.swapchain.format, 
+            vk::ImageAspectFlags::COLOR, 
+            self.data.msaa_samples, 
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT, 
+            1
+        )?;
+        self.data.depth_image = VkImage::new(
+            &self.instance, 
+            &self.device, 
+            &self.data.physical_device, 
+            self.data.swapchain.extent.width, 
+            self.data.swapchain.extent.height, 
+            helper::get_depth_format(self.instance.get_instance(), self.data.physical_device.get_device())?, 
+            vk::ImageAspectFlags::DEPTH, 
+            self.data.msaa_samples, 
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
+            1
+        )?;
+        
+        // Framebuffer
+        self.data.framebuffers = framebuffer::create_framebuffers(
+            &self.device, 
+            &self.data.render_pass, 
+            &self.data.swapchain.views, 
+            &self.data.color_image, 
+            &self.data.depth_image, 
+            self.data.swapchain.extent.width, 
+            self.data.swapchain.extent.height
+        )?;
+
+        self.device.allocate_command_buffers(VkQueueFamily::GRAPHICS, self.data.swapchain.images.len() as u32)?;
+        self.device.allocate_command_buffers(VkQueueFamily::PRESENT, self.data.swapchain.images.len() as u32)?;
+        self.device.allocate_command_buffers(VkQueueFamily::TRANSFER, self.data.swapchain.images.len() as u32)?;
 
         Ok(())
     }

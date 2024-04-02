@@ -70,9 +70,8 @@ impl VkImage {
             .format(format)
             .subresource_range(subresource_range);
         
-        let view = device.get_device().create_image_view(&info, None)?;
-
         device.get_device().bind_image_memory(image, memory, 0)?;
+        let view = device.get_device().create_image_view(&info, None)?;
         
         Ok(Self {
             image,

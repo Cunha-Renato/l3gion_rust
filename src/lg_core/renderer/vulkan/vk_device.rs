@@ -93,14 +93,12 @@ pub struct VkDevice {
 }
 impl VkDevice {
     pub unsafe fn new(
-        entry: &Entry,
         instance: &VkInstance,
         physical_device: &VkPhysicalDevice,
         surface: &SurfaceKHR,
     ) -> Result<Self, MyError>
     {
         let device  = create_logical_device(
-            entry, 
             instance, 
             physical_device, 
             surface
@@ -159,7 +157,6 @@ impl VkDevice {
 }
 
 unsafe fn create_logical_device(
-    entry: &Entry,
     instance: &VkInstance,
     physical_device: &VkPhysicalDevice,
     surface: &SurfaceKHR

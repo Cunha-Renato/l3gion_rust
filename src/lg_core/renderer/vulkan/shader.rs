@@ -1,5 +1,5 @@
 use vulkanalia:: {
-    bytecode::Bytecode, prelude::v1_0::*, vk::{self, ShaderModule}
+    bytecode::Bytecode, prelude::v1_2::*, vk::{self, ShaderModule}
 };
 use crate::MyError;
 use super::vk_device::VkDevice;

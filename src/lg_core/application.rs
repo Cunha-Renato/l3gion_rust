@@ -2,57 +2,61 @@ use std::{cell::RefCell, rc::Rc};
 
 use sllog::*;
 use winit::window::Window;
-use nalgebra_glm as glm;
 
-use crate::{utils::tools::to_radians, MyError};
+use crate::{lg_core::test_layer::TestLayer, MyError};
 use super::{
-    event::Event, input::Input, renderer::{ 
-        camera::Camera, object::{self, Object}, vertex::Vertex, Renderer
-    }
+    event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Ref, renderer::Renderer
 };
 pub struct AppCore {
-    window: Rc<Window>,
-    renderer: Renderer,
-    pub input: Input,
+    window: Ref<Window>,
+    renderer: Ref<Renderer>,
+    pub input: LgInput,
 }
 
 pub struct Application {
     pub resized: bool,
     pub core: AppCore,
-    main_camera: Rc<RefCell<Camera>>,
+    layers: Vec<Ref<dyn Layer>>,
 }
 impl Application {
     pub fn new(window: Window) -> Result<Self, MyError> {
         optick::start_capture();
         optick::event!();
         
-        let (mut renderer, window) = unsafe {Renderer::init(window)?};
-        let input = Input::new();
-        let main_camera = Rc::new(RefCell::new(Camera::new(
-            to_radians(45.0) as f32,
-            window.inner_size().width as f32, 
-            window.inner_size().height as f32, 
-            0.1, 
-            1000.0
-        )));
+        let (renderer, window) = unsafe {Renderer::init(window)?};
+        let input = LgInput::new();
 
-        renderer.set_camera(main_camera.clone());
+        let renderer = Ref::new(renderer);
         let core = AppCore {
-            window,
-            renderer,
+            window: window.clone(),
+            renderer: renderer.clone(),
             input,
         };
         
+        let layers = vec![Rc::new(RefCell::new(TestLayer::new(renderer.clone())))];
+        let layers: Vec<Ref<dyn Layer>> = layers
+            .iter()
+            .map(|layer| Ref::from_rc_refcell(&(layer.clone() as Rc<RefCell<dyn Layer>>)))
+            .collect();
+        
+        for layer in &layers {
+            layer.borrow_mut().init(window.clone());
+        }
+
         Ok(Self {
             resized: false,
             core,
-            main_camera,
+            layers,
         })
     }
     
     pub fn destroy(&mut self) {
         optick::event!();
-        unsafe { self.core.renderer.destroy().unwrap() }
+        for layer in &self.layers {
+            layer.borrow_mut().destroy();
+        }
+
+        unsafe { self.core.renderer.borrow_mut().destroy().unwrap() }
         optick::stop_capture("profiling");
     }
      
@@ -60,49 +64,26 @@ impl Application {
         optick::next_frame();
         optick::event!();
         
-        self.core.renderer.resized = self.resized;
+        self.core.renderer.borrow_mut().resized = self.resized;
         self.resized = false;
 
-        self.main_camera.borrow_mut().on_update(&self.core.input);
-
-        let vertices = [
-            Vertex::new(glm::vec3(-0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
-        ];
-        let vertices2 = [
-            Vertex::new(glm::vec3(-0.3, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.8, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.8, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.3, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
-        ];
-        let indices = [0, 1, 2, 2, 3, 0];
-        let object = Object::new(vertices.to_vec(), indices.to_vec());
-
-        unsafe {
-            match self.core.renderer.draw(object) {
-                Ok(_) => (),
-                Err(e) => error!("{:?}", e),
-            }
-            let object = Object::new(vertices2.to_vec(), indices.to_vec());
-            match self.core.renderer.draw(object) {
-                Ok(_) => (),
-                Err(e) => error!("{:?}", e),
-            }
-        };
+        for layer in &self.layers {
+            layer.borrow_mut().on_update(&self.core.input);
+        }
 
         // Rendering
         unsafe { 
-            match self.core.renderer.render() {
+            match self.core.renderer.borrow_mut().render() {
                 Ok(_) => (),
                 Err(e) => error!("{:?}", e),
             }
         }
     }
 
-    pub fn on_event(&mut self, event: &Event) {
+    pub fn on_event(&mut self, event: &LgEvent) {
         optick::event!();
-        self.main_camera.borrow_mut().on_event(event);
+        for layer in &self.layers {
+            layer.borrow_mut().on_event(event);
+        }
     }
 }

@@ -6,7 +6,7 @@ pub use mouse_event::*;
 pub use window_event::*;
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
-pub enum Event {
+pub enum LgEvent {
     WindowEvent(WindowEvent),
     KeyEvent(KeyEvent),
     MouseEvent(MouseEvent),

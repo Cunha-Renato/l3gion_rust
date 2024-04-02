@@ -8,12 +8,12 @@ use super::event::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Input {
+pub struct LgInput {
     key_states: HashMap<VKeyCode, bool>,    
     mouse_states: HashMap<MouseButton, bool>,
     mouse_position: glm::Vec2,
 }
-impl Input {
+impl LgInput {
     pub fn new() -> Self {
         Self { 
             key_states: HashMap::new(),

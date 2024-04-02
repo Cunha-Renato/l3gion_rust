@@ -35,12 +35,13 @@ impl DescriptorData {
     }
     pub unsafe fn update_default(
         &self,
+        index: usize,
         device: &Device,
         uniform_buffer: &UniformBuffer,
-        texture: &VkTexture
+        texture: &VkTexture,
     ) 
     {
-        update_default_descriptor_sets(device, &self.sets, uniform_buffer, texture)
+        update_default_descriptor_sets(device, index, &self.sets, uniform_buffer, texture)
     }
     
     pub unsafe fn destroy_pool(&mut self, device: &VkDevice) {
@@ -115,37 +116,36 @@ unsafe fn create_default_descriptor_sets(
 }
 pub unsafe fn update_default_descriptor_sets(
     device: &Device,
+    i: usize,
     sets: &[vk::DescriptorSet],
     uniform_buffer: &UniformBuffer,
     texture: &VkTexture,
 ) {
-    for i in 0..sets.len() {
-        let info = vk::DescriptorBufferInfo::builder()
-            .buffer(uniform_buffer.buffers[i])
-            .offset(0)
-            .range(uniform_buffer.ubo_size);
+    let info = vk::DescriptorBufferInfo::builder()
+        .buffer(uniform_buffer.buffers[i])
+        .offset(0)
+        .range(uniform_buffer.ubo_size);
 
-        let buffer_info = &[info];
-        let ubo_write = vk::WriteDescriptorSet::builder()
-            .dst_set(sets[i])
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(buffer_info);
+    let buffer_info = &[info];
+    let ubo_write = vk::WriteDescriptorSet::builder()
+        .dst_set(sets[i])
+        .dst_binding(0)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .buffer_info(buffer_info);
 
-        let info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(texture.image.view)
-            .sampler(texture.sampler);
+    let info = vk::DescriptorImageInfo::builder()
+        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .image_view(texture.image.view)
+        .sampler(texture.sampler);
 
-        let image_info = &[info];
-        let sampler_write = vk::WriteDescriptorSet::builder()
-            .dst_set(sets[i])
-            .dst_binding(1)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(image_info);
+    let image_info = &[info];
+    let sampler_write = vk::WriteDescriptorSet::builder()
+        .dst_set(sets[i])
+        .dst_binding(1)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        .image_info(image_info);
 
-        device.update_descriptor_sets(&[ubo_write, sampler_write], &[] as &[vk::CopyDescriptorSet]);
-    }
+    device.update_descriptor_sets(&[ubo_write, sampler_write], &[] as &[vk::CopyDescriptorSet]);
 }

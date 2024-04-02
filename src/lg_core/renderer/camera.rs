@@ -1,7 +1,6 @@
 use nalgebra_glm as glm;
-use sllog::*;
 
-use crate::{lg_core::{event::{Event, MouseButton, MouseEvent, VKeyCode}, input::Input}, utils::tools::to_radians};
+use crate::{lg_core::{event::{LgEvent, MouseButton, MouseEvent, VKeyCode}, input::LgInput}, utils::tools::to_radians};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Camera {
@@ -108,7 +107,7 @@ impl Camera {
         yaw_quat * pich_quat
     }
     
-    pub fn on_update(&mut self, input: &Input) {
+    pub fn on_update(&mut self, input: &LgInput) {
         optick::event!();
         if input.is_key_pressed(VKeyCode::LAlt)
         {
@@ -173,9 +172,9 @@ impl Camera {
         }
     }
     
-    pub fn on_event(&mut self, event: &Event) {
+    pub fn on_event(&mut self, event: &LgEvent) {
         match event {
-            Event::MouseEvent(MouseEvent::ScrollEvent(scroll_event)) => {
+            LgEvent::MouseEvent(MouseEvent::ScrollEvent(scroll_event)) => {
                 let delta = scroll_event.delta.1 * 0.1;
                 self.mouse_zoom(delta);
             },

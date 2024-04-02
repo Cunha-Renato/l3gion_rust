@@ -5,11 +5,11 @@ pub mod vertex;
 pub mod texture;
 pub mod vulkan;
 pub mod object;
+pub mod object_storage;
 pub mod helper;
 pub mod uniform_buffer_object;
 
-use std::cell::RefCell;
-use std::{mem::size_of, rc::Rc};
+use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 
 use nalgebra_glm as glm;
@@ -27,6 +27,7 @@ use crate::MyError;
 use texture::Texture;
 use helper::RendererData;
 use self::camera::Camera;
+use self::object_storage::ObjectStorage;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
 use self::vulkan::vk_image::VkImage;
 use self::vulkan::vk_instance::VkInstance;
@@ -34,22 +35,23 @@ use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::vulkan::vk_renderpass::VkRenderPass;
 use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, pipeline::VkPipeline, shader::Shader, vk_swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture}};
 
+use super::lg_types::reference::Ref;
+
 pub struct Renderer {
-    window: Rc<Window>,
+    window: Ref<Window>,
     entry: Entry,
     instance: VkInstance,
     data: RendererData,
     device: VkDevice,
     test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
     texture: VkTexture, // The textures also need to be in a hash map (probably)
-    objects: [Vec<Object<Vertex>>; 2],
-    objects_index: usize,
+    objects: ObjectStorage<Vertex>,
     frame: usize,
     pub resized: bool,
-    camera: Rc<RefCell<Camera>>,
+    camera: Ref<Camera>,
 }
 impl Renderer {
-    pub unsafe fn init(window: Window) -> Result<(Self, Rc<Window>), MyError> {
+    pub unsafe fn init(window: Window) -> Result<(Self, Ref<Window>), MyError> {
         let mut data = RendererData::default();
         let entry = helper::create_entry()?; 
         let instance = VkInstance::new(&entry, &window)?;
@@ -176,7 +178,7 @@ impl Renderer {
             &data.physical_device, 
             Texture::new("assets/textures/grid.png")?,
         )?;
-        let window = Rc::new(window);
+        let window = Ref::new(window);
 
         helper::create_sync_objects(device.get_device(), &mut data)?;
 
@@ -188,11 +190,10 @@ impl Renderer {
             device,
             test_pipeline,
             texture,
-            objects: [Vec::new(), Vec::new()],
-            objects_index: 0,
+            objects: ObjectStorage::init(),
             frame: 0,
             resized: false,
-            camera: Rc::default()
+            camera: Ref::default()
         },
         window.clone()))
     }
@@ -203,7 +204,7 @@ impl Renderer {
     pub fn msaa(&mut self, value: u32) {
         todo!()
     }
-    pub fn set_camera(&mut self, camera: Rc<RefCell<Camera>>) {
+    pub fn set_camera(&mut self, camera: Ref<Camera>) {
         self.camera = camera;        
     }
     
@@ -212,28 +213,25 @@ impl Renderer {
     //  object's position, rotation, scale, and maybe other things relevant to drawing
     //  It is ok to send those informations as an uniform buffer because it is not batched, on the contrary the transform should be aplied in the cpu side??
     //  Talking about uniform buffer, for every draw call I need to bind a different uniform buffer, (YAY I love this api (i don't))
-    pub unsafe fn draw(&mut self, mut object: Object<Vertex>) -> Result<(), MyError> {
+    pub unsafe fn draw(&mut self, object: Ref<Object<Vertex>>) -> Result<(), MyError> {
         optick::event!();
-        // Vertex and Index buffers are inside the Object, should I put the uniforms to??
-        // Update the uniform buffer????
-        // In case of updating the vertices or indices recreate the buffers, (Object's function)
-        // So, change of plans, instead of sending the commands themselfs, I will store the object's key so they can be draw later. (need to free the keys array after drawing). Question more expensive???? IDK
-        // I will iterate the keys and search the Object HashMap, and for every object I will send those commands,
-        // it is also necessary to create a seperate function to record those commands
-        // I may lose control over the object itself, I don't like the idea to send a reference back, I think I should reset the objects queue every frame
 
-        object.create_vertex_buffer(
-            &self.instance, 
-            &self.device, 
-            &self.data.physical_device, 
-        )?;
-        object.create_index_buffer(
-            &self.instance, 
-            &self.device, 
-            &self.data.physical_device, 
-        )?;
+        if object.borrow_mut().vertex_buffer().is_err() {
+            object.borrow_mut().create_vertex_buffer(
+                &self.instance, 
+                &self.device, 
+                &self.data.physical_device, 
+            )?;
+        }
+        if object.borrow_mut().index_buffer().is_err() {
+            object.borrow_mut().create_index_buffer(
+                &self.instance, 
+                &self.device, 
+                &self.data.physical_device, 
+            )?;
+        }
 
-        self.objects[self.objects_index].push(object);
+        self.objects.insert(object.clone());
         
         Ok(())
     }
@@ -242,6 +240,9 @@ impl Renderer {
     ) -> Result<(), MyError>
     {
         optick::event!();
+        if self.camera.borrow().distance < 1.5 {
+            println!("{:#?}", self.camera.borrow());
+        }
         let in_flight_fence = self.data.in_flight_fences[self.frame];
         self.device.get_device().wait_for_fences(&[in_flight_fence], true, u64::MAX)?;
         
@@ -271,7 +272,7 @@ impl Renderer {
         self.data.images_in_flight[image_index] = in_flight_fence;
         
         self.update_uniform_buffer(image_index)?;
-        self.prepare_cmd_buffers()?;
+        self.prepare_cmd_buffer(image_index)?;
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -299,15 +300,6 @@ impl Renderer {
         let changed = result == Ok(vk::SuccessCode::SUBOPTIMAL_KHR)
             || result == Err(vk::ErrorCode::OUT_OF_DATE_KHR);
         
-        if self.objects_index == 0 {
-            self.objects_index = 1;
-            self.clear_objects(1)?;
-        }
-        else { 
-            self.objects_index = 0;
-            self.clear_objects(0)?;
-        }
-
         if self.resized || changed {
             self.resized = false;
             self.recreate_swapchain()?;
@@ -341,6 +333,7 @@ impl Renderer {
 
         self.device.get_device().unmap_memory(self.test_pipeline.uniform_buffer.memories[image_index]);
         self.test_pipeline.descriptor_data.update_default(
+            image_index,
             self.device.get_device(), 
             &self.test_pipeline.uniform_buffer, 
             &self.texture
@@ -356,9 +349,8 @@ impl Renderer {
         // Texture
         self.texture.destroy(&self.device);
     
-        // Vertices
-        self.clear_objects(0)?; 
-        self.clear_objects(1)?;
+        // Objects
+        self.objects.destroy(&self.device);
         
         for i in 0..helper::MAX_FRAMES_IN_FLIGHT {
             self.device.get_device().destroy_fence(self.data.in_flight_fences[i], None);
@@ -380,22 +372,6 @@ impl Renderer {
         Ok(())
     }
     
-    // Private
-    unsafe fn clear_objects(&mut self, index: usize) -> Result<(), MyError> {
-        for object in self.objects[index].clone() {
-            // Clearing Vertices
-            self.device.get_device().destroy_buffer(object.vertex_buffer()?.buffer, None);
-            self.device.get_device().free_memory(object.vertex_buffer()?.memory, None);
-            
-            // Clearing Indices
-            self.device.get_device().destroy_buffer(object.index_buffer()?.buffer, None);
-            self.device.get_device().free_memory(object.index_buffer()?.memory, None);
-        }
-        
-        self.objects[index].clear();
-
-        Ok(())
-    }
     unsafe fn prepare_cmd_buffers(&mut self) -> Result<(), MyError>
     {
         let buffers = self.device.get_graphics_queue().command_buffers.clone();
@@ -409,7 +385,7 @@ impl Renderer {
     {
         let info = vk::CommandBufferBeginInfo::builder(); 
         let command_buffer = &self.device.get_graphics_queue().command_buffers[index];
-        
+
         // Prepare to submit commands
         self.device.get_device().begin_command_buffer(*command_buffer, &info)?;
         
@@ -438,7 +414,9 @@ impl Renderer {
         
         self.device.get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
 
-        for object in &self.objects[self.objects_index] {
+        for (_, obj_data) in self.objects.get_objects() {
+            let object = obj_data.object.borrow();
+
             self.device.get_device().cmd_bind_vertex_buffers(
                 *command_buffer, 
                 0, 
@@ -506,7 +484,7 @@ impl Renderer {
         
         self.destroy_swapchain();
         self.data.swapchain = VkSwapchain::new(
-            &self.window, 
+            &self.window.borrow(), 
             &self.instance, 
             &self.data.surface, 
             &self.data.physical_device, 

@@ -271,6 +271,7 @@ impl Renderer {
         
         self.data.images_in_flight[image_index] = in_flight_fence;
         
+        self.objects.destroy_inactive_objects(&self.device);
         self.update_uniform_buffer(image_index)?;
         self.prepare_cmd_buffer(image_index)?;
 

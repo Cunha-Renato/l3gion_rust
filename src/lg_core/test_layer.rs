@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use sllog::info;
+use sllog::*;
 use winit::window::Window;
 use crate::utils::tools::to_radians;
 

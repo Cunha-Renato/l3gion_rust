@@ -1,5 +1,4 @@
 pub mod camera;
-// pub mod renderer_core;
 pub mod model;
 pub mod vertex;
 pub mod texture;
@@ -35,7 +34,7 @@ use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::vulkan::vk_renderpass::VkRenderPass;
 use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, pipeline::VkPipeline, shader::Shader, vk_swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture}};
 
-use super::lg_types::reference::Ref;
+use super::{lg_types::reference::Ref, uuid::UUID};
 
 pub struct Renderer {
     window: Ref<Window>,
@@ -46,6 +45,7 @@ pub struct Renderer {
     test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
     texture: VkTexture, // The textures also need to be in a hash map (probably)
     objects: ObjectStorage<Vertex>,
+    frame_active_objects: Vec<UUID>,
     frame: usize,
     pub resized: bool,
     camera: Ref<Camera>,
@@ -191,6 +191,7 @@ impl Renderer {
             test_pipeline,
             texture,
             objects: ObjectStorage::init(),
+            frame_active_objects: Vec::new(),
             frame: 0,
             resized: false,
             camera: Ref::default()
@@ -216,22 +217,13 @@ impl Renderer {
     pub unsafe fn draw(&mut self, object: Ref<Object<Vertex>>) -> Result<(), MyError> {
         optick::event!();
 
-        if object.borrow_mut().vertex_buffer().is_err() {
-            object.borrow_mut().create_vertex_buffer(
-                &self.instance, 
-                &self.device, 
-                &self.data.physical_device, 
-            )?;
-        }
-        if object.borrow_mut().index_buffer().is_err() {
-            object.borrow_mut().create_index_buffer(
-                &self.instance, 
-                &self.device, 
-                &self.data.physical_device, 
-            )?;
-        }
-
-        self.objects.insert(object.clone());
+        self.objects.insert(
+            object.clone(), 
+            &self.device, 
+            &self.instance, 
+            &self.data.physical_device
+        );
+        self.frame_active_objects.push(object.borrow().uuid());
         
         Ok(())
     }
@@ -310,6 +302,7 @@ impl Renderer {
         }
         
         self.frame = (self.frame + 1) % helper::MAX_FRAMES_IN_FLIGHT;
+        self.frame_active_objects.clear();
 
         Ok(())
     }
@@ -415,18 +408,23 @@ impl Renderer {
         
         self.device.get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
 
-        for (_, obj_data) in self.objects.get_objects() {
-            let object = obj_data.object.borrow();
+        for fa_object in &self.frame_active_objects {
+            let object = self.objects
+                .get_objects()
+                .get(fa_object)
+                .unwrap()
+                .object
+                .borrow();
 
             self.device.get_device().cmd_bind_vertex_buffers(
                 *command_buffer, 
                 0, 
-                &[object.vertex_buffer()?.buffer], 
+                &[object.vertex_buffer.as_ref().unwrap().buffer], 
                 &[0]
             );
             self.device.get_device().cmd_bind_index_buffer(
                 *command_buffer, 
-                object.index_buffer()?.buffer, 
+                object.index_buffer.as_ref().unwrap().buffer, 
                 0, 
                 vk::IndexType::UINT32
             );
@@ -442,7 +440,7 @@ impl Renderer {
             // Draw call
             self.device.get_device().cmd_draw_indexed(
                 *command_buffer, 
-                object.indices().len() as u32, 
+                object.object.borrow().indices().len() as u32,
                 1, 
                 0, 
                 0, 

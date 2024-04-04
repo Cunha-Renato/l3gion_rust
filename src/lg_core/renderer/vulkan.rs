@@ -18,3 +18,4 @@ pub mod vk_command_pool;
 pub mod vk_image;
 pub mod vk_memory_allocator;
 pub mod vk_renderpass;
+pub mod vk_object;

@@ -1,10 +1,12 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
-    mat4 model;
+layout(set = 0, binding = 0) uniform ViewProjUBO {
     mat4 view;
     mat4 proj;
-} ubo;
+} u_ViewProjection;
+layout(set = 2, binding = 0) uniform ModelUBO  {
+    mat4 data;
+} u_Model;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
@@ -16,5 +18,5 @@ layout(location = 1) out vec2 fragTexCoord;
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = u_ViewProjection.proj * u_ViewProjection.view * u_Model.data * vec4(inPosition, 1.0);
 }

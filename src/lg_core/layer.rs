@@ -1,9 +1,11 @@
 use winit::window::Window;
-use super::{event::LgEvent, input::LgInput, lg_types::reference::Ref};
+use crate::MyError;
+
+use super::{event::LgEvent, input::LgInput, lg_types::reference::Rfc};
 
 pub trait Layer {
-    fn init(&mut self, window: Ref<Window>);
-    fn on_update(&mut self, input: &LgInput);
-    fn on_event(&mut self, event: &LgEvent);
-    fn destroy(&mut self);
+    fn init(&mut self, window: Rfc<Window>) -> Result<(), MyError>;
+    fn on_update(&mut self, input: &LgInput) -> Result<(), MyError>;
+    fn on_event(&mut self, event: &LgEvent) -> Result<(), MyError>;
+    fn destroy(&mut self) -> Result<(), MyError>;
 }

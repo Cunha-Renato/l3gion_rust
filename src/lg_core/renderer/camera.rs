@@ -77,8 +77,8 @@ impl Camera {
 
         self.projection_matrix * correction
     }
-    pub const fn get_view_matrix(&self) -> &glm::Mat4 {
-        &self.view_matrix
+    pub fn get_view_matrix(&self) -> glm::Mat4 {
+        self.view_matrix.clone()
     }
     pub fn get_view_projection(&self) -> glm::Mat4 {
         self.projection_matrix * self.view_matrix

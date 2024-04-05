@@ -1,30 +1,32 @@
-use vulkanalia:: {
-    prelude::v1_2::*, 
-    vk::{self, DescriptorSet},
-};
-use crate::MyError;
+use std::mem::size_of;
 
-use super::{uniform_buffer::UniformBuffer, vk_device::VkDevice, vk_swapchain::VkSwapchain, vk_texture::VkTexture};
+use vulkanalia::{
+    prelude::v1_2::*, 
+    vk,
+};
+use crate::{lg_core::renderer::uniform_buffer_object::UniformBufferObject, MyError};
+
+use super::{uniform_buffer::UniformBuffer, vk_device::VkDevice, vk_texture::VkTexture};
 
 #[derive(Default)]
 pub struct DescriptorData {
     pub layout: vk::DescriptorSetLayout,
     pub pool: vk::DescriptorPool,
-    pub sets: Vec<DescriptorSet>,
+    pub sets: Vec<vk::DescriptorSet>,
 }
 impl DescriptorData {
     pub unsafe fn new_default(
         device: &Device, 
-        swapchain: &VkSwapchain,
+        lenght: u32,
     ) -> Result<Self, MyError> 
     {
         let layout = create_default_descriptor_set_layout(device)?;
-        let pool = create_descriptor_pool(device, swapchain)?;
+        let pool = create_descriptor_pool(device, lenght)?;
         let sets = create_default_descriptor_sets(
             device, 
             &layout, 
             &pool, 
-            swapchain,
+            lenght,
         )?;
         
         Ok(Self {
@@ -36,12 +38,13 @@ impl DescriptorData {
     pub unsafe fn update_default(
         &self,
         index: usize,
+        ubo_offset: u64,
         device: &Device,
         uniform_buffer: &UniformBuffer,
         texture: &VkTexture,
     ) 
     {
-        update_default_descriptor_sets(device, index, &self.sets, uniform_buffer, texture)
+        update_default_descriptor_sets(device, index, ubo_offset, &self.sets, uniform_buffer, texture)
     }
     
     pub unsafe fn destroy_pool(&mut self, device: &VkDevice) {
@@ -58,7 +61,7 @@ pub unsafe fn create_default_descriptor_set_layout(
 {
     let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
         .binding(0)
-        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
         .descriptor_count(1)
         .stage_flags(vk::ShaderStageFlags::VERTEX);
 
@@ -66,7 +69,7 @@ pub unsafe fn create_default_descriptor_set_layout(
         .binding(1)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .descriptor_count(1)
-        .stage_flags(vk::ShaderStageFlags::FRAGMENT);
+        .stage_flags(vk::ShaderStageFlags::FRAGMENT); 
 
     let bindings = &[ubo_binding, sampler_binding];
     let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
@@ -75,22 +78,21 @@ pub unsafe fn create_default_descriptor_set_layout(
 }
 unsafe fn create_descriptor_pool(
     device: &Device,
-    swapchain: &VkSwapchain,
+    lenght: u32
 ) -> Result<vk::DescriptorPool, MyError>
 {
-    let sw_images_len = swapchain.images.len() as u32;
     let ubo_size = vk::DescriptorPoolSize::builder()
-        .type_(vk::DescriptorType::UNIFORM_BUFFER)
-        .descriptor_count(sw_images_len);
+        .type_(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+        .descriptor_count(1);
 
     let sampler_size = vk::DescriptorPoolSize::builder()
         .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(sw_images_len);
+        .descriptor_count(lenght);
 
     let pool_sizes = &[ubo_size, sampler_size];
     let info = vk::DescriptorPoolCreateInfo::builder()
         .pool_sizes(pool_sizes)
-        .max_sets(sw_images_len);
+        .max_sets(lenght);
 
     Ok(device.create_descriptor_pool(&info, None)?)
 }
@@ -98,13 +100,13 @@ unsafe fn create_default_descriptor_sets(
     device: &Device,
     layout: &vk::DescriptorSetLayout,
     pool: &vk::DescriptorPool,
-    swapchain: &VkSwapchain,
+    lenght: u32,
 ) -> Result<Vec<vk::DescriptorSet>, MyError>
 {
     // Allocate
     let layouts = vec![
         *layout; 
-        swapchain.images.len()
+        lenght as usize
     ];
     let info = vk::DescriptorSetAllocateInfo::builder()
         .descriptor_pool(*pool)
@@ -117,21 +119,22 @@ unsafe fn create_default_descriptor_sets(
 pub unsafe fn update_default_descriptor_sets(
     device: &Device,
     i: usize,
+    ubo_offset: u64,
     sets: &[vk::DescriptorSet],
     uniform_buffer: &UniformBuffer,
     texture: &VkTexture,
 ) {
     let info = vk::DescriptorBufferInfo::builder()
-        .buffer(uniform_buffer.buffers[i])
+        .buffer(uniform_buffer.buffers[0])
         .offset(0)
-        .range(uniform_buffer.ubo_size);
+        .range(size_of::<UniformBufferObject>() as u64);
 
     let buffer_info = &[info];
-    let ubo_write = vk::WriteDescriptorSet::builder()
+    let ds_write = vk::WriteDescriptorSet::builder()
         .dst_set(sets[i])
-        .dst_binding(0)
+        .dst_binding(ubo_offset as u32)
         .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
         .buffer_info(buffer_info);
 
     let info = vk::DescriptorImageInfo::builder()
@@ -147,5 +150,5 @@ pub unsafe fn update_default_descriptor_sets(
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(image_info);
 
-    device.update_descriptor_sets(&[ubo_write, sampler_write], &[] as &[vk::CopyDescriptorSet]);
+    device.update_descriptor_sets(&[ds_write, sampler_write], &[] as &[vk::CopyDescriptorSet]);
 }

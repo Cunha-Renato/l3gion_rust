@@ -51,14 +51,14 @@ fn main() -> Result<(), MyError> {
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared if !destroying && !minimized => {
-                app.on_update();
+                app.on_update().unwrap();
             }
             Event::WindowEvent {event, .. } => {
                 match event {
                     WindowEvent::CloseRequested => {
                         destroying = true;
                         *control_flow = ControlFlow::Exit;
-                        app.destroy();
+                        app.destroy().unwrap();
                     },
                     WindowEvent::Resized(size) => {
                         if size.width == 0 || size.height == 0 {
@@ -78,7 +78,7 @@ fn main() -> Result<(), MyError> {
                                 code: input.scancode,
                                 key: key_code.into(),
                                 pressed: state,
-                            }))
+                            })).unwrap();
                         }
                     },
                     WindowEvent::MouseInput { device_id, state, button, modifiers } => {
@@ -94,19 +94,19 @@ fn main() -> Result<(), MyError> {
                         app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
                             button: button,
                             pressed: btn_state,
-                        })));
+                        }))).unwrap();
                     },
                     WindowEvent::CursorMoved { device_id, position, modifiers } => {
                         app.core.input.set_mouse_position(position.x as f32, position.y as f32);
                         app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
                             position: (position.x, position.y),
-                        })));
+                        }))).unwrap();
                     },
                     WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
                         if let MouseScrollDelta::LineDelta(x, y) = delta {
                             app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ScrollEvent(MouseScrollEvent {
                                 delta: (x, y),
-                            })));
+                            }))).unwrap();
                         }
                     },
                     _ => {}

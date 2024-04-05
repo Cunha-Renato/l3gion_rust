@@ -2,22 +2,20 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::MyError;
-use super::{descriptor::DescriptorData, shader::Shader, uniform_buffer::UniformBuffer, vk_device::VkDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain};
-
+use crate::{lg_core::renderer::helper, MyError};
+use super::{shader::Shader, vk_descriptor::VkPipelineDescriptorData, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass};
 pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
-    pub descriptor_data: DescriptorData,
-    pub uniform_buffer: UniformBuffer,
+    pub descriptor_data: Vec<VkPipelineDescriptorData>,
 }
 impl VkPipeline {
     pub unsafe fn new(
         device: &VkDevice,
-        swapchain: &VkSwapchain,
+        instance: &VkInstance,
+        physical_device: &VkPhysicalDevice,
         mut vert_shader: Shader,
         mut frag_shader: Shader,
-        uniform_buffer: UniformBuffer,
         vertex_binding_descriptions: &[vk::VertexInputBindingDescription],
         vertex_attribute_descriptions: &[vk::VertexInputAttributeDescription],
         viewports: Vec<vk::Viewport>,
@@ -26,7 +24,7 @@ impl VkPipeline {
         render_pass: &VkRenderPass
     ) -> Result<Self, MyError> 
     {
-        let device = device.get_device();
+        let v_device = device.get_device();
 
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
         .vertex_binding_descriptions(vertex_binding_descriptions)
@@ -80,16 +78,20 @@ impl VkPipeline {
         .logic_op(vk::LogicOp::COPY)
         .attachments(attachments)
         .blend_constants([0.0, 0.0, 0.0, 0.0]);
+        
+        let mut descriptor_data = Vec::new();
+        for _ in 0..helper::MAX_FRAMES_IN_FLIGHT {
+            descriptor_data.push(VkPipelineDescriptorData::new(
+                device, 
+                instance, 
+                physical_device
+            )?);
+        }
 
-        let descriptor_data = DescriptorData::new_default(
-            device, 
-            swapchain, 
-        )?;
-        let layouts = [descriptor_data.layout];
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&layouts);
+            .set_layouts(&descriptor_data[0].layouts);
 
-        let layout = device.create_pipeline_layout(&layout_info, None)?;
+        let layout = v_device.create_pipeline_layout(&layout_info, None)?;
 
         let stages = &[
             vert_shader.info, 
@@ -108,20 +110,19 @@ impl VkPipeline {
             .render_pass(*render_pass.get_render_pass())
             .subpass(0);
 
-        let pipeline = device.create_graphics_pipelines(
+        let pipeline = v_device.create_graphics_pipelines(
             vk::PipelineCache::null(), 
             &[info], 
             None
         )?.0[0];
 
-        vert_shader.destroy_module(device);
-        frag_shader.destroy_module(device);
+        vert_shader.destroy_module(v_device);
+        frag_shader.destroy_module(v_device);
 
         Ok(Self {
             layout,
             pipeline,
             descriptor_data,
-            uniform_buffer
         })
     }
 }

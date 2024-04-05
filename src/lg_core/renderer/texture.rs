@@ -1,6 +1,7 @@
 use std::mem::size_of;
 use crate::{lg_core::uuid::UUID, MyError};
 
+#[derive(Default)]
 pub struct Texture {
     uuid: UUID,
     width: u32,

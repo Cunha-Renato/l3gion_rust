@@ -16,6 +16,13 @@ const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 #[derive(Default)]
+pub struct SyncObjects {
+    pub present_semaphore: vk::Semaphore,
+    pub render_semaphore: vk::Semaphore,
+    pub render_fence: vk::Fence,
+}
+
+#[derive(Default)]
 pub struct RendererData {
     pub physical_device: VkPhysicalDevice,
     pub surface: vk::SurfaceKHR,
@@ -25,10 +32,7 @@ pub struct RendererData {
     pub color_image: VkImage,
     pub depth_image: VkImage,
     pub framebuffers: Vec<vk::Framebuffer>,
-    pub in_flight_fences: Vec<vk::Fence>,
-    pub images_in_flight: Vec<vk::Fence>,
-    pub image_available_semaphores: Vec<vk::Semaphore>,
-    pub render_finished_semaphores: Vec<vk::Semaphore>,
+    pub sync_objects: Vec<SyncObjects>,
 }
 
 // Helper
@@ -152,21 +156,16 @@ pub unsafe fn create_sync_objects(
 ) -> Result<(), MyError>
 {
     let semaphore_info = vk::SemaphoreCreateInfo::builder();
-    
     let fence_info = vk::FenceCreateInfo::builder()
         .flags(vk::FenceCreateFlags::SIGNALED);
     
     for _ in 0..MAX_FRAMES_IN_FLIGHT {
-        data.image_available_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
-        data.render_finished_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
-        
-        data.in_flight_fences.push(device.create_fence(&fence_info, None)?);
+        data.sync_objects.push(SyncObjects {
+            render_fence: device.create_fence(&fence_info, None)?,
+            present_semaphore: device.create_semaphore(&semaphore_info, None)?,
+            render_semaphore: device.create_semaphore(&semaphore_info, None)?,
+        });
     }
-    
-    data.images_in_flight = data.swapchain.images
-        .iter()
-        .map(|_| vk::Fence::null())
-        .collect();
 
     Ok(())
 }

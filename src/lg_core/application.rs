@@ -5,18 +5,18 @@ use winit::window::Window;
 
 use crate::{lg_core::test_layer::TestLayer, MyError};
 use super::{
-    event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Ref, renderer::Renderer
+    event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::Renderer
 };
 pub struct AppCore {
-    window: Ref<Window>,
-    renderer: Ref<Renderer>,
+    window: Rfc<Window>,
+    renderer: Rfc<Renderer>,
     pub input: LgInput,
 }
 
 pub struct Application {
     pub resized: bool,
     pub core: AppCore,
-    layers: Vec<Ref<dyn Layer>>,
+    layers: Vec<Rfc<dyn Layer>>,
 }
 impl Application {
     pub fn new(window: Window) -> Result<Self, MyError> {
@@ -26,7 +26,7 @@ impl Application {
         let (renderer, window) = unsafe {Renderer::init(window)?};
         let input = LgInput::new();
 
-        let renderer = Ref::new(renderer);
+        let renderer = Rfc::new(renderer);
         let core = AppCore {
             window: window.clone(),
             renderer: renderer.clone(),
@@ -34,13 +34,13 @@ impl Application {
         };
         
         let layers = vec![Rc::new(RefCell::new(TestLayer::new(renderer.clone())))];
-        let layers: Vec<Ref<dyn Layer>> = layers
+        let layers: Vec<Rfc<dyn Layer>> = layers
             .iter()
-            .map(|layer| Ref::from_rc_refcell(&(layer.clone() as Rc<RefCell<dyn Layer>>)))
+            .map(|layer| Rfc::from_rc_refcell(&(layer.clone() as Rc<RefCell<dyn Layer>>)))
             .collect();
         
         for layer in &layers {
-            layer.borrow_mut().init(window.clone());
+            layer.borrow_mut().init(window.clone())?;
         }
 
         Ok(Self {
@@ -50,17 +50,19 @@ impl Application {
         })
     }
     
-    pub fn destroy(&mut self) {
+    pub fn destroy(&mut self) -> Result<(), MyError>{
         optick::event!();
         for layer in &self.layers {
-            layer.borrow_mut().destroy();
+            layer.borrow_mut().destroy()?;
         }
 
         unsafe { self.core.renderer.borrow_mut().destroy().unwrap() }
         optick::stop_capture("profiling");
+        
+        Ok(())
     }
      
-    pub fn on_update(&mut self) {
+    pub fn on_update(&mut self) -> Result<(), MyError>{
         optick::next_frame();
         optick::event!();
         
@@ -68,22 +70,23 @@ impl Application {
         self.resized = false;
 
         for layer in &self.layers {
-            layer.borrow_mut().on_update(&self.core.input);
+            layer.borrow_mut().on_update(&self.core.input)?;
         }
 
         // Rendering
         unsafe { 
-            match self.core.renderer.borrow_mut().render() {
-                Ok(_) => (),
-                Err(e) => error!("{:?}", e),
-            }
+            self.core.renderer.borrow_mut().render()?;
         }
+        
+        Ok(())
     }
 
-    pub fn on_event(&mut self, event: &LgEvent) {
+    pub fn on_event(&mut self, event: &LgEvent) -> Result<(), MyError>{
         optick::event!();
         for layer in &self.layers {
-            layer.borrow_mut().on_event(event);
+            layer.borrow_mut().on_event(event)?;
         }
+        
+        Ok(())
     }
 }

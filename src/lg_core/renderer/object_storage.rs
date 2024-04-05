@@ -1,11 +1,9 @@
-use std::{borrow::Borrow, collections::HashMap, time::Instant};
-use vulkanalia::vk::DeviceV1_0;
-
-use crate::lg_core::{lg_types::reference::Ref, uuid::UUID};
+use std::{collections::HashMap, time::Instant};
+use crate::lg_core::{lg_types::reference::Rfc, uuid::UUID};
 use super::{object::Object, vulkan::{vk_device::VkDevice, vk_instance::VkInstance, vk_object::VkObject, vk_physical_device::VkPhysicalDevice}};
 
 pub struct ObjectData<T> {
-    pub object: Ref<VkObject<T>>,
+    pub object: Rfc<VkObject<T>>,
     insertion_time: Instant,
 }
 pub struct ObjectStorage<T> {
@@ -21,7 +19,7 @@ impl<T> ObjectStorage<T> {
     }
     pub unsafe fn insert(
         &mut self, 
-        object: Ref<Object<T>>,
+        object: Rfc<Object<T>>,
         device: &VkDevice,
         instance: &VkInstance,
         physical_device: &VkPhysicalDevice,
@@ -40,7 +38,7 @@ impl<T> ObjectStorage<T> {
                 ).unwrap();
                 
                 ObjectData {
-                    object: Ref::new(vk_object),
+                    object: Rfc::new(vk_object),
                     insertion_time: Instant::now()
                 }
             });
@@ -66,26 +64,16 @@ impl<T> ObjectStorage<T> {
             self.timer = Instant::now();
         }
     }
-    unsafe fn destroy_buffers(&self, uuid: &UUID, device: &VkDevice) {
-        let object = self.objects.get(uuid).unwrap().object.borrow();
-        
-        // Free GPU resources
-        // Clearing Vertices
-        device.get_device().destroy_buffer(object.vertex_buffer.as_ref().unwrap().buffer, None);
-        device.get_device().free_memory(object.vertex_buffer.as_ref().unwrap().memory, None);
-        
-        // Clearing Indices
-        device.get_device().destroy_buffer(object.index_buffer.as_ref().unwrap().buffer, None);
-        device.get_device().free_memory(object.index_buffer.as_ref().unwrap().memory, None);
-
+    unsafe fn destroy_resources(&self, uuid: &UUID, device: &VkDevice) {
+        self.objects.get(uuid).unwrap().object.borrow_mut().destroy(device);
     }
     unsafe fn remove(&mut self, uuid: &UUID, device: &VkDevice) {
-        self.destroy_buffers(uuid, device);
+        self.destroy_resources(uuid, device);
         self.objects.remove(uuid);
     }
     pub unsafe fn destroy(&mut self, device: &VkDevice) {
         for (uuid, _) in &self.objects {
-            self.destroy_buffers(uuid, device);
+            self.destroy_resources(uuid, device);
         }
         self.objects.clear();
     }

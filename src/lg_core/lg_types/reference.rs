@@ -1,15 +1,14 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
-use std::ops::{Deref, DerefMut};
 
 #[derive(Default)]
-pub struct Ref<T: ?Sized> {
+pub struct Rfc<T: ?Sized> {
     data: Rc<RefCell<T>>,
 }
 
-impl<T> Ref<T> {
+impl<T> Rfc<T> {
     pub fn new(value: T) -> Self {
-        Ref {
+        Rfc {
             data: Rc::new(RefCell::new(value)),
         }
     }
@@ -17,7 +16,7 @@ impl<T> Ref<T> {
         Rc::downgrade(&self.data)
     }
 }
-impl<T: ?Sized> Ref<T> {
+impl<T: ?Sized> Rfc<T> {
     pub fn borrow(&self) -> std::cell::Ref<'_, T> {
         self.data.borrow()
     }
@@ -32,7 +31,7 @@ impl<T: ?Sized> Ref<T> {
     }
 }
 
-impl<T: ?Sized> Clone for Ref<T> {
+impl<T: ?Sized> Clone for Rfc<T> {
     fn clone(&self) -> Self {
         Self { data: self.data.clone() }
     }

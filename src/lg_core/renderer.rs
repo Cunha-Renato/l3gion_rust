@@ -8,7 +8,7 @@ pub mod object_storage;
 pub mod helper;
 pub mod uniform_buffer_object;
 
-use std::mem::size_of;
+use std::{any::Any,  mem::size_of};
 use std::ptr::copy_nonoverlapping as memcpy;
 
 use nalgebra_glm as glm;
@@ -25,33 +25,34 @@ use vulkanalia::{
 use crate::MyError;
 use texture::Texture;
 use helper::RendererData;
-use self::camera::Camera;
+use self::uniform_buffer_object::{ModelUBO, ViewProjUBO};
+use self::vulkan::vk_descriptor::BufferCategory;
+use self::{camera::Camera, vulkan::vk_texture::VkTexture};
 use self::object_storage::ObjectStorage;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
 use self::vulkan::vk_image::VkImage;
 use self::vulkan::vk_instance::VkInstance;
 use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::vulkan::vk_renderpass::VkRenderPass;
-use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, pipeline::VkPipeline, shader::Shader, vk_swapchain::VkSwapchain, uniform_buffer::UniformBuffer, vk_texture::VkTexture}};
+use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, pipeline::VkPipeline, shader::Shader, vk_swapchain::VkSwapchain}};
 
-use super::{lg_types::reference::Ref, uuid::UUID};
+use super::{lg_types::reference::Rfc, uuid::UUID};
 
 pub struct Renderer {
-    window: Ref<Window>,
+    window: Rfc<Window>,
     entry: Entry,
     instance: VkInstance,
     data: RendererData,
     device: VkDevice,
     test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
-    texture: VkTexture, // The textures also need to be in a hash map (probably)
     objects: ObjectStorage<Vertex>,
     frame_active_objects: Vec<UUID>,
     frame: usize,
     pub resized: bool,
-    camera: Ref<Camera>,
+    camera: Rfc<Camera>,
 }
 impl Renderer {
-    pub unsafe fn init(window: Window) -> Result<(Self, Ref<Window>), MyError> {
+    pub unsafe fn init(window: Window) -> Result<(Self, Rfc<Window>), MyError> {
         let mut data = RendererData::default();
         let entry = helper::create_entry()?; 
         let instance = VkInstance::new(&entry, &window)?;
@@ -113,19 +114,12 @@ impl Renderer {
             .extent(data.swapchain.extent)
             .build();
 
-        let ubo = UniformBuffer::new::<UniformBufferObject>(
-            &instance, 
-            &device, 
-            &data.physical_device, 
-            &data.swapchain
-        )?;
-
         let test_pipeline = VkPipeline::new(
             &device, 
-            &data.swapchain,
+            &instance,
+            &data.physical_device,
             vert_shader, 
             frag_shader, 
-            ubo,
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
             vec![viewport], 
@@ -171,14 +165,7 @@ impl Renderer {
             data.swapchain.extent.height
         )?;
 
-        // TODO: Make this similar to objects, better yet maybe tie this to the object itself.
-        let texture = VkTexture::new(
-            &instance, 
-            &device, 
-            &data.physical_device, 
-            Texture::new("assets/textures/grid.png")?,
-        )?;
-        let window = Ref::new(window);
+        let window = Rfc::new(window);
 
         helper::create_sync_objects(device.get_device(), &mut data)?;
 
@@ -189,12 +176,11 @@ impl Renderer {
             data,
             device,
             test_pipeline,
-            texture,
             objects: ObjectStorage::init(),
             frame_active_objects: Vec::new(),
             frame: 0,
             resized: false,
-            camera: Ref::default()
+            camera: Rfc::default()
         },
         window.clone()))
     }
@@ -205,16 +191,12 @@ impl Renderer {
     pub fn msaa(&mut self, value: u32) {
         todo!()
     }
-    pub fn set_camera(&mut self, camera: Ref<Camera>) {
+    pub fn set_camera(&mut self, camera: Rfc<Camera>) {
         self.camera = camera;        
     }
     
-    // TODO: Review all of this shit below!!!!
-    // I belive that, as an argument this function should have a single struct with data for:
-    //  object's position, rotation, scale, and maybe other things relevant to drawing
-    //  It is ok to send those informations as an uniform buffer because it is not batched, on the contrary the transform should be aplied in the cpu side??
-    //  Talking about uniform buffer, for every draw call I need to bind a different uniform buffer, (YAY I love this api (i don't))
-    pub unsafe fn draw(&mut self, object: Ref<Object<Vertex>>) -> Result<(), MyError> {
+    // TODO: Create a gigantic uniform buffer, use pushconstants to address them in the shader
+    pub unsafe fn draw(&mut self, object: Rfc<Object<Vertex>>) -> Result<(), MyError> {
         optick::event!();
 
         self.objects.insert(
@@ -232,18 +214,20 @@ impl Renderer {
     ) -> Result<(), MyError>
     {
         optick::event!();
-        if self.camera.borrow().distance < 1.5 {
-            println!("{:#?}", self.camera.borrow());
-        }
-        let in_flight_fence = self.data.in_flight_fences[self.frame];
-        self.device.get_device().wait_for_fences(&[in_flight_fence], true, u64::MAX)?;
+        // Wait for gpu to finish the rendering
+        self.device.get_device().wait_for_fences(
+            &[self.data.sync_objects[self.frame].render_fence],
+            true, 
+            u64::MAX
+        )?;
+        self.device.get_device().reset_fences(&[self.data.sync_objects[self.frame].render_fence])?;
         
         let result = self.device
             .get_device()
             .acquire_next_image_khr(
                 self.data.swapchain.swapchain, 
                 u64::MAX, 
-                self.data.image_available_semaphores[self.frame], 
+                self.data.sync_objects[self.frame].present_semaphore,
                 vk::Fence::null()
             );
         
@@ -256,21 +240,15 @@ impl Renderer {
             Err(e) => return Err(e.into()),
         };
         
-        let image_in_flight = self.data.images_in_flight[image_index];
-        if !image_in_flight.is_null() {
-            self.device.get_device().wait_for_fences(&[image_in_flight], true, u64::MAX)?;
-        }
-        
-        self.data.images_in_flight[image_index] = in_flight_fence;
-        
         self.objects.destroy_inactive_objects(&self.device);
-        self.update_uniform_buffer(image_index)?;
+        self.update_camera_buffer()?;
+        self.update_object_uniforms()?;
         self.prepare_cmd_buffer(image_index)?;
 
-        let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
+        let wait_semaphores = &[self.data.sync_objects[self.frame].present_semaphore];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = &[self.device.get_graphics_queue().command_buffers[image_index]];
-        let signal_semaphores = &[self.data.render_finished_semaphores[self.frame]];
+        let signal_semaphores = &[self.data.sync_objects[self.frame].render_semaphore];
         
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
@@ -278,8 +256,11 @@ impl Renderer {
             .command_buffers(command_buffers)
             .signal_semaphores(signal_semaphores);
         
-        self.device.get_device().reset_fences(&[in_flight_fence])?;
-        self.device.get_device().queue_submit(self.device.get_graphics_queue().queue, &[submit_info], in_flight_fence)?;
+        self.device.get_device().queue_submit(
+            self.device.get_graphics_queue().queue, 
+            &[submit_info], 
+            self.data.sync_objects[self.frame].render_fence
+        )?;
         
         let swapchains = &[self.data.swapchain.swapchain];
         let image_indices = &[image_index as u32];
@@ -306,32 +287,67 @@ impl Renderer {
 
         Ok(())
     }
-    unsafe fn update_uniform_buffer(&self, image_index: usize) -> Result<(), MyError>
-    {
-        let model = glm::Mat4::identity();
-        let view = *self.camera.borrow().get_view_matrix();
+    unsafe fn update_camera_buffer(&mut self) -> Result<(), MyError> {
+        let view = self.camera.borrow().get_view_matrix();
         let proj = self.camera.borrow().get_projection_matrix();
+        let ubo = ViewProjUBO { 
+            view,
+            proj
+        };
         
-        let ubo = UniformBufferObject { model, view, proj };
-
         // Copy
 
         let memory = self.device.get_device().map_memory(
-            self.test_pipeline.uniform_buffer.memories[image_index],
+            self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory,
             0,
-            size_of::<UniformBufferObject>() as u64,
+            size_of::<ViewProjUBO>() as u64,
             vk::MemoryMapFlags::empty(),
         )?;
-
         memcpy(&ubo, memory.cast(), 1);
 
-        self.device.get_device().unmap_memory(self.test_pipeline.uniform_buffer.memories[image_index]);
-        self.test_pipeline.descriptor_data.update_default(
-            image_index,
-            self.device.get_device(), 
-            &self.test_pipeline.uniform_buffer, 
-            &self.texture
-        );
+        self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory);
+        
+        self.test_pipeline.descriptor_data[self.frame].update_vp(&self.device);
+
+        Ok(())
+    }
+    unsafe fn update_object_uniforms(&mut self) -> Result<(), MyError>
+    {
+        let mut offset = 0;
+        for (_, fa_object) in self.frame_active_objects.iter().enumerate() {
+            let object = self.objects
+                .get_objects()
+                .get(fa_object)
+                .unwrap()
+                .object
+                .borrow();
+            
+            let texture = object.vk_texture.as_ref().unwrap();
+            let model = glm::Mat4::identity();
+            let ubo = ModelUBO { data: model };
+
+            // Copy
+
+            let memory = self.device.get_device().map_memory(
+                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory,
+                offset,
+                size_of::<ModelUBO>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo, memory.cast(), 1);
+
+            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory);
+
+            self.test_pipeline.descriptor_data[self.frame].update_model(
+                &self.device, 
+            );
+            self.test_pipeline.descriptor_data[self.frame].update_image(
+                &self.device, 
+                texture
+            );
+
+            offset += size_of::<UniformBufferObject>() as u64;
+        }
 
         Ok(())
     }
@@ -339,19 +355,14 @@ impl Renderer {
         self.device.get_device().device_wait_idle().unwrap();
         
         self.destroy_swapchain();
-        
-        // Texture
-        self.texture.destroy(&self.device);
     
         // Objects
         self.objects.destroy(&self.device);
         
-        for i in 0..helper::MAX_FRAMES_IN_FLIGHT {
-            self.device.get_device().destroy_fence(self.data.in_flight_fences[i], None);
-            
-            self.device.get_device().destroy_semaphore(self.data.image_available_semaphores[i], None);
-            
-            self.device.get_device().destroy_semaphore(self.data.render_finished_semaphores[i], None);
+        for sync_obj in &self.data.sync_objects {
+            self.device.get_device().destroy_fence(sync_obj.render_fence, None);
+            self.device.get_device().destroy_semaphore(sync_obj.present_semaphore, None);
+            self.device.get_device().destroy_semaphore(sync_obj.render_semaphore, None);
         }
     
         if helper::VALIDATION_ENABLED {
@@ -366,19 +377,12 @@ impl Renderer {
         Ok(())
     }
     
-    unsafe fn prepare_cmd_buffers(&mut self) -> Result<(), MyError>
-    {
-        let buffers = self.device.get_graphics_queue().command_buffers.clone();
-        for (i, _) in buffers.iter().enumerate() {
-            self.prepare_cmd_buffer(i)?;
-        }
-
-        Ok(())
-    }
     unsafe fn prepare_cmd_buffer(&mut self, index: usize) -> Result<(), MyError>
     {
         let info = vk::CommandBufferBeginInfo::builder(); 
         let command_buffer = &self.device.get_graphics_queue().command_buffers[index];
+        
+        self.device.get_device().reset_command_buffer(*command_buffer, vk::CommandBufferResetFlags::empty());
 
         // Prepare to submit commands
         self.device.get_device().begin_command_buffer(*command_buffer, &info)?;
@@ -405,17 +409,17 @@ impl Renderer {
             .clear_values(clear_values);
 
         self.device.get_device().cmd_begin_render_pass(*command_buffer, &begin_info, vk::SubpassContents::INLINE);
-        
         self.device.get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
 
-        for fa_object in &self.frame_active_objects {
+        let mut ubo_offset = 0;
+        for (_, fa_object) in self.frame_active_objects.iter().enumerate() {
             let object = self.objects
                 .get_objects()
                 .get(fa_object)
                 .unwrap()
                 .object
                 .borrow();
-
+            
             self.device.get_device().cmd_bind_vertex_buffers(
                 *command_buffer, 
                 0, 
@@ -433,9 +437,10 @@ impl Renderer {
                 vk::PipelineBindPoint::GRAPHICS, 
                 self.test_pipeline.layout, 
                 0, 
-                &[self.test_pipeline.descriptor_data.sets[index]], 
+                self.test_pipeline.descriptor_data[self.frame].get_sets().as_slice(),
                 &[]
             );
+            ubo_offset += size_of::<UniformBufferObject>() as u32;
             
             // Draw call
             self.device.get_device().cmd_draw_indexed(
@@ -458,12 +463,8 @@ impl Renderer {
     }
     unsafe fn destroy_swapchain(&mut self) {
         self.device.free_command_buffers();
-        self.test_pipeline.descriptor_data.destroy_pool(&self.device);
-        self.test_pipeline.descriptor_data.destroy_layout(&self.device);
+        self.test_pipeline.descriptor_data.iter_mut().for_each(|dd| dd.destroy(&self.device));
         
-        // Uniform buffer
-        self.test_pipeline.uniform_buffer.memories.iter().for_each(|m| self.device.get_device().free_memory(*m, None));
-        self.test_pipeline.uniform_buffer.buffers.iter().for_each(|u| self.device.get_device().destroy_buffer(*u, None));
         self.data.color_image.destroy(&self.device);
         self.data.depth_image.destroy(&self.device);
         
@@ -508,12 +509,6 @@ impl Renderer {
             vk::ShaderStageFlags::FRAGMENT, 
             include_bytes!("../../assets/shaders/compiled/shader.spv")
         )?;
-        let ubo = UniformBuffer::new::<UniformBufferObject>(
-            &self.instance, 
-            &self.device, 
-            &self.data.physical_device, 
-            &self.data.swapchain
-        )?;
         // Viewport and Scissor
         let viewport = vk::Viewport::builder()
             .x(0.0)
@@ -531,10 +526,10 @@ impl Renderer {
 
         self.test_pipeline = VkPipeline::new(
             &self.device, 
-            &self.data.swapchain,
+            &self.instance,
+            &self.data.physical_device,
             vert_shader, 
             frag_shader, 
-            ubo,
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
             vec![viewport], 

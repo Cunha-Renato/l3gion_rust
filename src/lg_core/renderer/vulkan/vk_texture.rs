@@ -7,7 +7,6 @@ use crate::{lg_core::renderer::texture::Texture, MyError};
 use super::{buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 
 pub struct VkTexture {
-    pub texture: Texture,
     pub image: VkImage,
     pub sampler: vk::Sampler,
 }
@@ -16,7 +15,7 @@ impl VkTexture {
         instance: &VkInstance,
         device: &VkDevice,
         physical_device: &VkPhysicalDevice,
-        texture: Texture
+        texture: &Texture
     ) -> Result<Self, MyError> 
     {
         let (staging_buffer, staging_buffer_memory) = buffer::create_buffer(
@@ -110,7 +109,6 @@ impl VkTexture {
         let sampler = device.get_device().create_sampler(&info, None)?;
         
         Ok(Self {
-            texture,
             image: tex_image,
             sampler,
         })

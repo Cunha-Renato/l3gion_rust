@@ -77,11 +77,11 @@ impl Camera {
 
         self.projection_matrix * correction
     }
-    pub fn get_view_matrix(&self) -> glm::Mat4 {
-        self.view_matrix.clone()
+    pub fn get_view_matrix(&self) -> &glm::Mat4 {
+        &self.view_matrix
     }
     pub fn get_view_projection(&self) -> glm::Mat4 {
-        self.projection_matrix * self.view_matrix
+        self.view_matrix * self.projection_matrix
     }
     
     pub fn get_up_direction(&self) -> glm::Vec3 {

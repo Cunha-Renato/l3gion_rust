@@ -18,5 +18,5 @@ layout(location = 1) out vec2 fragTexCoord;
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
-    gl_Position = u_ViewProjection.proj * u_ViewProjection.view * u_Model.data * vec4(inPosition, 1.0);
+    gl_Position = u_ViewProjection.view * u_ViewProjection.proj * u_Model.data * vec4(inPosition, 1.0);
 }

@@ -3,11 +3,11 @@ use vulkanalia:: {
     vk,
 };
 use crate::{lg_core::renderer::helper, MyError};
-use super::{shader::Shader, vk_descriptor::VkPipelineDescriptorData, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass};
+use super::{shader::Shader, vk_descriptor::{self, VkPipelineDescriptorData}, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass};
 pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
-    pub descriptor_data: Vec<VkPipelineDescriptorData>,
+    pub descriptor_data: Vec<Vec<VkPipelineDescriptorData>>,
 }
 impl VkPipeline {
     pub unsafe fn new(
@@ -81,15 +81,19 @@ impl VkPipeline {
         
         let mut descriptor_data = Vec::new();
         for _ in 0..helper::MAX_FRAMES_IN_FLIGHT {
-            descriptor_data.push(VkPipelineDescriptorData::new(
-                device, 
-                instance, 
-                physical_device
-            )?);
+            let mut aux = Vec::new();
+            for _ in 0..vk_descriptor::MAX_SETS/5 {
+                aux.push(VkPipelineDescriptorData::new(
+                    device, 
+                    instance, 
+                    physical_device
+                )?);
+            }
+            descriptor_data.push(aux);
         }
 
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&descriptor_data[0].layouts);
+            .set_layouts(&descriptor_data[0][0].layouts);
 
         let layout = v_device.create_pipeline_layout(&layout_info, None)?;
 

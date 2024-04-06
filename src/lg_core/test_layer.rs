@@ -38,24 +38,24 @@ impl Layer for TestLayer {
 
         let vertices = [
             Vertex::new(glm::vec3(-0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+            Vertex::new(glm::vec3( 0.5, -0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
+            Vertex::new(glm::vec3( 0.5,  0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3(-0.5,  0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
         ];
         let vertices2 = [
             Vertex::new(glm::vec3(-0.3, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.8, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.8, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.3, 0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+            Vertex::new(glm::vec3( 0.8, -0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 0.0)),
+            Vertex::new(glm::vec3( 0.8,  0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3(-0.3,  0.5, 1.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
         ];
         let indices = [0, 1, 2, 2, 3, 0];
 
         let object = Object::new(self.textures.grid.clone(), vertices.to_vec(), indices.to_vec());
-        let object2 = Object::new(self.textures.grid.clone(), vertices2.to_vec(), indices.to_vec());
+        let object2 = Object::new(self.textures.viking.clone(), vertices2.to_vec(), indices.to_vec());
         
         let objects = vec![
             Rfc::new(object),
-            // Rfc::new(object2),
+            Rfc::new(object2),
         ];
         
         self.objects = objects;

@@ -8,7 +8,7 @@ pub mod object_storage;
 pub mod helper;
 pub mod uniform_buffer_object;
 
-use std::{any::Any,  mem::size_of};
+use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 
 use nalgebra_glm as glm;
@@ -288,33 +288,32 @@ impl Renderer {
         Ok(())
     }
     unsafe fn update_camera_buffer(&mut self) -> Result<(), MyError> {
-        let view = self.camera.borrow().get_view_matrix();
-        let proj = self.camera.borrow().get_projection_matrix();
         let ubo = ViewProjUBO { 
-            view,
-            proj
+            view: *self.camera.borrow().get_view_matrix(),
+            proj: self.camera.borrow().get_projection_matrix(),
         };
         
         // Copy
 
-        let memory = self.device.get_device().map_memory(
-            self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory,
-            0,
-            size_of::<ViewProjUBO>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(&ubo, memory.cast(), 1);
+        for i in 0..self.frame_active_objects.len() {
+            let memory = self.device.get_device().map_memory(
+                self.test_pipeline.descriptor_data[self.frame][i].buffers[BufferCategory::VIEW_PROJ as usize].memory,
+                0,
+                size_of::<ViewProjUBO>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo, memory.cast(), 1);
 
-        self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory);
-        
-        self.test_pipeline.descriptor_data[self.frame].update_vp(&self.device);
-
+            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame][i].buffers[BufferCategory::VIEW_PROJ as usize].memory);
+            
+            self.test_pipeline.descriptor_data[self.frame][i].update_vp(&self.device);
+        }
         Ok(())
     }
     unsafe fn update_object_uniforms(&mut self) -> Result<(), MyError>
     {
         let mut offset = 0;
-        for (_, fa_object) in self.frame_active_objects.iter().enumerate() {
+        for (obj_index, fa_object) in self.frame_active_objects.iter().enumerate() {
             let object = self.objects
                 .get_objects()
                 .get(fa_object)
@@ -323,25 +322,25 @@ impl Renderer {
                 .borrow();
             
             let texture = object.vk_texture.as_ref().unwrap();
-            let model = glm::Mat4::identity();
-            let ubo = ModelUBO { data: model };
+            let data = glm::Mat4::identity().append_translation(&glm::vec3(0.0, 0.0, 0.3));
+            let ubo = ModelUBO { data };
 
             // Copy
 
             let memory = self.device.get_device().map_memory(
-                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory,
+                self.test_pipeline.descriptor_data[self.frame][obj_index].buffers[BufferCategory::MODEL as usize].memory,
                 offset,
                 size_of::<ModelUBO>() as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
 
-            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory);
+            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame][obj_index].buffers[BufferCategory::MODEL as usize].memory);
 
-            self.test_pipeline.descriptor_data[self.frame].update_model(
-                &self.device, 
+            self.test_pipeline.descriptor_data[self.frame][obj_index].update_model(
+                &self.device,
             );
-            self.test_pipeline.descriptor_data[self.frame].update_image(
+            self.test_pipeline.descriptor_data[self.frame][obj_index].update_image(
                 &self.device, 
                 texture
             );
@@ -382,7 +381,7 @@ impl Renderer {
         let info = vk::CommandBufferBeginInfo::builder(); 
         let command_buffer = &self.device.get_graphics_queue().command_buffers[index];
         
-        self.device.get_device().reset_command_buffer(*command_buffer, vk::CommandBufferResetFlags::empty());
+        self.device.get_device().reset_command_buffer(*command_buffer, vk::CommandBufferResetFlags::empty())?;
 
         // Prepare to submit commands
         self.device.get_device().begin_command_buffer(*command_buffer, &info)?;
@@ -412,7 +411,7 @@ impl Renderer {
         self.device.get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, self.test_pipeline.pipeline);
 
         let mut ubo_offset = 0;
-        for (_, fa_object) in self.frame_active_objects.iter().enumerate() {
+        for (obj_index, fa_object) in self.frame_active_objects.iter().enumerate() {
             let object = self.objects
                 .get_objects()
                 .get(fa_object)
@@ -437,8 +436,8 @@ impl Renderer {
                 vk::PipelineBindPoint::GRAPHICS, 
                 self.test_pipeline.layout, 
                 0, 
-                self.test_pipeline.descriptor_data[self.frame].get_sets().as_slice(),
-                &[]
+                self.test_pipeline.descriptor_data[self.frame][obj_index].get_sets().as_slice(),
+                &[ubo_offset]
             );
             ubo_offset += size_of::<UniformBufferObject>() as u32;
             
@@ -463,7 +462,7 @@ impl Renderer {
     }
     unsafe fn destroy_swapchain(&mut self) {
         self.device.free_command_buffers();
-        self.test_pipeline.descriptor_data.iter_mut().for_each(|dd| dd.destroy(&self.device));
+        self.test_pipeline.descriptor_data.iter_mut().for_each(|dd| dd.iter_mut().for_each(|dd| dd.destroy(&self.device)));
         
         self.data.color_image.destroy(&self.device);
         self.data.depth_image.destroy(&self.device);

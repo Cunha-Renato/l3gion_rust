@@ -7,7 +7,7 @@ use vulkanalia::{
 use crate::{lg_core::renderer::uniform_buffer_object::{ModelUBO, ViewProjUBO}, MyError};
 use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
-const MAX_SETS: usize = 1000;
+pub(crate) const MAX_SETS: usize = 1000;
 
 pub enum BufferCategory {
     VIEW_PROJ = 0,
@@ -74,7 +74,7 @@ impl VkPipelineDescriptorData {
             .dst_set(self.sets[set_index])
             .dst_binding(0)
             .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
             .buffer_info(buffer_info);
         
         device.get_device().update_descriptor_sets(
@@ -184,7 +184,7 @@ unsafe fn get_layouts(device: &VkDevice) -> Result<Vec<vk::DescriptorSetLayout>,
     // Model
     let model = vk::DescriptorSetLayoutBinding::builder()
         .binding(0)
-        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
         .descriptor_count(1)
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .build();
@@ -207,7 +207,7 @@ unsafe fn create_pool(
         .build();
 
     let model = vk::DescriptorPoolSize::builder()
-        .type_(vk::DescriptorType::UNIFORM_BUFFER)
+        .type_(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
         .descriptor_count(MAX_SETS as u32)
         .build();
 

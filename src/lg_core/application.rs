@@ -20,7 +20,7 @@ pub struct Application {
 }
 impl Application {
     pub fn new(window: Window) -> Result<Self, MyError> {
-        optick::start_capture();
+        // optick::start_capture();
         optick::event!();
         
         let (renderer, window) = unsafe {Renderer::init(window)?};

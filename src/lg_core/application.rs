@@ -57,7 +57,7 @@ impl Application {
         }
 
         unsafe { self.core.renderer.borrow_mut().destroy().unwrap() }
-        optick::stop_capture("profiling");
+        // optick::stop_capture("profiling");
         
         Ok(())
     }

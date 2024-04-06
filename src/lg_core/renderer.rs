@@ -297,16 +297,16 @@ impl Renderer {
 
         for i in 0..self.frame_active_objects.len() {
             let memory = self.device.get_device().map_memory(
-                self.test_pipeline.descriptor_data[self.frame][i].buffers[BufferCategory::VIEW_PROJ as usize].memory,
+                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory,
                 0,
                 size_of::<ViewProjUBO>() as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
 
-            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame][i].buffers[BufferCategory::VIEW_PROJ as usize].memory);
+            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].memory);
             
-            self.test_pipeline.descriptor_data[self.frame][i].update_vp(&self.device);
+            self.test_pipeline.descriptor_data[self.frame].update_vp(&self.device, i);
         }
         Ok(())
     }
@@ -328,21 +328,23 @@ impl Renderer {
             // Copy
 
             let memory = self.device.get_device().map_memory(
-                self.test_pipeline.descriptor_data[self.frame][obj_index].buffers[BufferCategory::MODEL as usize].memory,
+                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory,
                 offset,
                 size_of::<ModelUBO>() as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
 
-            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame][obj_index].buffers[BufferCategory::MODEL as usize].memory);
+            self.device.get_device().unmap_memory(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].memory);
 
-            self.test_pipeline.descriptor_data[self.frame][obj_index].update_model(
+            self.test_pipeline.descriptor_data[self.frame].update_model(
                 &self.device,
+                obj_index,
             );
-            self.test_pipeline.descriptor_data[self.frame][obj_index].update_image(
+            self.test_pipeline.descriptor_data[self.frame].update_image(
                 &self.device, 
-                texture
+                texture,
+                obj_index
             );
 
             offset += size_of::<UniformBufferObject>() as u64;
@@ -436,7 +438,7 @@ impl Renderer {
                 vk::PipelineBindPoint::GRAPHICS, 
                 self.test_pipeline.layout, 
                 0, 
-                self.test_pipeline.descriptor_data[self.frame][obj_index].get_sets().as_slice(),
+                self.test_pipeline.descriptor_data[self.frame].get_sets(obj_index).as_slice(),
                 &[ubo_offset]
             );
             ubo_offset += size_of::<UniformBufferObject>() as u32;
@@ -462,7 +464,7 @@ impl Renderer {
     }
     unsafe fn destroy_swapchain(&mut self) {
         self.device.free_command_buffers();
-        self.test_pipeline.descriptor_data.iter_mut().for_each(|dd| dd.iter_mut().for_each(|dd| dd.destroy(&self.device)));
+        self.test_pipeline.descriptor_data.iter_mut().for_each(|dd| dd.destroy(&self.device));
         
         self.data.color_image.destroy(&self.device);
         self.data.depth_image.destroy(&self.device);

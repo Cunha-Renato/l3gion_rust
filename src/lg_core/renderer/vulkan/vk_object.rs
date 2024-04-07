@@ -10,7 +10,7 @@ pub struct VkObject<T> {
     pub vertex_buffer: Option<VkVertexBuffer>,
     pub index_buffer: Option<VkIndexBuffer>,
 }
-impl<T> VkObject<T> {
+impl<T: Clone> VkObject<T> {
     pub unsafe fn new(
         device: &VkDevice,
         instance: &VkInstance,
@@ -25,7 +25,7 @@ impl<T> VkObject<T> {
             instance, 
             device, 
             physical_device, 
-            borrow.borrow().vertices(), 
+            &borrow.borrow().vertices, 
             borrow.borrow().vertex_size(),
         )?);
         
@@ -33,7 +33,7 @@ impl<T> VkObject<T> {
             instance, 
             device, 
             physical_device, 
-            borrow.borrow().indices(), 
+            &borrow.borrow().indices, 
             borrow.borrow().index_size(),
         )?);
         
@@ -41,7 +41,7 @@ impl<T> VkObject<T> {
             instance, 
             device, 
             physical_device, 
-            &borrow.borrow().texture().borrow()
+            &borrow.borrow().texture.borrow()
         )?);
         
         Ok(Self {

@@ -40,7 +40,7 @@ fn main() -> Result<(), MyError> {
     let event_loop = get_event_loop();
     let window = WindowBuilder::new()
         .with_title("Vulkan Tutorial (Rust)")
-        .with_inner_size(LogicalSize::new(1024, 768))
+        .with_inner_size(LogicalSize::new(1080, 720))
         .build(&event_loop)?;
 
     // App

@@ -26,12 +26,7 @@ impl Camera {
     // Public
     pub fn new(fov: f32, viewport_width: f32, viewport_height: f32, near_clip: f32, far_clip: f32) -> Self {
         let mut result = Self {
-            projection_matrix: glm::perspective(
-                viewport_width / viewport_height,
-                fov,
-                near_clip,
-                far_clip
-            ),
+            projection_matrix: glm::Mat4::identity(),
             view_matrix: glm::Mat4::identity(),
             position: glm::vec3(0.0, 0.0, 0.0),
             focal_point: glm::vec3(0.0, 0.0, 0.0),
@@ -47,6 +42,7 @@ impl Camera {
             far_clip
         };
         
+        result.update_projection();
         result.update_view();
         result
     }
@@ -70,7 +66,7 @@ impl Camera {
     pub fn get_projection_matrix(&self) -> glm::Mat4 {
         let correction = glm::mat4(
             1.0,  0.0, 0.0, 0.0,
-            0.0, -1.0, 0.0, 0.0,
+            0.0, -1.0/self.aspect_ratio, 0.0, 0.0,
             0.0,  0.0, 1.0, 0.0,
             0.0,  0.0, 0.0, 1.0,
         );
@@ -131,7 +127,7 @@ impl Camera {
         self.aspect_ratio = self.viewport_width / self.viewport_height;
         self.projection_matrix = glm::perspective(
             self.aspect_ratio, 
-            to_radians(self.fov as f64) as f32, 
+            self.fov, 
             self.near_clip,
             self.far_clip
         );
@@ -152,16 +148,16 @@ impl Camera {
     fn mouse_pan(&mut self, delta: &glm::Vec2) {
         let (x_speed, y_speed) = self.pan_speed();
         
-        self.focal_point += -self.get_right_direction() * delta.x * x_speed * self.distance;
-        self.focal_point += self.get_up_direction() * delta.y * y_speed * self.distance;
+        self.focal_point -= -self.get_right_direction() * delta.x * x_speed * self.distance;
+        self.focal_point -= self.get_up_direction() * delta.y * y_speed * self.distance;
     }
     fn mouse_rotate(&mut self, delta: &glm::Vec2) {
         let yaw_sign = if self.get_up_direction().y < 0.0 {
             -1.0
         } else { 1.0 };
         
-        self.yaw += yaw_sign * delta.x * self.rotation_speed();
-        self.pitch += delta.y * self.rotation_speed();
+        self.yaw -= yaw_sign * delta.x * self.rotation_speed();
+        self.pitch -= delta.y * self.rotation_speed();
     }
     fn mouse_zoom(&mut self, delta: f32) {
         self.distance -= delta * self.zoom_speed();

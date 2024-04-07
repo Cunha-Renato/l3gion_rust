@@ -10,7 +10,7 @@ pub struct ObjectStorage<T> {
     objects: HashMap<UUID, ObjectData<T>>,
     timer: Instant,
 }
-impl<T> ObjectStorage<T> {
+impl<T: Clone> ObjectStorage<T> {
     pub fn init() -> Self {
         Self {
             objects: HashMap::new(),

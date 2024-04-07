@@ -1,5 +1,4 @@
 pub mod camera;
-pub mod model;
 pub mod vertex;
 pub mod texture;
 pub mod vulkan;
@@ -27,7 +26,7 @@ use texture::Texture;
 use helper::RendererData;
 use self::uniform_buffer_object::{ModelUBO, ViewProjUBO};
 use self::vulkan::vk_descriptor::BufferCategory;
-use self::{camera::Camera, vulkan::vk_texture::VkTexture};
+use self::camera::Camera;
 use self::object_storage::ObjectStorage;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
 use self::vulkan::vk_image::VkImage;
@@ -40,7 +39,7 @@ use super::{lg_types::reference::Rfc, uuid::UUID};
 
 pub struct Renderer {
     window: Rfc<Window>,
-    entry: Entry,
+    _entry: Entry,
     instance: VkInstance,
     data: RendererData,
     device: VkDevice,
@@ -171,7 +170,7 @@ impl Renderer {
 
         Ok((Self {
             window: window.clone(),
-            entry,
+            _entry: entry,
             instance,
             data,
             device,
@@ -277,6 +276,7 @@ impl Renderer {
         if self.resized || changed {
             self.resized = false;
             self.recreate_swapchain()?;
+            self.camera.borrow_mut().set_viewport_size(self.data.swapchain.extent.width as f32, self.data.swapchain.extent.height as f32);
         }
         else if let Err(e) = result {
             return Err(e.into());
@@ -322,7 +322,10 @@ impl Renderer {
                 .borrow();
             
             let texture = object.vk_texture.as_ref().unwrap();
-            let data = glm::Mat4::identity().append_translation(&glm::vec3(0.0, 0.0, 0.3));
+            let transform = &object.object.borrow().transform;
+            let data = glm::scaling(&transform.scale)
+                * glm::rotate(&glm::Mat4::identity(), transform.angle, &transform.rotation_axis)
+                * glm::translate(&glm::Mat4::identity(), &transform.position);
             let ubo = ModelUBO { data };
 
             // Copy
@@ -446,7 +449,7 @@ impl Renderer {
             // Draw call
             self.device.get_device().cmd_draw_indexed(
                 *command_buffer, 
-                object.object.borrow().indices().len() as u32,
+                object.object.borrow().indices.len() as u32,
                 1, 
                 0, 
                 0, 

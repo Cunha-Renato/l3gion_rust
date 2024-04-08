@@ -2,17 +2,16 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::MyError;
-use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_memory_allocator, vk_physical_device::VkPhysicalDevice};
+use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use super::{vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 
 pub unsafe fn create_buffer(
-    instance: &VkInstance,
     device: &VkDevice,
-    physical_device: &VkPhysicalDevice,
+    memory_manager: &mut VkMemoryManager,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
-    properties: vk::MemoryPropertyFlags,
-) -> Result<(vk::Buffer, vk::DeviceMemory), MyError>
+    properties: VkMemoryUsageFlags,
+) -> Result<(vk::Buffer, Rfc<VkMemoryRegion>), MyError>
 {
     let device = device.get_device();
     let buffer_info = vk::BufferCreateInfo::builder()
@@ -22,22 +21,10 @@ pub unsafe fn create_buffer(
     
     let buffer = device.create_buffer(&buffer_info, None)?;
     
-    let requirements = device.get_buffer_memory_requirements(buffer);
+    let buffer_region = memory_manager.alloc_buffer(&buffer, properties)?;
+    memory_manager.bind_buffer(&buffer, buffer_region.clone())?;
     
-    let memory_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(requirements.size)
-        .memory_type_index(vk_memory_allocator::get_memory_type_index(
-            instance, 
-            physical_device, 
-            properties, 
-            requirements
-        )?);
-    
-    let buffer_memory = device.allocate_memory(&memory_info, None)?;
-    
-    device.bind_buffer_memory(buffer, buffer_memory, 0)?;
-    
-    Ok((buffer, buffer_memory))
+    Ok((buffer, buffer_region))
 }
 
 pub unsafe fn copy_buffer_to_image(

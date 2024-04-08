@@ -1,9 +1,3 @@
-#![allow(
-    dead_code,
-    unused_variables,
-    clippy::unnecessary_wraps
-)]
-
 use std::env;
 
 use l3gion_rust::{
@@ -69,7 +63,7 @@ fn main() -> Result<(), MyError> {
                             app.resized = true;
                         }
                     },
-                    WindowEvent::KeyboardInput { device_id, input, is_synthetic } => {
+                    WindowEvent::KeyboardInput { input, .. } => {
                         if let Some(key_code) = input.virtual_keycode {
                             let state = input.state == ElementState::Pressed;
 
@@ -81,7 +75,7 @@ fn main() -> Result<(), MyError> {
                             })).unwrap();
                         }
                     },
-                    WindowEvent::MouseInput { device_id, state, button, modifiers } => {
+                    WindowEvent::MouseInput { state, button, .. } => {
                         let button = match button {
                             winit::event::MouseButton::Left => MouseButton::Left,
                             winit::event::MouseButton::Right => MouseButton::Right,
@@ -96,13 +90,13 @@ fn main() -> Result<(), MyError> {
                             pressed: btn_state,
                         }))).unwrap();
                     },
-                    WindowEvent::CursorMoved { device_id, position, modifiers } => {
+                    WindowEvent::CursorMoved { position, .. } => {
                         app.core.input.set_mouse_position(position.x as f32, position.y as f32);
                         app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
                             position: (position.x, position.y),
                         }))).unwrap();
                     },
-                    WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
+                    WindowEvent::MouseWheel { delta, .. } => {
                         if let MouseScrollDelta::LineDelta(x, y) = delta {
                             app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ScrollEvent(MouseScrollEvent {
                                 delta: (x, y),

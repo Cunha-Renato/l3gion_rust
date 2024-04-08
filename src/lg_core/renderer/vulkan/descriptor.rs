@@ -125,7 +125,7 @@ pub unsafe fn update_default_descriptor_sets(
     texture: &VkTexture,
 ) {
     let info = vk::DescriptorBufferInfo::builder()
-        .buffer(uniform_buffer.buffers[0])
+        .buffer(uniform_buffer.buffer)
         .offset(0)
         .range(size_of::<UniformBufferObject>() as u64);
 

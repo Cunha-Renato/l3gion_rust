@@ -1,10 +1,10 @@
-use std::ptr::copy_nonoverlapping as memcpy;
+use std::{borrow::BorrowMut, ptr::copy_nonoverlapping as memcpy};
 use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
 use crate::{lg_core::renderer::texture::Texture, MyError};
-use super::{buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
+use super::{vk_buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::{VkMemoryManager, VkMemoryUsageFlags}, vk_physical_device::VkPhysicalDevice};
 
 pub struct VkTexture {
     pub image: VkImage,
@@ -15,29 +15,27 @@ impl VkTexture {
         instance: &VkInstance,
         device: &VkDevice,
         physical_device: &VkPhysicalDevice,
+        memory_manager: &mut VkMemoryManager,
         texture: &Texture
     ) -> Result<Self, MyError> 
     {
-        let (staging_buffer, staging_buffer_memory) = buffer::create_buffer(
-            instance, 
+        let (staging_buffer, staging_buffer_region) = vk_buffer::create_buffer(
             device, 
-            physical_device, 
+            memory_manager,
             texture.size(), 
             vk::BufferUsageFlags::TRANSFER_SRC, 
-            vk::MemoryPropertyFlags::HOST_COHERENT 
-            | vk::MemoryPropertyFlags::HOST_VISIBLE,
+            VkMemoryUsageFlags::CPU,
         )?;
 
         // Copy
-        let memory = device.get_device().map_memory(staging_buffer_memory, 0, texture.size(), vk::MemoryMapFlags::empty())?;
+        let memory = memory_manager.map_buffer(staging_buffer_region.clone(), 0, texture.size(), vk::MemoryMapFlags::empty())?;
         memcpy(texture.pixels().as_ptr(), memory.cast(), texture.pixels().len());
-        device.get_device().unmap_memory(staging_buffer_memory);
+        memory_manager.unmap_buffer(staging_buffer_region.clone())?;
 
         // Creating Image        
         let mut tex_image = VkImage::new(
-            instance, 
             device, 
-            physical_device, 
+            memory_manager.borrow_mut(),
             texture.width(), 
             texture.height(), 
             vk::Format::R8G8B8A8_SRGB, 
@@ -57,7 +55,7 @@ impl VkTexture {
             vk::ImageLayout::TRANSFER_DST_OPTIMAL, 
         )?;
         
-        buffer::copy_buffer_to_image(
+        vk_buffer::copy_buffer_to_image(
             device, 
             staging_buffer, 
             tex_image.image, 
@@ -76,7 +74,7 @@ impl VkTexture {
         
         // Cleanup
         device.get_device().destroy_buffer(staging_buffer, None);
-        device.get_device().free_memory(staging_buffer_memory, None);
+        memory_manager.free_buffer_region(staging_buffer_region)?;
 
         generate_mipmaps(
             instance.get_instance(), 
@@ -114,13 +112,11 @@ impl VkTexture {
         })
     }
     
-    pub unsafe fn destroy(&mut self, device: &VkDevice) {
-        let device = device.get_device();
+    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
+        device.get_device().destroy_sampler(self.sampler, None);
+        self.image.destroy(device, memory_manager)?;
         
-        device.destroy_sampler(self.sampler, None);
-        device.destroy_image_view(self.image.view, None);
-        device.destroy_image(self.image.image, None);
-        device.free_memory(self.image.memory, None);
+        Ok(())
     }
 }
 unsafe fn generate_mipmaps(

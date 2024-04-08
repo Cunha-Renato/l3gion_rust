@@ -4,62 +4,48 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::MyError;
+use crate::{lg_core::lg_types::reference::Rfc, MyError};
 
-use super::{buffer, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
+use super::{vk_buffer, vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 
 #[derive(Clone)]
 pub struct VkVertexBuffer {
     pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
+    pub region: Rfc<VkMemoryRegion>,
 }
 impl VkVertexBuffer {
     pub unsafe fn new<T>(
-        instance: &VkInstance,
         device: &VkDevice,
-        physical_device: &VkPhysicalDevice,
+        memory_manager: &mut VkMemoryManager,
         vertices: &[T],
         size: u64,
     ) -> Result<Self, MyError> 
     {
-        let (staging_buffer, staging_buffer_memory) = buffer::create_buffer(
-            instance, 
+        let (staging_buffer, staging_buffer_region) = vk_buffer::create_buffer(
             device, 
-            physical_device, 
+            memory_manager,
             size, 
             vk::BufferUsageFlags::TRANSFER_SRC, 
-            vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::HOST_VISIBLE,
+            VkMemoryUsageFlags::CPU_GPU,
         )?;
 
         // Copy (staging)
-
-        let memory = device.get_device().map_memory(
-            staging_buffer_memory, 
-            0, 
-            size, 
-            vk::MemoryMapFlags::empty()
-        )?;
-
+        let memory = memory_manager.map_buffer(staging_buffer_region.clone(), 0, size, vk::MemoryMapFlags::empty())?;
         memcpy(vertices.as_ptr(), memory.cast(), vertices.len());
-
-        device.get_device().unmap_memory(staging_buffer_memory);
+        memory_manager.unmap_buffer(staging_buffer_region.clone())?;
 
         // Create (vertex)
-
-        let (vertex_buffer, vertex_buffer_memory) = buffer::create_buffer(
-            instance, 
+        let (vertex_buffer, vertex_buffer_region) = vk_buffer::create_buffer(
             device, 
-            physical_device, 
+            memory_manager,
             size, 
             vk::BufferUsageFlags::TRANSFER_DST 
                 | vk::BufferUsageFlags::VERTEX_BUFFER, 
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            VkMemoryUsageFlags::GPU
         )?;
 
         // Copy (vertex)
-
-        buffer::copy_buffer(
+        vk_buffer::copy_buffer(
             device, 
             staging_buffer, 
             vertex_buffer, 
@@ -69,11 +55,11 @@ impl VkVertexBuffer {
         // Cleanup
 
         device.get_device().destroy_buffer(staging_buffer, None);
-        device.get_device().free_memory(staging_buffer_memory, None);
+        memory_manager.free_buffer_region(staging_buffer_region)?;
 
         Ok(Self {
             buffer: vertex_buffer,
-            memory: vertex_buffer_memory,
+            region: vertex_buffer_region,
         })
     }
 }

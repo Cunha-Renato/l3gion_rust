@@ -1,9 +1,8 @@
 pub mod descriptor;
 pub mod shader;
 pub mod pipeline;
-pub mod memory;
 pub mod framebuffer;
-pub mod buffer;
+pub mod vk_buffer;
 pub mod vk_texture;
 pub mod vertex_buffer;
 pub mod index_buffer;

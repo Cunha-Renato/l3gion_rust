@@ -3,7 +3,7 @@ use sllog::*;
 use winit::window::Window;
 use crate::{utils::tools::to_radians, MyError};
 
-use super::{input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{self, Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
+use super::{input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
 
 #[derive(Default)]
 struct Textures {

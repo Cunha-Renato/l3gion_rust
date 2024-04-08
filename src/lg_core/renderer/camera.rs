@@ -1,6 +1,6 @@
 use nalgebra_glm as glm;
 
-use crate::{lg_core::{event::{LgEvent, MouseButton, MouseEvent, VKeyCode}, input::LgInput}, utils::tools::to_radians};
+use crate::lg_core::{event::{LgEvent, MouseButton, MouseEvent, VKeyCode}, input::LgInput};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Camera {

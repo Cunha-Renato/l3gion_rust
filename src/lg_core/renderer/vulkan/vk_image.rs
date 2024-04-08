@@ -1,20 +1,19 @@
 use vulkanalia::{
     prelude::v1_2::*, vk
 };
-use crate::MyError;
-use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_memory_allocator, vk_physical_device::VkPhysicalDevice};
+use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use super::{vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 
 #[derive(Default)]
 pub struct VkImage {
     pub image: vk::Image,
     pub view: vk::ImageView,
-    pub memory: vk::DeviceMemory,
+    pub memory_region: Rfc<VkMemoryRegion>,
 }
 impl VkImage {
     pub unsafe fn new(
-        instance: &VkInstance,
         device: &VkDevice,
-        physical_device: &VkPhysicalDevice,
+        memory_manager: &mut VkMemoryManager,
         width: u32,
         height: u32,
         format: vk::Format,
@@ -43,18 +42,7 @@ impl VkImage {
         let image = device.get_device().create_image(&info, None)?;
         
         // Memory
-        let requirements = device.get_device().get_image_memory_requirements(image);
-        
-        let memory_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(requirements.size)
-            .memory_type_index(vk_memory_allocator::get_memory_type_index(
-                instance, 
-                physical_device, 
-                vk::MemoryPropertyFlags::DEVICE_LOCAL, 
-                requirements
-            )?);
-        
-        let memory = device.get_device().allocate_memory(&memory_info, None)?;
+        let memory_region = memory_manager.alloc_image(&image, VkMemoryUsageFlags::GPU_CPU)?;
         
         // View
         let subresource_range = vk::ImageSubresourceRange::builder()
@@ -70,13 +58,13 @@ impl VkImage {
             .format(format)
             .subresource_range(subresource_range);
         
-        device.get_device().bind_image_memory(image, memory, 0)?;
+        memory_manager.bind_image(&image, memory_region.clone())?;
         let view = device.get_device().create_image_view(&info, None)?;
         
         Ok(Self {
             image,
             view,
-            memory
+            memory_region,
         })
     }
     pub unsafe fn transition_layout(
@@ -136,11 +124,13 @@ impl VkImage {
     
         Ok(()) 
     }
-    pub unsafe fn destroy(&mut self, device: &VkDevice) {
+    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
         let device = device.get_device();
         
         device.destroy_image_view(self.view, None);
-        device.free_memory(self.memory, None);
+        memory_manager.free_image_region(self.memory_region.clone())?;
         device.destroy_image(self.image, None);
+        
+        Ok(())
     }
 }

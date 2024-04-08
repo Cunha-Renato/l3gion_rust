@@ -87,6 +87,7 @@ pub struct Queues {
     transfer: VkQueue,
 }
 
+
 pub struct VkDevice {
     device: Device,
     pub queues: Queues,    

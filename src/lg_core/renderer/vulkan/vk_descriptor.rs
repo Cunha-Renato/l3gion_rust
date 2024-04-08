@@ -1,11 +1,11 @@
-use std::mem::size_of;
+#![allow(non_camel_case_types)]
 
 use vulkanalia::{
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::renderer::uniform_buffer_object::{ModelUBO, ViewProjUBO}, MyError};
-use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::uniform_buffer_object::{ModelUBO, ViewProjUBO}}, MyError};
+use super::{vk_device::VkDevice, vk_memory_allocator::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
 pub(crate) const MAX_SETS: usize = 1000;
 
@@ -20,48 +20,44 @@ pub enum Layout {
 }
 
 pub struct VkPipelineDescriptorData {
+    device: Rfc<VkDevice>,
     pub layouts: Vec<Vec<vk::DescriptorSetLayout>>,
     pool: vk::DescriptorPool,
     sets: Vec<Vec<vk::DescriptorSet>>,
     pub buffers: Vec<VkUniformBuffer>,
-    offset: usize,
 }
 impl VkPipelineDescriptorData {
     pub unsafe fn new(
-        device: &VkDevice,
-        instance: &VkInstance,
-        physical_device: &VkPhysicalDevice
+        device: Rfc<VkDevice>,
+        memory_manager: &mut VkMemoryManager,
     ) -> Result<Self, MyError>
     {
-        let layouts = get_layouts(device)?;
+        let layouts = get_layouts(&device.borrow())?;
         let max_sets_pool = layouts.len() * layouts[0].len();
 
-        let pool = create_pool(device, max_sets_pool as u32)?;
-        let sets = create_sets(device, &layouts, &pool)?;
+        let pool = create_pool(&device.borrow(), max_sets_pool as u32)?;
+        let sets = create_sets(&device.borrow(), &layouts, &pool)?;
         let buffers = vec![
             VkUniformBuffer::new::<ViewProjUBO>(
-                instance, 
-                device, 
-                physical_device
+                &device.borrow(), 
+                memory_manager,
             )?,
             VkUniformBuffer::new::<ModelUBO>(
-                instance, 
-                device, 
-                physical_device
+                &device.borrow(), 
+                memory_manager,
             )?,
         ];
 
         Ok(Self {
+            device,
             layouts,
             pool,
             sets,
             buffers,
-            offset: 0,
         })
     }
     pub unsafe fn update_model(
         &mut self,
-        device: &VkDevice,
         obj_index: usize,
     ) {
         let buffer_index = BufferCategory::MODEL as usize;
@@ -80,14 +76,13 @@ impl VkPipelineDescriptorData {
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
             .buffer_info(buffer_info);
         
-        device.get_device().update_descriptor_sets(
+        self.device.borrow().get_device().update_descriptor_sets(
             &[model_write], 
             &[] as &[vk::CopyDescriptorSet]
         );
     }
     pub unsafe fn update_vp(
         &mut self,
-        device: &VkDevice,
         obj_index: usize,
     ) {
         let buffer_index = BufferCategory::VIEW_PROJ as usize;        
@@ -106,14 +101,13 @@ impl VkPipelineDescriptorData {
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(buffer_info);
         
-        device.get_device().update_descriptor_sets(
+        self.device.borrow().get_device().update_descriptor_sets(
             &[vp_write], 
             &[] as &[vk::CopyDescriptorSet]
         );
     }
     pub unsafe fn update_image(
         &mut self,
-        device: &VkDevice,
         texture: &VkTexture,
         obj_index: usize,
     ) {
@@ -131,7 +125,7 @@ impl VkPipelineDescriptorData {
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(image_info);
 
-        device.get_device().update_descriptor_sets(
+        self.device.borrow().get_device().update_descriptor_sets(
             &[sampler_write], 
             &[] as &[vk::CopyDescriptorSet]
         );
@@ -139,8 +133,9 @@ impl VkPipelineDescriptorData {
     pub fn get_sets(&self, obj_index: usize) -> &Vec<vk::DescriptorSet> {
         &self.sets[obj_index]
     }
-    pub unsafe fn destroy(&mut self, device: &VkDevice) {
-        let device = device.get_device();
+    pub unsafe fn destroy(&mut self, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
+        let dev = self.device.borrow();
+        let device = dev.get_device();
         
         device.destroy_descriptor_pool(self.pool, None);
         self.layouts
@@ -148,12 +143,13 @@ impl VkPipelineDescriptorData {
             .for_each(|l| l
                     .iter()
                     .for_each(|l| device.destroy_descriptor_set_layout(*l, None)));
-        self.buffers
-            .iter()
-            .for_each(|b| {
-                device.free_memory(b.memory, None);
-                device.destroy_buffer(b.buffer, None);
-            })
+
+        for b in &self.buffers {
+            memory_manager.free_buffer_region(b.region.clone())?;
+            device.destroy_buffer(b.buffer, None);
+        }
+
+        Ok(())
     }
 }
 unsafe fn get_layouts(device: &VkDevice) -> Result<Vec<Vec<vk::DescriptorSetLayout>>, MyError>

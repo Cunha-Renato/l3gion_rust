@@ -2,8 +2,9 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::renderer::helper, MyError};
-use super::{shader::Shader, vk_descriptor::VkPipelineDescriptorData, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::helper}, MyError};
+use super::{shader::Shader, vk_descriptor::VkPipelineDescriptorData, vk_device::VkDevice, vk_memory_allocator::VkMemoryManager, vk_renderpass::VkRenderPass};
+
 pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
@@ -11,9 +12,8 @@ pub struct VkPipeline {
 }
 impl VkPipeline {
     pub unsafe fn new(
-        device: &VkDevice,
-        instance: &VkInstance,
-        physical_device: &VkPhysicalDevice,
+        device: Rfc<VkDevice>,
+        memory_manager: &mut VkMemoryManager,
         mut vert_shader: Shader,
         mut frag_shader: Shader,
         vertex_binding_descriptions: &[vk::VertexInputBindingDescription],
@@ -24,7 +24,8 @@ impl VkPipeline {
         render_pass: &VkRenderPass
     ) -> Result<Self, MyError> 
     {
-        let v_device = device.get_device();
+        let dev = device.borrow();
+        let v_device = dev.get_device();
 
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
         .vertex_binding_descriptions(vertex_binding_descriptions)
@@ -82,9 +83,8 @@ impl VkPipeline {
         let mut descriptor_data = Vec::new();
         for _ in 0..helper::MAX_FRAMES_IN_FLIGHT {
             descriptor_data.push(VkPipelineDescriptorData::new(
-                device, 
-                instance, 
-                physical_device
+                device.clone(), 
+                memory_manager,
             )?);
         }
 

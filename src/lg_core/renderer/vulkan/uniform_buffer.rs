@@ -1,59 +1,48 @@
 use std::mem::size_of;
 use vulkanalia::vk;
 
-use crate::MyError;
+use crate::{lg_core::lg_types::reference::Rfc, MyError};
 
-use super::{buffer, vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
+use super::{vk_buffer, vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 pub struct UniformBuffer {
-    pub buffers: Vec<vk::Buffer>,
-    pub memories: Vec<vk::DeviceMemory>,
+    pub buffer: vk::Buffer,
+    pub region: Rfc<VkMemoryRegion>,
     pub ubo_size: u64,
 }
 impl UniformBuffer {
     pub unsafe fn new<T>(
-        instance: &VkInstance,
         device: &VkDevice,
-        physical_device: &VkPhysicalDevice,
+        memory_manager: &mut VkMemoryManager,
     ) -> Result<Self, MyError> 
     {
         let ubo_size = size_of::<T>() as u64 * 2000;
-        let (buffers, memories) = create_uniform_buffers(
-            instance, 
+        let (buffer, region) = create_uniform_buffers(
             device, 
-            physical_device, 
+            memory_manager,
             ubo_size
         )?;
         
         Ok(Self {
-            buffers,
-            memories,
+            buffer,
+            region,
             ubo_size
         })
     }
 }
 unsafe fn create_uniform_buffers(
-    instance: &VkInstance,
     device: &VkDevice,
-    physical_device: &VkPhysicalDevice,
+    memory_manager: &mut VkMemoryManager,
     size: u64,
-) -> Result<(Vec<vk::Buffer>, Vec<vk::DeviceMemory>), MyError>
+) -> Result<(vk::Buffer, Rfc<VkMemoryRegion>), MyError>
 {
-    let mut buffers = Vec::new();
-    let mut memories = Vec::new();
-    // for _ in 0..swapchain.images.len() {
-        let (uniform_buffer, uniform_buffer_memory) = buffer::create_buffer(
-            instance, 
-            device, 
-            physical_device, 
-            size, 
-            vk::BufferUsageFlags::UNIFORM_BUFFER, 
-            vk::MemoryPropertyFlags::HOST_COHERENT
-                | vk::MemoryPropertyFlags::HOST_VISIBLE
-        )?;
+    let (buffer, region) = vk_buffer::create_buffer(
+        device, 
+        memory_manager,
+        size, 
+        vk::BufferUsageFlags::UNIFORM_BUFFER, 
+        VkMemoryUsageFlags::CPU_GPU,
+    )?;
 
-        buffers.push(uniform_buffer);
-        memories.push(uniform_buffer_memory);
-    // }
 
-    Ok((buffers, memories))
+    Ok((buffer, region))
 }

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Rfc<T: ?Sized> {
     data: Rc<RefCell<T>>,
 }
@@ -30,7 +30,6 @@ impl<T: ?Sized> Rfc<T> {
         }
     }
 }
-
 impl<T: ?Sized> Clone for Rfc<T> {
     fn clone(&self) -> Self {
         Self { data: self.data.clone() }

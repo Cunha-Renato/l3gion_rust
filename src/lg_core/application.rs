@@ -8,7 +8,7 @@ use super::{
     event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::Renderer
 };
 pub struct AppCore {
-    window: Rfc<Window>,
+    _window: Rfc<Window>,
     renderer: Rfc<Renderer>,
     pub input: LgInput,
 }
@@ -28,7 +28,7 @@ impl Application {
 
         let renderer = Rfc::new(renderer);
         let core = AppCore {
-            window: window.clone(),
+            _window: window.clone(),
             renderer: renderer.clone(),
             input,
         };

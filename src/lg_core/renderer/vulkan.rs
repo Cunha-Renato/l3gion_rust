@@ -16,7 +16,6 @@ pub mod vk_queue;
 pub mod vk_command_pool;
 pub mod vk_image;
 pub mod vk_descriptor;
-pub mod vk_descriptor_layout;
 pub mod vk_uniform_buffer;
 pub mod vk_memory_allocator;
 pub mod vk_renderpass;

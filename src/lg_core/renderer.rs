@@ -52,7 +52,8 @@ pub struct Renderer {
     device: Rfc<VkDevice>,
     memory_manager: Rfc<VkMemoryManager>,
     data: RendererData,
-    pipelines: Vec<Rfc<dyn VulkanPipeline>>,
+    test_pipeline: DefaultPipeline,
+    // pipelines: Vec<Rfc<dyn VulkanPipeline>>,
     objects: ObjectStorage<Vertex>,
     frame_active_objects: Vec<UUID>,
     frame: usize,
@@ -106,16 +107,16 @@ impl Renderer {
             &Vertex::attribute_descritptions(), 
             &data.swapchain, 
             data.msaa_samples, 
-            &render_pass
+            render_pass
         )?;
         
-        let render_pass = VkRenderPass::get_object_picker(
+        /* let render_pass = VkRenderPass::get_object_picker(
             &instance, 
             &device.borrow(), 
             &data.physical_device
-        )?;
+        )?; */
 
-        let obj_picker = ObjectPickerPipeline::new(
+        /* let obj_picker = ObjectPickerPipeline::new(
             device.clone(),
             &instance, 
             &data.physical_device, 
@@ -124,17 +125,18 @@ impl Renderer {
             &Vertex::attribute_descritptions(), 
             &data.swapchain, 
             &render_pass
-        )?;
+        )?; */
 
         let window = Rfc::new(window);
 
         helper::create_sync_objects(device.borrow().get_device(), &mut data)?;
 
-        let pipelines = vec![Rc::new(RefCell::new(default_pipeline))];
-        let pipelines: Vec<Rfc<dyn VulkanPipeline>> = pipelines
-            .iter()
-            .map(|pp| Rfc::from_rc_refcell(&(pp.clone() as Rc<RefCell<dyn VulkanPipeline>>)))
-            .collect();
+        // let pipelines = vec![Rc::new(RefCell::new(default_pipeline))];
+        // let pipelines: Vec<Rfc<dyn VulkanPipeline>> = pipelines
+        //     .iter()
+        //     .map(|pp| Rfc::from_rc_refcell(&(pp.clone() as Rc<RefCell<dyn VulkanPipeline>>)))
+        //     .collect();
+
 
         Ok((Self {
             window: window.clone(),
@@ -143,7 +145,8 @@ impl Renderer {
             device: device.clone(),
             memory_manager: memory_manager.clone(),
             data,
-            pipelines,
+            test_pipeline: default_pipeline,
+            // pipelines,
             objects: ObjectStorage::new(
                 device.clone(),
                 memory_manager.clone(),
@@ -378,8 +381,8 @@ impl Renderer {
         let clear_values = &[color_clear_value, depth_clear_value];
 
         let begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(*self.data.render_pass.get_render_pass())
-            .framebuffer(self.data.framebuffers[index])
+            .render_pass(*self.test_pipeline.render_pass.get_render_pass())
+            .framebuffer(self.test_pipeline.framebuffers[index])
             .render_area(render_area)
             .clear_values(clear_values);
 
@@ -438,19 +441,9 @@ impl Renderer {
     }
     unsafe fn destroy_swapchain(&mut self) -> Result<(), MyError>{
         self.device.borrow().free_command_buffers();
-        for dd in &mut self.test_pipeline.descriptor_data {
-            dd.destroy(&mut self.memory_manager.borrow_mut())?;
-        }
-        self.data.color_image.destroy(&self.device.borrow(), &mut self.memory_manager.borrow_mut())?;
-        self.data.depth_image.destroy(&self.device.borrow(), &mut self.memory_manager.borrow_mut())?;
-        
-        self.data.framebuffers.iter().for_each(|f| self.device.borrow().get_device().destroy_framebuffer(*f, None));
-        
-        self.device.borrow().get_device().destroy_pipeline(self.test_pipeline.pipeline, None);
-        self.device.borrow().get_device().destroy_pipeline_layout(self.test_pipeline.layout, None);
-    
-        self.device.borrow().get_device().destroy_render_pass(*self.data.render_pass.get_render_pass(), None);
-        
+
+        self.test_pipeline.destroy(&self.device.borrow(), &mut self.memory_manager.borrow_mut())?;
+
         self.data.swapchain.views.iter().for_each(|v| self.device.borrow().get_device().destroy_image_view(*v, None));
         
         self.device.borrow().get_device().destroy_swapchain_khr(self.data.swapchain.swapchain, None);
@@ -468,88 +461,24 @@ impl Renderer {
             &self.data.physical_device, 
             &self.device.borrow()
         )?;
-        self.data.render_pass = VkRenderPass::get_default(
+
+        let render_pass = VkRenderPass::get_default(
             &self.instance, 
             &self.device.borrow(), 
-            &self.data.physical_device, 
+            &self.data.physical_device.borrow(), 
             self.data.swapchain.format, 
             self.data.msaa_samples
         )?;
-
-        // Shaders
-        let vert_shader = Shader::new(
-            &self.device.borrow(), 
-            vk::ShaderStageFlags::VERTEX, 
-            include_bytes!("../../assets/shaders/compiled/2DShader.spv")
-        )?;
-        let frag_shader = Shader::new(
-            &self.device.borrow(), 
-            vk::ShaderStageFlags::FRAGMENT, 
-            include_bytes!("../../assets/shaders/compiled/shader.spv")
-        )?;
-        // Viewport and Scissor
-        let viewport = vk::Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(self.data.swapchain.extent.width as f32)
-            .height(self.data.swapchain.extent.width as f32)
-            .min_depth(0.0)
-            .max_depth(1.0)
-            .build();
-        
-        let scissor = vk::Rect2D::builder()
-            .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(self.data.swapchain.extent)
-            .build();
-
-        self.test_pipeline = VkPipeline::new(
+        self.test_pipeline = DefaultPipeline::new(
             self.device.clone(), 
+            &self.instance,
+            &self.data.physical_device,
             &mut self.memory_manager.borrow_mut(),
-            vert_shader, 
-            frag_shader, 
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
-            vec![viewport], 
-            vec![scissor], 
-            self.data.msaa_samples, 
-            &self.data.render_pass
-        )?;
-
-        self.data.color_image = VkImage::new(
-            &self.device.borrow(), 
-            &mut self.memory_manager.borrow_mut(),
-            self.data.swapchain.extent.width, 
-            self.data.swapchain.extent.height, 
-            self.data.swapchain.format, 
-            vk::ImageAspectFlags::COLOR, 
-            self.data.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT, 
-            1
-        )?;
-        self.data.depth_image = VkImage::new(
-            &self.device.borrow(), 
-            &mut self.memory_manager.borrow_mut(),
-            self.data.swapchain.extent.width, 
-            self.data.swapchain.extent.height, 
-            helper::get_depth_format(self.instance.get_instance(), self.data.physical_device.get_device())?, 
-            vk::ImageAspectFlags::DEPTH, 
-            self.data.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
-            1
-        )?;
-        
-        // Framebuffer
-        self.data.framebuffers = framebuffer::create_framebuffers(
-            &self.device.borrow(), 
-            &self.data.render_pass, 
-            &self.data.swapchain.views, 
-            &self.data.color_image, 
-            &self.data.depth_image, 
-            self.data.swapchain.extent.width, 
-            self.data.swapchain.extent.height
+            &self.data.swapchain, 
+            self. data.msaa_samples, 
+            render_pass
         )?;
 
         self.device.borrow_mut().allocate_command_buffers(VkQueueFamily::GRAPHICS, self.data.swapchain.images.len() as u32)?;

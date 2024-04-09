@@ -6,3 +6,4 @@ pub mod input;
 pub mod event;
 pub mod uuid;
 pub mod lg_types;
+pub mod serializer;

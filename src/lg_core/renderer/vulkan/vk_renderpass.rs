@@ -34,8 +34,9 @@ impl VkRenderPass {
         let color_attachments = &[color_attachment_ref];
 
         let mut resolve_attachments = &[] as &[vk::AttachmentReferenceBuilder];
+        let color_resolve = &[color_resolve_attachment_ref];
         if attachments.len() > 2 {
-            resolve_attachments = &[color_resolve_attachment_ref];
+            resolve_attachments = color_resolve;
         }
 
         let subpass = vk::SubpassDescription::builder()

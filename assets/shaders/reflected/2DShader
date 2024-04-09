@@ -1,0 +1,105 @@
+---
+name: 2DShader
+node_type: Vertex
+value: ""
+children:
+  - name: Input
+    node_type: ""
+    value: ""
+    children:
+      - name: inColor
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "10"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "7"
+            children: []
+      - name: inTexCoord
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "16"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "13"
+            children: []
+      - name: inPosition
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "10"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "7"
+            children: []
+  - name: Output
+    node_type: ""
+    value: ""
+    children:
+      - name: fragColor
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "8"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "7"
+            children: []
+      - name: fragTexCoord
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "14"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "13"
+            children: []
+  - name: UniformBuffer
+    node_type: ""
+    value: ""
+    children:
+      - name: ViewProjUBO
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "30"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "29"
+            children: []
+      - name: ModelUBO
+        node_type: ""
+        value: ""
+        children:
+          - name: TypeId
+            node_type: ""
+            value: "40"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "39"
+            children: []
+  - name: SampledImage
+    node_type: ""
+    value: ""
+    children: []

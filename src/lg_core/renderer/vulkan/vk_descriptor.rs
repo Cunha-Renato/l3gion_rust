@@ -19,6 +19,25 @@ pub enum Layout {
     MODEL = 2,
 }
 
+pub struct VkDescriptorLayout {
+    layouts: Vec<vk::DescriptorSetLayout>,
+}
+impl VkDescriptorLayout {
+    pub unsafe fn new(device: &VkDevice, bindings: Vec<Vec<vk::DescriptorSetLayoutBinding>>) -> Result<Self, MyError> {
+        let mut result = Vec::new();
+        for bindings in &bindings {
+            let info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(bindings.as_slice());
+            
+            result.push(device.get_device().create_descriptor_set_layout(&info, None)?);
+        }
+        
+        Ok(Self {
+            layouts: result
+        })
+    }
+}
+
 pub struct VkPipelineDescriptorData {
     device: Rfc<VkDevice>,
     pub layouts: Vec<Vec<vk::DescriptorSetLayout>>,

@@ -28,10 +28,6 @@ pub struct RendererData {
     pub surface: vk::SurfaceKHR,
     pub swapchain: VkSwapchain,
     pub msaa_samples: vk::SampleCountFlags,
-    pub render_pass: VkRenderPass,
-    pub color_image: VkImage,
-    pub depth_image: VkImage,
-    pub framebuffers: Vec<vk::Framebuffer>,
     pub sync_objects: Vec<SyncObjects>,
 }
 

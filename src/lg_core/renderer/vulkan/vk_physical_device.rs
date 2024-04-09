@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use crate::{lg_core::renderer::vulkan::vk_swapchain::SwapchainSupport, MyError};
-use sllog::*;
 use vulkanalia::{
     prelude::v1_2::*,
     vk,
@@ -53,10 +52,7 @@ pub unsafe fn pick_physical_device(
             *val.as_ref().unwrap()
         })
     {
-        let properties = instance.get_physical_device_properties(*physical_device);
-        warn!("Physical Selected:\n  Name: {}\n  Type: {:?}", properties.device_name, properties.device_type);
         let physical_device = *physical_device;
-        // data.msaa_samples = get_max_msaa_samples(instance, data);
 
         return Ok(physical_device);
     }
@@ -102,8 +98,6 @@ unsafe fn check_physical_device(
         return Err("Insufficient swapchain support!".into());
     }
     
-    info!("Checking Physical Device:\n  Name: {}\n  Type: {:?}", properties.device_name, properties.device_type);
-
     if result < 4 { return Ok(result); }
     
     Err("Could not find suitable device!".into())

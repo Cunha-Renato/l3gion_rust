@@ -13,7 +13,7 @@ pub struct VkRenderPass {
 impl VkRenderPass {
     pub unsafe fn new(
         device: &VkDevice,
-        attachments: [vk::AttachmentDescription; 3],
+        attachments: Vec<vk::AttachmentDescription>,
     ) -> Result<Self, MyError>
     {
         let device = device.get_device();
@@ -30,9 +30,14 @@ impl VkRenderPass {
         let color_resolve_attachment_ref = vk::AttachmentReference::builder()
             .attachment(2)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-    
+
         let color_attachments = &[color_attachment_ref];
-        let resolve_attachments = &[color_resolve_attachment_ref];
+
+        let mut resolve_attachments = &[] as &[vk::AttachmentReferenceBuilder];
+        if attachments.len() > 2 {
+            resolve_attachments = &[color_resolve_attachment_ref];
+        }
+
         let subpass = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(color_attachments)
@@ -106,7 +111,42 @@ impl VkRenderPass {
         
         Self::new(
             device, 
-            [*color_attachment, *depth_stencil_attachment, *color_resolve_attachment]
+            vec![*color_attachment, *depth_stencil_attachment, *color_resolve_attachment]
+        )
+    }
+    pub unsafe fn get_object_picker(
+        instance: &VkInstance,
+        device: &VkDevice,
+        physical_device: &VkPhysicalDevice,
+    ) -> Result<Self, MyError>
+    {
+        let instance = instance.get_instance();
+        let physical_device = physical_device.get_device();
+
+        let color_attachment = vk::AttachmentDescription::builder()
+            .format(vk::Format::R32_SFLOAT)
+            .samples(vk::SampleCountFlags::_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+
+        let depth_stencil_attachment = vk::AttachmentDescription::builder()
+            .format(get_depth_format(instance, physical_device)?)
+            .samples(vk::SampleCountFlags::_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+        
+        Self::new(
+            device, 
+            vec![*color_attachment, *depth_stencil_attachment]
         )
     }
     pub fn get_render_pass(&self) -> &vk::RenderPass {

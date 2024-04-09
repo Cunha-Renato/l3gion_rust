@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 pub mod camera;
 pub mod vertex;
 pub mod texture;
@@ -8,6 +10,8 @@ pub mod helper;
 pub mod uniform_buffer_object;
 
 use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{borrow::Borrow, mem::size_of};
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -33,9 +37,13 @@ use self::vulkan::vk_image::VkImage;
 use self::vulkan::vk_instance::VkInstance;
 use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::vulkan::vk_renderpass::VkRenderPass;
-use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, pipeline::VkPipeline, shader::Shader, vk_swapchain::VkSwapchain}};
-
+use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, vk_pipeline::*, shader::Shader, vk_swapchain::VkSwapchain}};
 use super::{lg_types::reference::Rfc, uuid::UUID};
+
+enum Pipelines {
+    DEFAULT,
+    OBJECT_PICKER,
+}
 
 pub struct Renderer {
     window: Rfc<Window>,
@@ -44,7 +52,7 @@ pub struct Renderer {
     device: Rfc<VkDevice>,
     memory_manager: Rfc<VkMemoryManager>,
     data: RendererData,
-    test_pipeline: VkPipeline, // One Pipeline for each kind of rendering (ie. Batch, Circle, Rect, Normal)
+    pipelines: Vec<Rfc<dyn VulkanPipeline>>,
     objects: ObjectStorage<Vertex>,
     frame_active_objects: Vec<UUID>,
     frame: usize,
@@ -81,92 +89,52 @@ impl Renderer {
         device.borrow_mut().allocate_command_buffers(VkQueueFamily::PRESENT, data.swapchain.images.len() as u32)?;
         device.borrow_mut().allocate_command_buffers(VkQueueFamily::TRANSFER, data.swapchain.images.len() as u32)?;
 
-        data.render_pass = VkRenderPass::get_default(
-            &instance.borrow(), 
+        let render_pass = VkRenderPass::get_default(
+            &instance, 
             &device.borrow(), 
             &data.physical_device.borrow(), 
             data.swapchain.format, 
             data.msaa_samples
         )?;
         
-        // Shaders
-        let vert_shader = Shader::new(
-            &device.borrow(), 
-            vk::ShaderStageFlags::VERTEX, 
-            include_bytes!("../../assets/shaders/compiled/2DShader.spv")
-        )?;
-        let frag_shader = Shader::new(
-            &device.borrow(), 
-            vk::ShaderStageFlags::FRAGMENT, 
-            include_bytes!("../../assets/shaders/compiled/shader.spv")
-        )?;
-        
-        // Viewport and Scissor
-        let viewport = vk::Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(data.swapchain.extent.width as f32)
-            .height(data.swapchain.extent.width as f32)
-            .min_depth(0.0)
-            .max_depth(1.0)
-            .build();
-        
-        let scissor = vk::Rect2D::builder()
-            .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(data.swapchain.extent)
-            .build();
-
-        let test_pipeline = VkPipeline::new(
+        let default_pipeline = DefaultPipeline::new(
             device.clone(), 
+            &instance,
+            &data.physical_device,
             &mut memory_manager.borrow_mut(),
-            vert_shader, 
-            frag_shader, 
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
-            vec![viewport], 
-            vec![scissor], 
+            &data.swapchain, 
             data.msaa_samples, 
-            &data.render_pass
+            &render_pass
+        )?;
+        
+        let render_pass = VkRenderPass::get_object_picker(
+            &instance, 
+            &device.borrow(), 
+            &data.physical_device
         )?;
 
-        data.color_image = VkImage::new(
-            &device.borrow(), 
+        let obj_picker = ObjectPickerPipeline::new(
+            device.clone(),
+            &instance, 
+            &data.physical_device, 
             &mut memory_manager.borrow_mut(),
-            data.swapchain.extent.width, 
-            data.swapchain.extent.height, 
-            data.swapchain.format, 
-            vk::ImageAspectFlags::COLOR, 
-            data.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT, 
-            1
-        )?;
-        data.depth_image = VkImage::new(
-            &device.borrow(), 
-            &mut memory_manager.borrow_mut(),
-            data.swapchain.extent.width, 
-            data.swapchain.extent.height, 
-            helper::get_depth_format(instance.get_instance(), data.physical_device.borrow().get_device())?, 
-            vk::ImageAspectFlags::DEPTH, 
-            data.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
-            1
-        )?;
-        data.framebuffers = framebuffer::create_framebuffers(
-            &device.borrow(), 
-            &data.render_pass, 
-            &data.swapchain.views, 
-            &data.color_image, 
-            &data.depth_image, 
-            data.swapchain.extent.width, 
-            data.swapchain.extent.height
+            &[Vertex::binding_description()],
+            &Vertex::attribute_descritptions(), 
+            &data.swapchain, 
+            &render_pass
         )?;
 
         let window = Rfc::new(window);
 
         helper::create_sync_objects(device.borrow().get_device(), &mut data)?;
+
+        let pipelines = vec![Rc::new(RefCell::new(default_pipeline))];
+        let pipelines: Vec<Rfc<dyn VulkanPipeline>> = pipelines
+            .iter()
+            .map(|pp| Rfc::from_rc_refcell(&(pp.clone() as Rc<RefCell<dyn VulkanPipeline>>)))
+            .collect();
 
         Ok((Self {
             window: window.clone(),
@@ -175,7 +143,7 @@ impl Renderer {
             device: device.clone(),
             memory_manager: memory_manager.clone(),
             data,
-            test_pipeline,
+            pipelines,
             objects: ObjectStorage::new(
                 device.clone(),
                 memory_manager.clone(),

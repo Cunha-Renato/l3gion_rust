@@ -2,15 +2,16 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::helper}, MyError};
-use super::{framebuffer, shader::Shader, vk_descriptor::VkPipelineDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBO, ViewProjUBO}}}, MyError};
+use super::{framebuffer, shader::Shader, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_descriptor::VkDescriptorData, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
 
 pub trait VulkanPipeline {}
 
 pub struct DefaultPipeline {
+    memory_manager: Rfc<VkMemoryManager>,
     pub layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
-    pub descriptor_data: Vec<VkPipelineDescriptorData>,
+    pub descriptor_data: Vec<VkDescriptorData>,
     pub color_image: VkImage,
     pub depth_image: VkImage,
     pub framebuffers: Vec<vk::Framebuffer>,
@@ -21,7 +22,7 @@ impl DefaultPipeline {
         device: Rfc<VkDevice>,
         instance: &VkInstance,
         physical_device: &VkPhysicalDevice,
-        memory_manager: &mut VkMemoryManager,
+        memory_manager: Rfc<VkMemoryManager>,
         vertex_binding_descriptions: &[vk::VertexInputBindingDescription],
         vertex_attribute_descriptions: &[vk::VertexInputAttributeDescription],
         swapchain: &VkSwapchain,
@@ -35,12 +36,10 @@ impl DefaultPipeline {
         // Shaders
         let mut vert_shader = Shader::new(
             &device.borrow(), 
-            vk::ShaderStageFlags::VERTEX, 
             "assets/shaders/compiled/2DShader.spv",
         )?;
         let mut frag_shader = Shader::new(
             &device.borrow(), 
-            vk::ShaderStageFlags::FRAGMENT, 
             "assets/shaders/compiled/shader.spv",
         )?;
 
@@ -109,16 +108,26 @@ impl DefaultPipeline {
         let attachments = &[attachment];
 
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-        .logic_op_enable(false)
-        .logic_op(vk::LogicOp::COPY)
-        .attachments(attachments)
-        .blend_constants([0.0, 0.0, 0.0, 0.0]);
-        
+            .logic_op_enable(false)
+            .logic_op(vk::LogicOp::COPY)
+            .attachments(attachments)
+            .blend_constants([0.0, 0.0, 0.0, 0.0]);
+
         let mut descriptor_data = Vec::new();
         for _ in 0..helper::MAX_FRAMES_IN_FLIGHT {
-            descriptor_data.push(VkPipelineDescriptorData::new(
-                device.clone(), 
-                memory_manager,
+            let model = VkUniformBuffer::new::<ModelUBO>(
+                        &device.borrow(), 
+                        &mut memory_manager.borrow_mut()
+                )?;
+            let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
+                        &device.borrow(), 
+                        &mut memory_manager.borrow_mut()
+                )?;
+            descriptor_data.push(VkDescriptorData::new(
+                device.clone(),
+                &[&vert_shader, &frag_shader],
+                memory_manager.clone(),
+                vec![model, view_proj]
             )?);
         }
 
@@ -152,7 +161,7 @@ impl DefaultPipeline {
 
         let color_image = VkImage::new(
             &device.borrow(),
-            memory_manager,
+            &mut memory_manager.borrow_mut(),
             swapchain.extent.width, 
             swapchain.extent.height, 
             swapchain.format, 
@@ -165,7 +174,7 @@ impl DefaultPipeline {
         )?;
         let depth_image = VkImage::new(
             &device.borrow(), 
-            memory_manager,
+            &mut memory_manager.borrow_mut(),
             swapchain.extent.width, 
             swapchain.extent.height, 
             helper::get_depth_format(instance.get_instance(), physical_device.get_device())?, 
@@ -190,6 +199,7 @@ impl DefaultPipeline {
         frag_shader.destroy_module(v_device);
 
         Ok(Self {
+            memory_manager,
             layout,
             pipeline,
             descriptor_data,
@@ -199,15 +209,15 @@ impl DefaultPipeline {
             render_pass,
         })
     }
-    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError> {
+    pub unsafe fn destroy(&mut self, device: &VkDevice) -> Result<(), MyError> {
         let v_device = device.get_device();
         
         for dd in &mut self.descriptor_data {
-            dd.destroy(memory_manager)?;
+            dd.destroy()?;
         }
 
-        self.color_image.destroy(device, memory_manager)?;
-        self.depth_image.destroy(device, memory_manager)?;
+        self.color_image.destroy(device, &mut self.memory_manager.borrow_mut())?;
+        self.depth_image.destroy(device, &mut self.memory_manager.borrow_mut())?;
 
         self.framebuffers
             .iter()
@@ -222,7 +232,7 @@ impl DefaultPipeline {
 pub struct ObjectPickerPipeline {
     pub layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
-    pub descriptor_data: Vec<VkPipelineDescriptorData>,
+    pub descriptor_data: Vec<VkDescriptorData>,
     pub color_image: VkImage,
     pub depth_image: VkImage,
     pub framebuffers: Vec<vk::Framebuffer>,

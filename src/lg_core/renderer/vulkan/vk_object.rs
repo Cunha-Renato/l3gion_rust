@@ -2,7 +2,7 @@ use vulkanalia::vk::DeviceV1_0;
 
 use crate::{lg_core::{lg_types::reference::Rfc, renderer::object::Object}, MyError};
 
-use super::{index_buffer::VkIndexBuffer, vertex_buffer::VkVertexBuffer, vk_device::VkDevice, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture};
+use super::{vk_index_buffer::VkIndexBuffer, vk_vertex_buffer::VkVertexBuffer, vk_device::VkDevice, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture};
 
 pub struct VkObject<T> {
     pub object: Rfc<Object<T>>,

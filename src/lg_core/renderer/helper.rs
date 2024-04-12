@@ -4,7 +4,7 @@ use vulkanalia:: {
     loader::{LibloadingLoader, LIBRARY}, prelude::v1_2::*, vk, Entry, Instance, Version
 };
 use crate::MyError;
-use super::vulkan::{vk_device::QueueFamilyIndices, vk_image::VkImage, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain};
+use super::vulkan::{vk_device::QueueFamilyIndices, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain};
 
 // CONSTANTS
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);

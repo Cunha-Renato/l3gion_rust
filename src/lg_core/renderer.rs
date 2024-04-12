@@ -10,8 +10,6 @@ pub mod helper;
 pub mod uniform_buffer_object;
 
 use std::borrow::BorrowMut;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::{borrow::Borrow, mem::size_of};
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -29,15 +27,13 @@ use crate::MyError;
 use texture::Texture;
 use helper::RendererData;
 use self::{uniform_buffer_object::{ModelUBO, ViewProjUBO}, vulkan::vk_memory_allocator::VkMemoryManager};
-use self::vulkan::vk_descriptor::BufferCategory;
 use self::camera::Camera;
 use self::object_storage::ObjectStorage;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
-use self::vulkan::vk_image::VkImage;
 use self::vulkan::vk_instance::VkInstance;
 use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::vulkan::vk_renderpass::VkRenderPass;
-use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{framebuffer, vk_pipeline::*, shader::Shader, vk_swapchain::VkSwapchain}};
+use self::{object::Object, uniform_buffer_object::UniformBufferObject, vertex::Vertex, vulkan::{vk_pipeline::*, vk_swapchain::VkSwapchain}};
 use super::{lg_types::reference::Rfc, uuid::UUID};
 
 enum Pipelines {
@@ -102,7 +98,7 @@ impl Renderer {
             device.clone(), 
             &instance,
             &data.physical_device,
-            &mut memory_manager.borrow_mut(),
+            memory_manager.clone(),
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
             &data.swapchain, 
@@ -267,21 +263,26 @@ impl Renderer {
             view: *self.camera.borrow().get_view_matrix(),
             proj: self.camera.borrow().get_projection_matrix(),
         };
-        
+
         // Copy
 
         for i in 0..self.frame_active_objects.len() {
             let memory = self.memory_manager.borrow_mut().map_buffer(
-                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].region.clone(),
+                self.test_pipeline.descriptor_data[self.frame].buffers[1].region.clone(),
                 0,
                 size_of::<ViewProjUBO>() as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
 
-            self.memory_manager.borrow_mut().unmap_buffer(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::VIEW_PROJ as usize].region.clone())?;
+            self.memory_manager.borrow_mut().unmap_buffer(self.test_pipeline.descriptor_data[self.frame].buffers[1].region.clone())?;
             
-            self.test_pipeline.descriptor_data[self.frame].update_vp(i);
+            self.test_pipeline.descriptor_data[self.frame].update_buffer(
+                1,
+                0,
+                0,
+                i
+            );
         }
         Ok(())
     }
@@ -306,19 +307,24 @@ impl Renderer {
             // Copy
 
             let memory = self.memory_manager.borrow_mut().map_buffer(
-                self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].region.clone(),
+                self.test_pipeline.descriptor_data[self.frame].buffers[0].region.clone(),
                 offset,
                 size_of::<ModelUBO>() as u64,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
-            self.memory_manager.borrow_mut().unmap_buffer(self.test_pipeline.descriptor_data[self.frame].buffers[BufferCategory::MODEL as usize].region.clone())?;
+            self.memory_manager.borrow_mut().unmap_buffer(self.test_pipeline.descriptor_data[self.frame].buffers[0].region.clone())?;
 
-            self.test_pipeline.descriptor_data[self.frame].update_model(
+            self.test_pipeline.descriptor_data[self.frame].update_buffer(
+                0,
+                2,
+                0,
                 obj_index,
             );
-            self.test_pipeline.descriptor_data[self.frame].update_image(
+            self.test_pipeline.descriptor_data[self.frame].update_sampled_image(
                 texture,
+                1,
+                0,
                 obj_index
             );
 
@@ -442,7 +448,7 @@ impl Renderer {
     unsafe fn destroy_swapchain(&mut self) -> Result<(), MyError>{
         self.device.borrow().free_command_buffers();
 
-        self.test_pipeline.destroy(&self.device.borrow(), &mut self.memory_manager.borrow_mut())?;
+        self.test_pipeline.destroy(&self.device.borrow())?;
 
         self.data.swapchain.views.iter().for_each(|v| self.device.borrow().get_device().destroy_image_view(*v, None));
         
@@ -473,7 +479,7 @@ impl Renderer {
             self.device.clone(), 
             &self.instance,
             &self.data.physical_device,
-            &mut self.memory_manager.borrow_mut(),
+            self.memory_manager.clone(),
             &[Vertex::binding_description()],
             &Vertex::attribute_descritptions(), 
             &self.data.swapchain, 

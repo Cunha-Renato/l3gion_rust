@@ -25,7 +25,7 @@ impl YamlNode {
 }
 
 pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), MyError> {
-    let path = path.to_string() + name;
+    let path = path.to_string() + name + ".yaml";
     std::fs::write(path, serde_yaml::to_string(value)?)?;
     Ok(())
 }

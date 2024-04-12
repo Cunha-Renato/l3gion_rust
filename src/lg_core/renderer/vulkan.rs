@@ -1,12 +1,10 @@
-pub mod descriptor;
 pub mod shader;
 pub mod vk_pipeline;
 pub mod framebuffer;
 pub mod vk_buffer;
 pub mod vk_texture;
-pub mod vertex_buffer;
-pub mod index_buffer;
-pub mod uniform_buffer;
+pub mod vk_vertex_buffer;
+pub mod vk_index_buffer;
 
 pub mod vk_swapchain;
 pub mod vk_instance;
@@ -20,3 +18,4 @@ pub mod vk_uniform_buffer;
 pub mod vk_memory_allocator;
 pub mod vk_renderpass;
 pub mod vk_object;
+pub mod new_pipeline;

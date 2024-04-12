@@ -4,7 +4,7 @@ layout(set = 0, binding = 0) uniform ViewProjUBO {
     mat4 view;
     mat4 proj;
 } u_ViewProjection;
-layout(set = 2, binding = 0) uniform ModelUBO  {
+layout(set = 2, binding = 0) uniform ModelUBO_DYNAMIC  {
     mat4 data;
 } u_Model;
 

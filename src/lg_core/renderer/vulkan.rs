@@ -18,4 +18,3 @@ pub mod vk_uniform_buffer;
 pub mod vk_memory_allocator;
 pub mod vk_renderpass;
 pub mod vk_object;
-pub mod new_pipeline;

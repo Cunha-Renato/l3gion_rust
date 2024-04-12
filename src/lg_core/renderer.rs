@@ -26,6 +26,7 @@ use vulkanalia::{
 use crate::MyError;
 use texture::Texture;
 use helper::RendererData;
+use self::vulkan::shader::Shader;
 use self::{uniform_buffer_object::{ModelUBO, ViewProjUBO}, vulkan::vk_memory_allocator::VkMemoryManager};
 use self::camera::Camera;
 use self::object_storage::ObjectStorage;
@@ -48,8 +49,7 @@ pub struct Renderer {
     device: Rfc<VkDevice>,
     memory_manager: Rfc<VkMemoryManager>,
     data: RendererData,
-    test_pipeline: DefaultPipeline,
-    // pipelines: Vec<Rfc<dyn VulkanPipeline>>,
+    test_pipeline: VkPipeline,
     objects: ObjectStorage<Vertex>,
     frame_active_objects: Vec<UUID>,
     frame: usize,
@@ -85,25 +85,14 @@ impl Renderer {
         device.borrow_mut().allocate_command_buffers(VkQueueFamily::GRAPHICS, data.swapchain.images.len() as u32)?;
         device.borrow_mut().allocate_command_buffers(VkQueueFamily::PRESENT, data.swapchain.images.len() as u32)?;
         device.borrow_mut().allocate_command_buffers(VkQueueFamily::TRANSFER, data.swapchain.images.len() as u32)?;
-
-        let render_pass = VkRenderPass::get_default(
-            &instance, 
-            &device.borrow(), 
-            &data.physical_device.borrow(), 
-            data.swapchain.format, 
-            data.msaa_samples
-        )?;
         
-        let default_pipeline = DefaultPipeline::new(
+        let def_pipeline = VkPipeline::get_2d(
             device.clone(), 
-            &instance,
-            &data.physical_device,
-            memory_manager.clone(),
-            &[Vertex::binding_description()],
-            &Vertex::attribute_descritptions(), 
+            &instance, 
+            &data.physical_device, 
             &data.swapchain, 
-            data.msaa_samples, 
-            render_pass
+            memory_manager.clone(), 
+            data.msaa_samples
         )?;
         
         /* let render_pass = VkRenderPass::get_object_picker(
@@ -141,7 +130,7 @@ impl Renderer {
             device: device.clone(),
             memory_manager: memory_manager.clone(),
             data,
-            test_pipeline: default_pipeline,
+            test_pipeline: def_pipeline,
             // pipelines,
             objects: ObjectStorage::new(
                 device.clone(),
@@ -468,23 +457,13 @@ impl Renderer {
             &self.device.borrow()
         )?;
 
-        let render_pass = VkRenderPass::get_default(
-            &self.instance, 
-            &self.device.borrow(), 
-            &self.data.physical_device.borrow(), 
-            self.data.swapchain.format, 
-            self.data.msaa_samples
-        )?;
-        self.test_pipeline = DefaultPipeline::new(
+        self.test_pipeline = VkPipeline::get_2d(
             self.device.clone(), 
-            &self.instance,
-            &self.data.physical_device,
-            self.memory_manager.clone(),
-            &[Vertex::binding_description()],
-            &Vertex::attribute_descritptions(), 
+            &self.instance, 
+            &self.data.physical_device, 
             &self.data.swapchain, 
-            self. data.msaa_samples, 
-            render_pass
+            self.memory_manager.clone(), 
+            self.data.msaa_samples
         )?;
 
         self.device.borrow_mut().allocate_command_buffers(VkQueueFamily::GRAPHICS, self.data.swapchain.images.len() as u32)?;

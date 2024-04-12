@@ -16,6 +16,7 @@ use l3gion_rust::{
 };
 use l3gion_rust::MyError;
 
+use sllog::{error, warn};
 use winit::event::{ElementState, MouseScrollDelta};
 use winit::{
     dpi::LogicalSize,
@@ -45,7 +46,10 @@ fn main() -> Result<(), MyError> {
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared if !destroying && !minimized => {
-                app.on_update().unwrap();
+                match app.on_update() {
+                    Err(e) => warn!("{:#?}", e),
+                    _ => ()
+                }
             }
             Event::WindowEvent {event, .. } => {
                 match event {

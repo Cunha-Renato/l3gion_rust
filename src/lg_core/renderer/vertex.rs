@@ -5,12 +5,16 @@ use std::{
         Hasher,
     },
 };
-
 use vulkanalia::{
     prelude::v1_0::*, 
     vk,
 };
 pub use nalgebra_glm as glm;
+
+pub trait VkVertex: PartialEq + Eq + Hash {
+    fn binding_description() -> vk::VertexInputBindingDescription;
+    fn attribute_descritptions() -> [vk::VertexInputAttributeDescription; 3];
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -23,8 +27,9 @@ impl Vertex {
     pub const fn new(position: glm::Vec3, color: glm::Vec3, tex_coord: glm::Vec2) -> Self {
         Self { position, color, tex_coord }
     }
-    
-    pub fn binding_description() -> vk::VertexInputBindingDescription {
+}
+impl VkVertex for Vertex {
+    fn binding_description() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(size_of::<Vertex>() as u32)
@@ -32,7 +37,7 @@ impl Vertex {
             .build()
     }
     
-    pub fn attribute_descritptions() -> [vk::VertexInputAttributeDescription; 3] {
+    fn attribute_descritptions() -> [vk::VertexInputAttributeDescription; 3] {
         let position = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
@@ -57,6 +62,7 @@ impl Vertex {
         [position, color, tex_coord]
     }
 }
+
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
         self.position == other.position
@@ -64,9 +70,7 @@ impl PartialEq for Vertex {
             && self.tex_coord == other.tex_coord
     }
 }
-
 impl Eq for Vertex {}
-
 impl Hash for Vertex {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.position[0].to_bits().hash(state);

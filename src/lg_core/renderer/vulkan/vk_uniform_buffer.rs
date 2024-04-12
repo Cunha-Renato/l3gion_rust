@@ -37,4 +37,25 @@ impl VkUniformBuffer {
             offset: 0,
         })
     }
+    pub unsafe fn from_buffer(device: &VkDevice, memory_manager: &mut VkMemoryManager, other: &Self) -> Result<Self, MyError> {
+        let range = other.range;
+        let size = other.size;
+        let offset = other.offset;
+
+        let (buffer, region) = vk_buffer::create_buffer(
+            device, 
+            memory_manager,
+            size, 
+            vk::BufferUsageFlags::UNIFORM_BUFFER, 
+            VkMemoryUsageFlags::CPU_GPU,
+        )?;
+        
+        Ok(Self {
+            buffer,
+            region,
+            range,
+            size,
+            offset,
+        })
+    }
 }

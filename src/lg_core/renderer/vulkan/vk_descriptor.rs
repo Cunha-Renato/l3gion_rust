@@ -20,7 +20,7 @@ pub struct VkDescriptorData {
 impl VkDescriptorData {
     pub unsafe fn new (
         device: Rfc<VkDevice>,
-        shaders: &[&Shader],
+        shaders: &[Shader],
         memory_manager: Rfc<VkMemoryManager>,
         buffers: Vec<VkUniformBuffer>,
     ) -> Result<Self, MyError>

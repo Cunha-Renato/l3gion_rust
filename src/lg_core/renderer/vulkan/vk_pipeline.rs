@@ -1,21 +1,23 @@
-use std::borrow::Borrow;
-
 use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBO, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, MyError};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBO, ModelUBOId, StorageBuffer, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, MyError};
 
 use super::{framebuffer, shader::Shader, vk_descriptor::VkDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
 
-pub struct VkPipelineCreateInfo {
-    pub msaa_samples: vk::SampleCountFlags,
-    pub shaders: Vec<Shader>,
-    pub viewport: vk::Viewport,
-    pub scissor: vk::Rect2D,
-    pub dynamic_states: Vec<vk::DynamicState>,
-    pub render_pass: VkRenderPass,
-    pub uniform_buffers: Vec<VkUniformBuffer>,
+struct VkPipelineCreateInfo {
+    msaa_samples: vk::SampleCountFlags,
+    color_format: vk::Format,
+    color_image_usage: vk::ImageUsageFlags,
+    attachments_count: u32,
+    shaders: Vec<Shader>,
+    viewport: vk::Viewport,
+    scissor: vk::Rect2D,
+    dynamic_states: Vec<vk::DynamicState>,
+    render_pass: VkRenderPass,
+    uniform_buffers: Vec<VkUniformBuffer>,
+    should_present: bool,
 }
 
 pub struct VkPipeline {
@@ -27,6 +29,7 @@ pub struct VkPipeline {
     pub render_pass: VkRenderPass,
     pub color_image: VkImage,
     pub depth_image: VkImage,
+    pub present: bool,
 }
 impl VkPipeline {
     pub unsafe fn new<T: VkVertex>(
@@ -159,12 +162,11 @@ impl VkPipeline {
             &mut memory_manager.borrow_mut(),
             swapchain.extent.width, 
             swapchain.extent.height, 
-            swapchain.format, 
+            info.color_format, 
             vk::ImageAspectFlags::COLOR, 
             info.msaa_samples, 
             vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT, 
+            info.color_image_usage,
             1
         )?;
 
@@ -180,17 +182,18 @@ impl VkPipeline {
             vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
             1
         )?;
-    
+        
         let framebuffers = framebuffer::create_framebuffers(
-            &device.borrow(), 
-            &info.render_pass, 
+            &device.borrow(),
+            &info.render_pass,
+            info.attachments_count, 
             &swapchain.views, 
             &color_image, 
             &depth_image, 
             swapchain.extent.width, 
             swapchain.extent.height
         )?;
-
+        
         let pipeline = v_device.create_graphics_pipelines(
             vk::PipelineCache::null(), 
             &[pipeline_info], 
@@ -211,6 +214,7 @@ impl VkPipeline {
             depth_image,
             framebuffers,
             render_pass: info.render_pass,
+            present: info.should_present,
         })
     }
     pub unsafe fn get_2d(
@@ -222,7 +226,7 @@ impl VkPipeline {
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self, MyError>
     {
-        let model = VkUniformBuffer::new::<ModelUBO>(
+        let model = VkUniformBuffer::new::<ModelUBOId>(
             &device.borrow(), 
             &mut memory_manager.borrow_mut()
         )?;
@@ -233,6 +237,10 @@ impl VkPipeline {
 
         let info = VkPipelineCreateInfo {
             msaa_samples,
+            color_format: swapchain.format,
+            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT,
+            attachments_count: 3,
             shaders: vec![
                 Shader::new(&device.borrow(), "assets/shaders/compiled/2DShader_v.spv")?,
                 Shader::new(&device.borrow(), "assets/shaders/compiled/2DShader_f.spv")?,
@@ -257,7 +265,8 @@ impl VkPipeline {
                 vk::Format::R8G8B8A8_SRGB, 
                 msaa_samples
             )?,
-            uniform_buffers: vec![model, view_proj]
+            uniform_buffers: vec![model, view_proj],
+            should_present: true,
         };
         
         Self::new::<Vertex>(
@@ -269,7 +278,63 @@ impl VkPipeline {
             info
         )
     }
-    
+    pub unsafe fn obj_picker(
+        device: Rfc<VkDevice>,
+        instance: &VkInstance,
+        physical_device: &VkPhysicalDevice,
+        swapchain: &VkSwapchain,
+        memory_manager: Rfc<VkMemoryManager>,
+    ) -> Result<Self, MyError>
+    {
+        let model = VkUniformBuffer::new::<ModelUBOId>(
+            &device.borrow(), 
+            &mut memory_manager.borrow_mut()
+        )?;
+        let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
+            &device.borrow(), 
+            &mut memory_manager.borrow_mut()
+        )?;
+        
+        let info = VkPipelineCreateInfo {
+            msaa_samples: vk::SampleCountFlags::_1,
+            color_format: vk::Format::R8G8B8A8_SRGB,
+            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            attachments_count: 2,
+            shaders: vec![
+                Shader::new(&device.borrow(), "assets/shaders/compiled/obj_picker_v.spv")?,
+                Shader::new(&device.borrow(), "assets/shaders/compiled/obj_picker_f.spv")?,
+            ],
+            viewport: vk::Viewport::builder()
+                .x(0.0)
+                .y(0.0)
+                .width(swapchain.extent.width as f32)
+                .height(swapchain.extent.width as f32)
+                .min_depth(0.0)
+                .max_depth(1.0)
+                .build(),
+            scissor: vk::Rect2D::builder()
+                .offset(vk::Offset2D { x: 0, y: 0 })
+                .extent(swapchain.extent)
+                .build(),
+            dynamic_states: vec![],
+            render_pass: VkRenderPass::get_object_picker(
+                instance, 
+                &device.borrow(), 
+                physical_device, 
+            )?,
+            uniform_buffers: vec![model, view_proj],
+            should_present: false,
+        };
+        
+        Self::new::<Vertex>(
+            device, 
+            instance, 
+            physical_device, 
+            swapchain, 
+            memory_manager, 
+            info
+        )
+    }
     pub unsafe fn destroy(&mut self, device: &VkDevice) -> Result<(), MyError>{
         let v_device = device.get_device();
         

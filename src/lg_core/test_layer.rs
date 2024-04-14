@@ -3,7 +3,7 @@ use sllog::*;
 use winit::window::Window;
 use crate::{utils::tools::to_radians, MyError};
 
-use super::{input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
+use super::{event::MouseEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
 
 #[derive(Default)]
 struct Textures {
@@ -105,6 +105,15 @@ impl Layer for TestLayer {
 
     fn on_event(&mut self, event: &super::event::LgEvent) -> Result<(), MyError> {
         self.main_camera.borrow_mut().on_event(event);
+        
+        match event {
+            super::event::LgEvent::MouseEvent(me) => {
+                match me {
+                    _ => (), 
+                }
+            },
+            _ => ()
+        }
         
         Ok(())
     }

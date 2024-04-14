@@ -7,7 +7,7 @@ use vulkanalia::{
 use crate::{lg_core::lg_types::reference::Rfc, MyError};
 use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_memory_allocator::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
-pub(crate) const MAX_SETS: usize = 1000;
+pub(crate) const MAX_SETS: usize = 500;
 pub struct VkDescriptorData {
     device: Rfc<VkDevice>,
     descriptor_infos: Vec<ShaderDescriptor>,
@@ -62,7 +62,8 @@ impl VkDescriptorData {
         let info = vk::DescriptorBufferInfo::builder()
             .buffer(self.buffers[buffer_index].buffer)
             .offset(0)
-            .range(self.buffers[buffer_index].range);
+            .range(self.buffers[buffer_index].range)
+            .build();
         
         let buffer_info = &[info];
         
@@ -72,8 +73,8 @@ impl VkDescriptorData {
             .unwrap();
         
         let buffer_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.sets[obj_index][set_index])
-            .dst_binding(binding)
+            .dst_set(self.sets[obj_index][ds_info.set as usize])
+            .dst_binding(ds_info.binding)
             .dst_array_element(0)
             .descriptor_type(ds_info.ds_type)
             .buffer_info(buffer_info);
@@ -117,7 +118,7 @@ impl VkDescriptorData {
     pub fn get_sets(&self, obj_index: usize) -> &Vec<vk::DescriptorSet> {
         &self.sets[obj_index]
     }
-    pub unsafe fn destroy(&mut self) -> Result<(), MyError>{
+    pub unsafe fn destroy(&mut self) -> Result<(), MyError> {
         let dev = self.device.borrow();
         let device = dev.get_device();
         

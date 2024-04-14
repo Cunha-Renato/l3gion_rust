@@ -45,7 +45,7 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "45"
+            value: "52"
             children: []
           - name: TypeId
             node_type: ""
@@ -91,42 +91,62 @@ children:
             node_type: ""
             value: "13"
             children: []
-  - name: UniformBuffer
-    node_type: ""
-    value: ""
-    children:
-      - name: ViewProjUBO
+      - name: outId
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "31"
+            value: "21"
             children: []
           - name: TypeId
             node_type: ""
-            value: "30"
+            value: "20"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "29"
+            value: "19"
             children: []
+  - name: UniformBuffer
+    node_type: ""
+    value: ""
+    children:
       - name: ModelUBO_DYNAMIC
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "41"
+            value: "27"
             children: []
           - name: TypeId
             node_type: ""
-            value: "40"
+            value: "26"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "39"
+            value: "25"
             children: []
+      - name: ViewProjUBO
+        node_type: ""
+        value: ""
+        children:
+          - name: Id
+            node_type: ""
+            value: "42"
+            children: []
+          - name: TypeId
+            node_type: ""
+            value: "41"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "40"
+            children: []
+  - name: StorageBuffer
+    node_type: ""
+    value: ""
+    children: []
   - name: SampledImage
     node_type: ""
     value: ""

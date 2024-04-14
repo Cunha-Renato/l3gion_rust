@@ -80,6 +80,25 @@ impl Shader {
                         }
                     }
                 }
+                "StorageBuffer" => {
+                    for ub_children in &main_children.children {
+                        for ub_type in &ub_children.children {
+                            let ds_type = if ub_children.name.contains("DYNAMIC") {
+                                vk::DescriptorType::STORAGE_BUFFER_DYNAMIC
+                            } else {
+                                vk::DescriptorType::STORAGE_BUFFER
+                            };
+                            if ub_type.name == "Id" {
+                                result.push(ShaderDescriptor {
+                                    shader_stage: string_to_shader_stage(&self.node.node_type)?,
+                                    ds_type,
+                                    binding: ast.get_decoration(ub_type.value.parse()?, spirv::Decoration::Binding)?,
+                                    set: ast.get_decoration(ub_type.value.parse()?, spirv::Decoration::DescriptorSet)?,
+                                })
+                            } 
+                        }
+                    }
+                }
                 "SampledImage" => {
                     for si_children in &main_children.children {
                         for si_type in &si_children.children {
@@ -141,6 +160,7 @@ unsafe fn reflect_and_serialize(filepath: &str, name: &str) -> Result<spirv::Ast
     shader_node.push(serialize_resource("Input", &ast_resources.stage_inputs));
     shader_node.push(serialize_resource("Output", &ast_resources.stage_outputs));
     shader_node.push(serialize_resource("UniformBuffer", &ast_resources.uniform_buffers));
+    shader_node.push(serialize_resource("StorageBuffer", &ast_resources.storage_buffers));
     shader_node.push(serialize_resource("SampledImage", &ast_resources.sampled_images));
 
     shader_node.serialize("assets/shaders/reflected/", name)?;

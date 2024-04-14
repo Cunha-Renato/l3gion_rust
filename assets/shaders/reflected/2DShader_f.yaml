@@ -7,21 +7,21 @@ children:
     node_type: ""
     value: ""
     children:
-      - name: fragTexCoord
+      - name: outId
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "17"
+            value: "11"
             children: []
           - name: TypeId
             node_type: ""
-            value: "16"
+            value: "10"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "15"
+            value: "9"
             children: []
       - name: fragColor
         node_type: ""
@@ -29,15 +29,31 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "22"
+            value: "28"
             children: []
           - name: TypeId
             node_type: ""
-            value: "21"
+            value: "27"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "20"
+            value: "26"
+            children: []
+      - name: fragTexCoord
+        node_type: ""
+        value: ""
+        children:
+          - name: Id
+            node_type: ""
+            value: "31"
+            children: []
+          - name: TypeId
+            node_type: ""
+            value: "30"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "29"
             children: []
   - name: Output
     node_type: ""
@@ -49,17 +65,21 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "9"
+            value: "18"
             children: []
           - name: TypeId
             node_type: ""
-            value: "8"
+            value: "17"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "7"
+            value: "16"
             children: []
   - name: UniformBuffer
+    node_type: ""
+    value: ""
+    children: []
+  - name: StorageBuffer
     node_type: ""
     value: ""
     children: []
@@ -73,13 +93,13 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "13"
+            value: "25"
             children: []
           - name: TypeId
             node_type: ""
-            value: "12"
+            value: "24"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "11"
+            value: "23"
             children: []

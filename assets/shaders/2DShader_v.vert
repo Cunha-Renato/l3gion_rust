@@ -6,6 +6,7 @@ layout(set = 0, binding = 0) uniform ViewProjUBO {
 } u_ViewProjection;
 layout(set = 2, binding = 0) uniform ModelUBO_DYNAMIC  {
     mat4 data;
+    uvec4 id;
 } u_Model;
 
 layout(location = 0) in vec3 inPosition;
@@ -14,9 +15,11 @@ layout(location = 2) in vec2 inTexCoord;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
+layout(location = 2) out uint outId;
 
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
+    outId = u_Model.id.x;
     gl_Position = u_ViewProjection.view * u_ViewProjection.proj * u_Model.data * vec4(inPosition, 1.0);
 }

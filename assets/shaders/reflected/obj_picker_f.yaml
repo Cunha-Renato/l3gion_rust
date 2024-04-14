@@ -1,5 +1,5 @@
 ---
-name: shader
+name: obj_picker_f
 node_type: Fragment
 value: ""
 children:
@@ -7,43 +7,27 @@ children:
     node_type: ""
     value: ""
     children:
-      - name: fragTexCoord
+      - name: outId
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "17"
+            value: "12"
             children: []
           - name: TypeId
             node_type: ""
-            value: "16"
+            value: "11"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "15"
-            children: []
-      - name: fragColor
-        node_type: ""
-        value: ""
-        children:
-          - name: Id
-            node_type: ""
-            value: "22"
-            children: []
-          - name: TypeId
-            node_type: ""
-            value: "21"
-            children: []
-          - name: BaseTypeId
-            node_type: ""
-            value: "20"
+            value: "10"
             children: []
   - name: Output
     node_type: ""
     value: ""
     children:
-      - name: outColor
+      - name: id
         node_type: ""
         value: ""
         children:
@@ -63,6 +47,10 @@ children:
     node_type: ""
     value: ""
     children: []
+  - name: StorageBuffer
+    node_type: ""
+    value: ""
+    children: []
   - name: SampledImage
     node_type: ""
     value: ""
@@ -73,13 +61,13 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "13"
+            value: "20"
             children: []
           - name: TypeId
             node_type: ""
-            value: "12"
+            value: "19"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "11"
+            value: "18"
             children: []

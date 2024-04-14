@@ -1,5 +1,5 @@
 ---
-name: 2DShader
+name: obj_picker_v
 node_type: Vertex
 value: ""
 children:
@@ -7,21 +7,37 @@ children:
     node_type: ""
     value: ""
     children:
+      - name: inPosition
+        node_type: ""
+        value: ""
+        children:
+          - name: Id
+            node_type: ""
+            value: "36"
+            children: []
+          - name: TypeId
+            node_type: ""
+            value: "35"
+            children: []
+          - name: BaseTypeId
+            node_type: ""
+            value: "34"
+            children: []
       - name: inColor
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "11"
+            value: "52"
             children: []
           - name: TypeId
             node_type: ""
-            value: "10"
+            value: "35"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "7"
+            value: "34"
             children: []
       - name: inTexCoord
         node_type: ""
@@ -29,67 +45,35 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "17"
+            value: "55"
             children: []
           - name: TypeId
             node_type: ""
-            value: "16"
+            value: "54"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "13"
-            children: []
-      - name: inPosition
-        node_type: ""
-        value: ""
-        children:
-          - name: Id
-            node_type: ""
-            value: "45"
-            children: []
-          - name: TypeId
-            node_type: ""
-            value: "10"
-            children: []
-          - name: BaseTypeId
-            node_type: ""
-            value: "7"
+            value: "53"
             children: []
   - name: Output
     node_type: ""
     value: ""
     children:
-      - name: fragColor
+      - name: outId
         node_type: ""
         value: ""
         children:
           - name: Id
             node_type: ""
-            value: "9"
+            value: "47"
             children: []
           - name: TypeId
+            node_type: ""
+            value: "46"
+            children: []
+          - name: BaseTypeId
             node_type: ""
             value: "8"
-            children: []
-          - name: BaseTypeId
-            node_type: ""
-            value: "7"
-            children: []
-      - name: fragTexCoord
-        node_type: ""
-        value: ""
-        children:
-          - name: Id
-            node_type: ""
-            value: "15"
-            children: []
-          - name: TypeId
-            node_type: ""
-            value: "14"
-            children: []
-          - name: BaseTypeId
-            node_type: ""
-            value: "13"
             children: []
   - name: UniformBuffer
     node_type: ""
@@ -101,15 +85,15 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "31"
+            value: "19"
             children: []
           - name: TypeId
             node_type: ""
-            value: "30"
+            value: "18"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "29"
+            value: "17"
             children: []
       - name: ModelUBO_DYNAMIC
         node_type: ""
@@ -117,16 +101,20 @@ children:
         children:
           - name: Id
             node_type: ""
-            value: "41"
+            value: "30"
             children: []
           - name: TypeId
             node_type: ""
-            value: "40"
+            value: "29"
             children: []
           - name: BaseTypeId
             node_type: ""
-            value: "39"
+            value: "28"
             children: []
+  - name: StorageBuffer
+    node_type: ""
+    value: ""
+    children: []
   - name: SampledImage
     node_type: ""
     value: ""

@@ -2,11 +2,11 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBO, ModelUBOId, StorageBuffer, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, MyError};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBOId, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, MyError};
 
-use super::{framebuffer, shader::Shader, vk_descriptor::VkDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::VkMemoryManager, vk_physical_device::VkPhysicalDevice, vk_renderpass::VkRenderPass, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
+use super::{framebuffer, shader::Shader, vk_descriptor::VkDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_manager::VkMemoryManager, vk_renderpass::{get_depth_format, VkRenderPassBuilder}, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
 
-struct VkPipelineCreateInfo {
+pub struct VkPipelineCreateInfo {
     msaa_samples: vk::SampleCountFlags,
     color_format: vk::Format,
     color_image_usage: vk::ImageUsageFlags,
@@ -15,7 +15,7 @@ struct VkPipelineCreateInfo {
     viewport: vk::Viewport,
     scissor: vk::Rect2D,
     dynamic_states: Vec<vk::DynamicState>,
-    render_pass: VkRenderPass,
+    render_pass: vk::RenderPass,
     uniform_buffers: Vec<VkUniformBuffer>,
     should_present: bool,
 }
@@ -26,9 +26,9 @@ pub struct VkPipeline {
     pub layout: vk::PipelineLayout,
     pub descriptor_data: Vec<VkDescriptorData>,
     pub framebuffers: Vec<vk::Framebuffer>,
-    pub render_pass: VkRenderPass,
-    pub color_image: VkImage,
-    pub depth_image: VkImage,
+    pub render_pass: vk::RenderPass,
+    pub color_image: Rfc<VkImage>,
+    pub depth_image: Rfc<VkImage>,
     pub present: bool,
 }
 impl VkPipeline {
@@ -110,7 +110,7 @@ impl VkPipeline {
         for _ in 0..helper::MAX_FRAMES_IN_FLIGHT {
             let mut uniform_buffers = Vec::new();
             for buffer in &info.uniform_buffers {
-                uniform_buffers.push(VkUniformBuffer::from_buffer(&device.borrow(), &mut memory_manager.borrow_mut(), buffer)?);
+                uniform_buffers.push(VkUniformBuffer::from_buffer(&mut memory_manager.borrow_mut(), buffer)?);
             }
 
             descriptor_data.push(VkDescriptorData::new(
@@ -123,8 +123,7 @@ impl VkPipeline {
 
         // Cleaning the unused buffers
         for b in &info.uniform_buffers {
-            memory_manager.borrow_mut().free_buffer_region(b.region.clone())?;
-            v_device.destroy_buffer(b.buffer, None);
+            memory_manager.borrow_mut().destroy_buffer(b.buffer.clone())?;
         }
 
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
@@ -136,30 +135,8 @@ impl VkPipeline {
             .iter()
             .map(|s| s.info) 
             .collect();
-        
-        let mut pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
-            .stages(&stages)
-            .vertex_input_state(&vertex_input_state)
-            .input_assembly_state(&input_assembly_state)
-            .viewport_state(&viewport_state)
-            .rasterization_state(&rasterization_state)
-            .multisample_state(&multisample_state)
-            .depth_stencil_state(&depth_stencil_state)
-            .color_blend_state(&color_blend_state)
-            .layout(layout)
-            .render_pass(*info.render_pass.get_render_pass())
-            .subpass(0);
             
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-                .dynamic_states(&info.dynamic_states);
-
-        if !info.dynamic_states.is_empty() {
-            pipeline_info = pipeline_info.dynamic_state(&dynamic_state);
-        }
-            
-        let color_image = VkImage::new(
-            &device.borrow(),
-            &mut memory_manager.borrow_mut(),
+        let color_image = memory_manager.borrow_mut().new_image(
             swapchain.extent.width, 
             swapchain.extent.height, 
             info.color_format, 
@@ -170,9 +147,7 @@ impl VkPipeline {
             1
         )?;
 
-        let depth_image = VkImage::new(
-            &device.borrow(), 
-            &mut memory_manager.borrow_mut(),
+        let depth_image = memory_manager.borrow_mut().new_image(
             swapchain.extent.width, 
             swapchain.extent.height, 
             helper::get_depth_format(instance.get_instance(), physical_device.get_device())?, 
@@ -188,12 +163,31 @@ impl VkPipeline {
             &info.render_pass,
             info.attachments_count, 
             &swapchain.views, 
-            &color_image, 
-            &depth_image, 
+            &color_image.borrow(), 
+            &depth_image.borrow(), 
             swapchain.extent.width, 
             swapchain.extent.height
         )?;
         
+        let mut pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&stages)
+            .vertex_input_state(&vertex_input_state)
+            .input_assembly_state(&input_assembly_state)
+            .viewport_state(&viewport_state)
+            .rasterization_state(&rasterization_state)
+            .multisample_state(&multisample_state)
+            .depth_stencil_state(&depth_stencil_state)
+            .color_blend_state(&color_blend_state)
+            .layout(layout)
+            .render_pass(info.render_pass)
+            .subpass(0);
+
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+                .dynamic_states(&info.dynamic_states);
+        if !info.dynamic_states.is_empty() {
+            pipeline_info = pipeline_info.dynamic_state(&dynamic_state);
+        }
+
         let pipeline = v_device.create_graphics_pipelines(
             vk::PipelineCache::null(), 
             &[pipeline_info], 
@@ -227,11 +221,9 @@ impl VkPipeline {
     ) -> Result<Self, MyError>
     {
         let model = VkUniformBuffer::new::<ModelUBOId>(
-            &device.borrow(), 
             &mut memory_manager.borrow_mut()
         )?;
         let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
-            &device.borrow(), 
             &mut memory_manager.borrow_mut()
         )?;
 
@@ -258,13 +250,58 @@ impl VkPipeline {
                 .extent(swapchain.extent)
                 .build(),
             dynamic_states: vec![],
-            render_pass: VkRenderPass::get_default(
-                instance, 
-                &device.borrow(), 
-                physical_device, 
-                vk::Format::R8G8B8A8_SRGB, 
-                msaa_samples
-            )?,
+            render_pass: VkRenderPassBuilder::begin()
+                .add_attachment(vk::AttachmentDescription::builder()
+                    .format(swapchain.format)
+                    .samples(msaa_samples)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .add_attachment(vk::AttachmentDescription::builder()
+                    .format(get_depth_format(instance.get_instance(), physical_device.get_device())?)
+                    .samples(msaa_samples)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .add_attachment(vk::AttachmentDescription::builder()
+                    .format(swapchain.format)
+                    .samples(vk::SampleCountFlags::_1)
+                    .load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                    .build()
+                )
+                .new_subpass()
+                .set_bind_point(vk::PipelineBindPoint::GRAPHICS)
+                .add_color_attachment_ref(vk::AttachmentReference::builder()
+                    .attachment(0)
+                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .set_depth_attachment_ref(vk::AttachmentReference::builder()
+                    .attachment(1)
+                    .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .add_resolve_attachment_ref(vk::AttachmentReference::builder()
+                    .attachment(2)
+                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .build(&device.borrow())?,
             uniform_buffers: vec![model, view_proj],
             should_present: true,
         };
@@ -287,18 +324,17 @@ impl VkPipeline {
     ) -> Result<Self, MyError>
     {
         let model = VkUniformBuffer::new::<ModelUBOId>(
-            &device.borrow(), 
             &mut memory_manager.borrow_mut()
         )?;
         let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
-            &device.borrow(), 
             &mut memory_manager.borrow_mut()
         )?;
         
         let info = VkPipelineCreateInfo {
             msaa_samples: vk::SampleCountFlags::_1,
             color_format: vk::Format::R8G8B8A8_SRGB,
-            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC,
             attachments_count: 2,
             shaders: vec![
                 Shader::new(&device.borrow(), "assets/shaders/compiled/obj_picker_v.spv")?,
@@ -317,11 +353,42 @@ impl VkPipeline {
                 .extent(swapchain.extent)
                 .build(),
             dynamic_states: vec![],
-            render_pass: VkRenderPass::get_object_picker(
-                instance, 
-                &device.borrow(), 
-                physical_device, 
-            )?,
+            render_pass: VkRenderPassBuilder::begin()
+                .add_attachment(vk::AttachmentDescription::builder()
+                    .format(vk::Format::R8G8B8A8_SRGB)
+                    .samples(vk::SampleCountFlags::_1)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .add_attachment(vk::AttachmentDescription::builder()
+                    .format(get_depth_format(instance.get_instance(), physical_device.get_device())?)
+                    .samples(vk::SampleCountFlags::_1)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .new_subpass()
+                .set_bind_point(vk::PipelineBindPoint::GRAPHICS)
+                .add_color_attachment_ref(vk::AttachmentReference::builder()
+                    .attachment(0)
+                    .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .set_depth_attachment_ref(vk::AttachmentReference::builder()
+                    .attachment(1)
+                    .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .build()
+                )
+                .build(&device.borrow())?,
             uniform_buffers: vec![model, view_proj],
             should_present: false,
         };
@@ -342,15 +409,15 @@ impl VkPipeline {
             dd.destroy()?;
         }
 
-        self.color_image.destroy(device, &mut self.memory_manager.borrow_mut())?;
-        self.depth_image.destroy(device, &mut self.memory_manager.borrow_mut())?;
+        self.memory_manager.borrow_mut().destroy_image(self.color_image.clone())?;
+        self.memory_manager.borrow_mut().destroy_image(self.depth_image.clone())?;
 
         self.framebuffers
             .iter()
             .for_each(|f| v_device.destroy_framebuffer(*f, None));
         v_device.destroy_pipeline(self.pipeline, None);
         v_device.destroy_pipeline_layout(self.layout, None);
-        v_device.destroy_render_pass(*self.render_pass.get_render_pass(), None);
+        v_device.destroy_render_pass(self.render_pass, None);
         
         Ok(())
     }

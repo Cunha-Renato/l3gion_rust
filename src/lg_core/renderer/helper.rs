@@ -1,15 +1,12 @@
 use std::collections::HashSet;
 use sllog::*;
 use vulkanalia:: {
-    loader::{LibloadingLoader, LIBRARY}, prelude::v1_2::*, vk, Entry, Instance, Version
+    loader::{LibloadingLoader, LIBRARY}, prelude::v1_2::*, vk, Entry, Instance
 };
 use crate::MyError;
 use super::vulkan::{vk_device::QueueFamilyIndices, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain};
 
 // CONSTANTS
-const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
-pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-const VALIDATION_LAYER: vk::ExtensionName = vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name
 ];
@@ -39,7 +36,7 @@ pub unsafe fn create_entry() -> Result<Entry, MyError> {
     Ok(entry)
 }
 pub unsafe fn create_logical_device(
-    entry: &Entry,
+    _entry: &Entry,
     physical_device: &vk::PhysicalDevice,
     indices: &QueueFamilyIndices,
     instance: &Instance,
@@ -59,22 +56,10 @@ pub unsafe fn create_logical_device(
         })
         .collect::<Vec<_>>();
     
-    let layers = if VALIDATION_ENABLED {
-        vec![VALIDATION_LAYER.as_ptr()]
-    }
-    else {
-        vec![]
-    };
-    
-    let mut extensions = DEVICE_EXTENSIONS
+    let extensions = DEVICE_EXTENSIONS
         .iter()
         .map(|n| n.as_ptr())
         .collect::<Vec<_>>();
-    
-    // Required by Vulkan SDK on macOS since 1.3.216
-    if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-        extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
-    }
     
     let features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
@@ -82,7 +67,7 @@ pub unsafe fn create_logical_device(
     
     let info = vk::DeviceCreateInfo::builder()
         .queue_create_infos(&queue_infos)
-        .enabled_layer_names(&layers)
+        .enabled_layer_names(&[])
         .enabled_extension_names(&extensions)
         .enabled_features(&features);
     

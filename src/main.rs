@@ -16,7 +16,7 @@ use l3gion_rust::{
 };
 use l3gion_rust::MyError;
 
-use sllog::{error, warn};
+use sllog::warn;
 use winit::event::{ElementState, MouseScrollDelta};
 use winit::{
     dpi::LogicalSize,

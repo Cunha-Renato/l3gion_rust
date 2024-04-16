@@ -1,6 +1,5 @@
 use std::{cell::RefCell, rc::Rc};
 
-use sllog::*;
 use winit::window::Window;
 
 use crate::{lg_core::test_layer::TestLayer, MyError};

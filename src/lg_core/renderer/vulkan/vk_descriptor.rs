@@ -5,7 +5,7 @@ use vulkanalia::{
     vk,
 };
 use crate::{lg_core::lg_types::reference::Rfc, MyError};
-use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_memory_allocator::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
+use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_memory_manager::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
 pub(crate) const MAX_SETS: usize = 500;
 pub struct VkDescriptorData {
@@ -60,7 +60,7 @@ impl VkDescriptorData {
         obj_index: usize,
     ) {
         let info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.buffers[buffer_index].buffer)
+            .buffer(self.buffers[buffer_index].buffer.borrow().buffer)
             .offset(0)
             .range(self.buffers[buffer_index].range)
             .build();
@@ -93,7 +93,7 @@ impl VkDescriptorData {
     ) {
         let info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(texture.image.view)
+            .image_view(texture.image.borrow().view)
             .sampler(texture.sampler);
 
         let image_info = &[info];
@@ -130,8 +130,7 @@ impl VkDescriptorData {
                     .for_each(|l| device.destroy_descriptor_set_layout(*l, None)));
 
         for b in &self.buffers {
-            self.memory_manager.borrow_mut().free_buffer_region(b.region.clone())?;
-            device.destroy_buffer(b.buffer, None);
+            self.memory_manager.borrow_mut().destroy_buffer(b.buffer.clone())?;
         }
 
         Ok(())

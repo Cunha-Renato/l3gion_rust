@@ -96,7 +96,15 @@ impl VkInstance {
     pub fn get_instance(&self) -> &Instance {
         &self.instance
     }
+    pub unsafe fn destroy(&mut self) {
+        if let Some(messenger) = self.messenger {
+            self.instance.destroy_debug_utils_messenger_ext(messenger, None);
+        }
+        
+        self.instance.destroy_instance(None);
+    }
 }
+
 extern "system" fn debug_callback(
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     type_: vk::DebugUtilsMessageTypeFlagsEXT,

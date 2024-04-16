@@ -5,11 +5,11 @@ use vulkanalia:: {
 
 use crate::MyError;
 
-use super::{vk_device::VkDevice, vk_image::VkImage, vk_renderpass::VkRenderPass};
+use super::{vk_device::VkDevice, vk_image::VkImage};
 
 pub unsafe fn create_framebuffers(
     device: &VkDevice,
-    render_pass: &VkRenderPass,
+    render_pass: &vk::RenderPass,
     attachments_count: u32,
     swapchain_image_views: &Vec<vk::ImageView>,
     color_image_data: &VkImage,
@@ -34,7 +34,7 @@ pub unsafe fn create_framebuffers(
             }
             
             let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(*render_pass.get_render_pass())
+                .render_pass(*render_pass)
                 .attachments(&attachments)
                 .width(width)
                 .height(height)

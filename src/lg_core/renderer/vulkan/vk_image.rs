@@ -1,71 +1,34 @@
 use vulkanalia::{
     prelude::v1_2::*, vk
 };
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
-use super::{vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 
+use crate::{lg_core::lg_types::reference::Rfc, MyError};
+
+use super::{vk_device::VkDevice, vk_memory_manager::VkMemoryRegion};
 #[derive(Default)]
 pub struct VkImage {
     pub image: vk::Image,
+    pub region: Rfc<VkMemoryRegion>,
     pub view: vk::ImageView,
-    pub memory_region: Rfc<VkMemoryRegion>,
+    pub width: u32,
+    pub height: u32,
 }
 impl VkImage {
     pub unsafe fn new(
-        device: &VkDevice,
-        memory_manager: &mut VkMemoryManager,
+        image: vk::Image,
+        region: Rfc<VkMemoryRegion>,
+        view: vk::ImageView,
         width: u32,
         height: u32,
-        format: vk::Format,
-        aspect_mask: vk::ImageAspectFlags,
-        samples: vk::SampleCountFlags,
-        tiling: vk::ImageTiling,
-        usage: vk::ImageUsageFlags,
-        mip_levels: u32,
-    ) -> Result<Self, MyError> {
-        let info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::_2D)
-            .extent(vk::Extent3D {
-                width,
-                height,
-                depth: 1,
-            })
-            .mip_levels(mip_levels)
-            .array_layers(1)
-            .format(format)
-            .tiling(tiling)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(samples);
-
-        let image = device.get_device().create_image(&info, None)?;
+    ) -> Self {
         
-        // Memory
-        let memory_region = memory_manager.alloc_image(&image, VkMemoryUsageFlags::GPU_CPU)?;
-        
-        // View
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(aspect_mask)
-            .base_mip_level(0)
-            .level_count(mip_levels)
-            .base_array_layer(0)
-            .layer_count(1);
-        
-        let info = vk::ImageViewCreateInfo::builder()
-            .image(image)
-            .view_type(vk::ImageViewType::_2D)
-            .format(format)
-            .subresource_range(subresource_range);
-        
-        memory_manager.bind_image(&image, memory_region.clone())?;
-        let view = device.get_device().create_image_view(&info, None)?;
-        
-        Ok(Self {
+        Self {
             image,
+            region,
             view,
-            memory_region,
-        })
+            width,
+            height,
+        }
     }
     pub unsafe fn transition_layout(
         &mut self,
@@ -124,13 +87,10 @@ impl VkImage {
     
         Ok(()) 
     }
-    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
+    pub unsafe fn destroy(&mut self, device: &VkDevice) {
         let device = device.get_device();
         
         device.destroy_image_view(self.view, None);
-        memory_manager.free_image_region(self.memory_region.clone())?;
         device.destroy_image(self.image, None);
-        
-        Ok(())
     }
 }

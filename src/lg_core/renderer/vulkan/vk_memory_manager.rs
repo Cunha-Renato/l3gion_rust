@@ -1,17 +1,18 @@
 #![allow(non_camel_case_types)]
 
-use std::ffi::c_void;
+use std::{collections::HashMap, ffi::c_void};
 use vulkanalia::{
     prelude::v1_2::*, vk
 };
 use crate::{lg_core::lg_types::reference::Rfc, MyError};
-use super::{vk_device::VkDevice, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
+use super::{vk_buffer::VkBuffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 
 const SIZE_OF_MEGABYTES: u64 = 1_000_000;
 const MEMORY_BLOCK_SIZE: u64 = 256 * SIZE_OF_MEGABYTES;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VkMemoryUsageFlags {
+    #[default]
     GPU,
     CPU,
     GPU_CPU,
@@ -38,7 +39,7 @@ impl VkMemoryUsageFlags {
 pub struct VkMemoryRegion {
     begin: u64,
     size: u64,
-    memory_index: usize,
+    memory_usage: VkMemoryUsageFlags,
 }
 
 struct VkMemory {
@@ -57,7 +58,9 @@ struct VkMemoryHeap {
 
 pub struct VkMemoryManager {
     device: Rfc<VkDevice>,
-    heaps: Vec<VkMemoryHeap>,
+    heaps: HashMap<VkMemoryUsageFlags, VkMemoryHeap>,
+    images: Vec<Rfc<VkImage>>,
+    buffers: Vec<Rfc<VkBuffer>>,
 }
 impl VkMemoryManager {
     pub unsafe fn new(
@@ -67,37 +70,100 @@ impl VkMemoryManager {
     ) -> Result<Self, MyError>
     {
         let heap_indices = vec![
-            get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::GPU)?,
-            get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::CPU)?,
-            get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::GPU_CPU)?,
-            get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::CPU_GPU)?,
+            (get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::GPU)?, VkMemoryUsageFlags::GPU),
+            (get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::CPU)?, VkMemoryUsageFlags::CPU),
+            (get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::CPU_GPU)?, VkMemoryUsageFlags::CPU_GPU),
+            (get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::GPU_CPU)?, VkMemoryUsageFlags::GPU_CPU),
         ];
         
         let heaps = heap_indices
             .iter()
-            .map(|i| VkMemoryHeap {
+            .map(|(i, j)| (*j, VkMemoryHeap {
                 memory_index: *i,
                 image_regions: Vec::new(),
                 buffer_regions: Vec::new(),
                 image_memory: None,
                 buffer_memory: None,
-            })
+            }))
             .collect();
             
         Ok(Self {
             device,
             heaps,
+            images: Vec::new(),
+            buffers: Vec::new(),
         })
     }
 
     // Image
-    pub unsafe fn alloc_image(
+    pub unsafe fn new_image(
+        &mut self,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+        aspect_mask: vk::ImageAspectFlags,
+        samples: vk::SampleCountFlags,
+        tiling: vk::ImageTiling,
+        usage: vk::ImageUsageFlags,
+        mip_levels: u32,
+    ) -> Result<Rfc<VkImage>, MyError>
+    {
+        let info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::_2D)
+            .extent(vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            })
+            .mip_levels(mip_levels)
+            .array_layers(1)
+            .format(format)
+            .tiling(tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(samples);
+
+        let image = self.device.borrow().get_device().create_image(&info, None)?;
+        
+        // Memory
+        let memory_region = self.alloc_image(&image, VkMemoryUsageFlags::GPU)?;
+        
+        // View
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(aspect_mask)
+            .base_mip_level(0)
+            .level_count(mip_levels)
+            .base_array_layer(0)
+            .layer_count(1);
+        
+        let info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::_2D)
+            .format(format)
+            .subresource_range(subresource_range);
+
+        self.bind_image(&image, memory_region.clone())?;
+        let view = self.device.borrow().get_device().create_image_view(&info, None)?;
+        let image = Rfc::new(VkImage::new(
+           image,
+           memory_region,
+           view,
+           width,
+           height 
+        ));
+        
+        self.images.push(image.clone());
+
+        Ok(image)
+    }
+    unsafe fn alloc_image(
         &mut self,
         image: &vk::Image,
         memory_usage: VkMemoryUsageFlags,
     ) -> Result<Rfc<VkMemoryRegion>, MyError>
     {
-        let heap = &mut self.heaps[memory_usage as usize];
+        let heap = self.heaps.get_mut(&memory_usage).unwrap();
         let requirements = self.device.borrow().get_device().get_image_memory_requirements(*image);
         
         let begin = match &heap.image_memory {
@@ -123,7 +189,7 @@ impl VkMemoryManager {
         let region = Rfc::new(VkMemoryRegion {
             begin,
             size,
-            memory_index: memory_usage as usize,
+            memory_usage,
         });
         
         heap.image_regions.push(region.clone());
@@ -134,12 +200,35 @@ impl VkMemoryManager {
 
         Ok(region.clone())
     }
-    pub unsafe fn alloc_buffer(
+    
+    pub unsafe fn new_buffer(
+        &mut self,
+        size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags,
+        properties: VkMemoryUsageFlags
+    ) -> Result<Rfc<VkBuffer>, MyError> 
+    {
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(size)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        
+        let buffer = self.device.borrow().get_device().create_buffer(&buffer_info, None)?;
+        let region = self.alloc_buffer(&buffer, properties)?;
+        
+        self.bind_buffer(&buffer, region.clone())?;
+        let buffer = Rfc::new(VkBuffer::new(buffer, region));
+
+        self.buffers.push(buffer.clone());
+        
+        Ok(buffer)
+    }
+    unsafe fn alloc_buffer(
         &mut self,
         buffer: &vk::Buffer,
         memory_usage: VkMemoryUsageFlags        
     ) -> Result<Rfc<VkMemoryRegion>, MyError> {
-        let heap = &mut self.heaps[memory_usage as usize];
+        let heap = self.heaps.get_mut(&memory_usage).unwrap();
         let requirements = self.device.borrow().get_device().get_buffer_memory_requirements(*buffer);
         
         let begin = match &heap.buffer_memory {
@@ -165,7 +254,7 @@ impl VkMemoryManager {
         let region = Rfc::new(VkMemoryRegion {
             begin,
             size,
-            memory_index: memory_usage as usize,
+            memory_usage,
         });
         
         heap.buffer_regions.push(region.clone());
@@ -176,35 +265,36 @@ impl VkMemoryManager {
 
         Ok(region.clone())
     }
-    pub unsafe fn bind_image(
+
+    unsafe fn bind_image(
         &self,
         image: &vk::Image,
         region: Rfc<VkMemoryRegion>
     ) -> Result<(), MyError>
     {
-        let memory = self.heaps[region.borrow().memory_index].image_memory.as_ref().unwrap();
+        let memory = self.heaps.get(&region.borrow().memory_usage).unwrap().image_memory.as_ref().unwrap();
         self.device.borrow().get_device().bind_image_memory(*image, memory.memory, region.borrow().begin)?;
         
         Ok(())
     }
-    pub unsafe fn bind_buffer(
+    unsafe fn bind_buffer(
         &self,
         buffer: &vk::Buffer,
-        region: Rfc<VkMemoryRegion>
+        region: Rfc<VkMemoryRegion>,
     ) -> Result<(), MyError>
     {
-        let memory = self.heaps[region.borrow().memory_index].buffer_memory.as_ref().unwrap();
+        let memory = self.heaps.get(&region.borrow().memory_usage).unwrap().buffer_memory.as_ref().unwrap();
         self.device.borrow().get_device().bind_buffer_memory(*buffer, memory.memory, region.borrow().begin)?;
         
         Ok(())
     }
     
-    pub unsafe fn map_image(&mut self, region: Rfc<VkMemoryRegion>, flags: vk::MemoryMapFlags) -> Result<(), MyError> {
-        if let Some(memory) = &self.heaps[region.borrow().memory_index].image_memory {
+    pub unsafe fn map_image(&mut self, image: Rfc<VkImage>, flags: vk::MemoryMapFlags) -> Result<(), MyError> {
+        if let Some(memory) = &self.heaps.get(&image.borrow().region.borrow().memory_usage).unwrap().image_memory {
             self.device.borrow().get_device().map_memory(
                 memory.memory, 
-                region.borrow().begin, 
-                region.borrow().size, 
+                image.borrow().region.borrow().begin, 
+                image.borrow().region.borrow().size, 
                 flags
             )?;
         }
@@ -214,11 +304,11 @@ impl VkMemoryManager {
 
         Ok(())
     }
-    pub unsafe fn map_buffer(&mut self, region: Rfc<VkMemoryRegion>, offset: u64, size: u64, flags: vk::MemoryMapFlags) -> Result<*mut c_void,  MyError> {
-        if let Some(memory) = &self.heaps[region.borrow().memory_index].buffer_memory {
+    pub unsafe fn map_buffer(&mut self, buffer: Rfc<VkBuffer>, offset: u64, size: u64, flags: vk::MemoryMapFlags) -> Result<*mut c_void,  MyError> {
+        if let Some(memory) = &self.heaps.get(&buffer.borrow().region.borrow().memory_usage).unwrap().buffer_memory {
             return Ok(self.device.borrow().get_device().map_memory(
                 memory.memory, 
-                region.borrow().begin + offset, 
+                buffer.borrow().region.borrow().begin + offset, 
                 size,
                 flags
             )?);
@@ -228,8 +318,8 @@ impl VkMemoryManager {
         }
     }
 
-    pub unsafe fn unmap_image(&mut self, region: Rfc<VkMemoryRegion>) -> Result<(), MyError> {
-        if let Some(memory) = &self.heaps[region.borrow().memory_index].image_memory {
+    pub unsafe fn unmap_image(&mut self, image: Rfc<VkImage>)-> Result<(), MyError> {
+        if let Some(memory) = &self.heaps.get(&image.borrow().region.borrow().memory_usage).unwrap().image_memory {
             self.device.borrow().get_device().unmap_memory(memory.memory);
         }
         else {
@@ -238,8 +328,8 @@ impl VkMemoryManager {
         
         Ok(())
     }
-    pub unsafe fn unmap_buffer(&mut self, region: Rfc<VkMemoryRegion>) -> Result<(), MyError> {
-        if let Some(memory) = &self.heaps[region.borrow().memory_index].buffer_memory {
+    pub unsafe fn unmap_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+        if let Some(memory) = &self.heaps.get(&buffer.borrow().region.borrow().memory_usage).unwrap().buffer_memory {
             self.device.borrow().get_device().unmap_memory(memory.memory);
         }
         else {
@@ -249,44 +339,60 @@ impl VkMemoryManager {
         Ok(())
     }
 
-    pub unsafe fn free_image_region(&mut self, region: Rfc<VkMemoryRegion>) -> Result<(), MyError>{
-        let regions = &mut self.heaps[region.borrow().memory_index].image_regions;
+    pub unsafe fn free_image(&mut self, image: Rfc<VkImage>) -> Result<(), MyError>{
+        let heap = self.heaps.get_mut(&image.borrow().region.borrow().memory_usage).unwrap();
+        let regions = &mut heap.image_regions;
         
         if let Some((index, _)) = regions
             .iter()
             .enumerate()
-            .find(|(_, rg)| rg.borrow().begin == region.borrow().begin)
+            .find(|(_, rg)| rg.borrow().begin == image.borrow().region.borrow().begin)
         {
             regions.remove(index);
-            *region.borrow_mut() = VkMemoryRegion::default();
+            *image.borrow().region.borrow_mut() = VkMemoryRegion::default();
 
             return Ok(());
         }
         
         Err("Trying to free memory that doesn't exists (VkMemoryManager)".into())
     }
-    pub unsafe fn free_buffer_region(&mut self, region: Rfc<VkMemoryRegion>) -> Result<(), MyError> {
-        let regions = &mut self.heaps[region.borrow().memory_index].buffer_regions;
+    pub unsafe fn free_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+        let heap = self.heaps.get_mut(&buffer.borrow().region.borrow().memory_usage).unwrap();
+        let regions = &mut heap.buffer_regions;
         
         if let Some((index, _)) = regions
             .iter()
             .enumerate()
-            .find(|(_, rg)| rg.borrow().begin == region.borrow().begin)
+            .find(|(_, rg)| rg.borrow().begin == buffer.borrow().region.borrow().begin)
         {
             regions.remove(index);
-            *region.borrow_mut() = VkMemoryRegion::default();
+            *buffer.borrow().region.borrow_mut() = VkMemoryRegion::default();
 
             return Ok(());
         }
         
         Err("Trying to free memory that doesn't exists (VkMemoryManager)".into())
     }
+
+    pub unsafe fn destroy_image(&mut self, image: Rfc<VkImage>) -> Result<(), MyError> {
+        self.free_image(image.clone())?;
+        image.borrow_mut().destroy(&self.device.borrow());
+        
+        Ok(())
+    }
+    pub unsafe fn destroy_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+        self.free_buffer(buffer.clone())?;
+        self.device.borrow().get_device().destroy_buffer(buffer.borrow().buffer, None);
+        
+        Ok(())
+    }
+
     pub unsafe fn destroy(&mut self, device: &VkDevice) {
         let device = device.get_device();
         
         self.heaps
             .iter()
-            .for_each(|h| {
+            .for_each(|(_, h)| {
                 if let Some(img_mem) = &h.image_memory { device.free_memory(img_mem.memory, None); }
                 if let Some(buff_mem) = &h.buffer_memory { device.free_memory(buff_mem.memory, None); }
             })

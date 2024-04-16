@@ -2,31 +2,28 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
+
 use crate::{lg_core::lg_types::reference::Rfc, MyError};
-use super::{vk_device::VkDevice, vk_memory_allocator::{VkMemoryManager, VkMemoryRegion, VkMemoryUsageFlags}};
 
-pub unsafe fn create_buffer(
-    device: &VkDevice,
-    memory_manager: &mut VkMemoryManager,
-    size: vk::DeviceSize,
-    usage: vk::BufferUsageFlags,
-    properties: VkMemoryUsageFlags,
-) -> Result<(vk::Buffer, Rfc<VkMemoryRegion>), MyError>
-{
-    let device = device.get_device();
-    let buffer_info = vk::BufferCreateInfo::builder()
-        .size(size)
-        .usage(usage)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    
-    let buffer = device.create_buffer(&buffer_info, None)?;
-    
-    let buffer_region = memory_manager.alloc_buffer(&buffer, properties)?;
-    memory_manager.bind_buffer(&buffer, buffer_region.clone())?;
-    
-    Ok((buffer, buffer_region))
+use super::{vk_device::VkDevice, vk_memory_manager::VkMemoryRegion};
+
+#[derive(Debug)]
+pub struct VkBuffer {
+    pub buffer: vk::Buffer,
+    pub region: Rfc<VkMemoryRegion>,
 }
-
+impl VkBuffer {
+    pub unsafe fn new(
+        buffer: vk::Buffer,
+        region: Rfc<VkMemoryRegion>
+    ) -> Self
+    {
+        Self {
+            buffer,
+            region
+        }
+    }
+}
 pub unsafe fn copy_buffer_to_image(
     device: &VkDevice,
     buffer: vk::Buffer,

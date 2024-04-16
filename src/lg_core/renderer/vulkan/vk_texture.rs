@@ -1,13 +1,14 @@
-use std::{borrow::BorrowMut, ptr::copy_nonoverlapping as memcpy};
+use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::renderer::texture::Texture, MyError};
-use super::{vk_buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_allocator::{VkMemoryManager, VkMemoryUsageFlags}, vk_physical_device::VkPhysicalDevice};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::texture::Texture}, MyError};
+use super::{vk_buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_manager::{VkMemoryManager, VkMemoryUsageFlags}, vk_physical_device::VkPhysicalDevice};
 
 pub struct VkTexture {
-    pub image: VkImage,
+    pub texture: Rfc<Texture>,
+    pub image: Rfc<VkImage>,
     pub sampler: vk::Sampler,
 }
 impl VkTexture {
@@ -16,26 +17,24 @@ impl VkTexture {
         device: &VkDevice,
         physical_device: &VkPhysicalDevice,
         memory_manager: &mut VkMemoryManager,
-        texture: &Texture
+        texture: Rfc<Texture>
     ) -> Result<Self, MyError> 
     {
-        let (staging_buffer, staging_buffer_region) = vk_buffer::create_buffer(
-            device, 
-            memory_manager,
+        let tex = texture;
+        let texture = tex.borrow();
+        let staging_buffer = memory_manager.new_buffer(
             texture.size(), 
             vk::BufferUsageFlags::TRANSFER_SRC, 
             VkMemoryUsageFlags::CPU,
         )?;
 
         // Copy
-        let memory = memory_manager.map_buffer(staging_buffer_region.clone(), 0, texture.size(), vk::MemoryMapFlags::empty())?;
+        let memory = memory_manager.map_buffer(staging_buffer.clone(), 0, texture.size(), vk::MemoryMapFlags::empty())?;
         memcpy(texture.pixels().as_ptr(), memory.cast(), texture.pixels().len());
-        memory_manager.unmap_buffer(staging_buffer_region.clone())?;
+        memory_manager.unmap_buffer(staging_buffer.clone())?;
 
         // Creating Image        
-        let mut tex_image = VkImage::new(
-            device, 
-            memory_manager.borrow_mut(),
+        let tex_image = memory_manager.new_image(
             texture.width(), 
             texture.height(), 
             vk::Format::R8G8B8A8_SRGB, 
@@ -48,7 +47,7 @@ impl VkTexture {
             texture.mip_level()
         )?;
         
-        tex_image.transition_layout(
+        tex_image.borrow_mut().transition_layout(
             device, 
             texture.mip_level(),
             vk::ImageLayout::UNDEFINED, 
@@ -57,8 +56,8 @@ impl VkTexture {
         
         vk_buffer::copy_buffer_to_image(
             device, 
-            staging_buffer, 
-            tex_image.image, 
+            staging_buffer.borrow().buffer, 
+            tex_image.borrow().image, 
             texture.width(), 
             texture.height()
         )?;
@@ -73,14 +72,13 @@ impl VkTexture {
         )?; */
         
         // Cleanup
-        device.get_device().destroy_buffer(staging_buffer, None);
-        memory_manager.free_buffer_region(staging_buffer_region)?;
+        memory_manager.destroy_buffer(staging_buffer)?;
 
         generate_mipmaps(
             instance.get_instance(), 
             device, 
             physical_device.get_device(), 
-            tex_image.image, 
+            tex_image.borrow().image, 
             vk::Format::R8G8B8A8_SRGB, 
             texture.width(), 
             texture.height(), 
@@ -107,6 +105,7 @@ impl VkTexture {
         let sampler = device.get_device().create_sampler(&info, None)?;
         
         Ok(Self {
+            texture: tex.clone(),
             image: tex_image,
             sampler,
         })
@@ -114,7 +113,7 @@ impl VkTexture {
     
     pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
         device.get_device().destroy_sampler(self.sampler, None);
-        self.image.destroy(device, memory_manager)?;
+        memory_manager.destroy_image(self.image.clone())?;
         
         Ok(())
     }

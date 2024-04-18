@@ -3,7 +3,7 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk::{KhrSurfaceExtension, KhrSwapchainExtension, SurfaceKHR},
 };
-use crate::MyError;
+use crate::StdError;
 
 use super::{vk_device::{QueueFamilyIndices, VkDevice}, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 #[derive(Clone, Debug)]
@@ -17,7 +17,7 @@ impl SwapchainSupport {
         instance: &Instance,
         surface: &SurfaceKHR,
         physical_device: vk::PhysicalDevice,     
-    ) -> Result<Self, MyError> 
+    ) -> Result<Self, StdError> 
     {
         Ok(Self {
             capabilities: instance
@@ -54,7 +54,7 @@ impl VkSwapchain {
         surface: &SurfaceKHR,
         physical_device: &VkPhysicalDevice,
         device: &VkDevice,
-    ) -> Result<Self, MyError> 
+    ) -> Result<Self, StdError> 
     {
         let instance = instance.get_instance();
         let device = device.get_device();

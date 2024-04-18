@@ -6,7 +6,7 @@ use vulkanalia:: {
 };
 use winit::window::Window;
 
-use crate::MyError;
+use crate::StdError;
 
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
@@ -20,7 +20,7 @@ impl VkInstance {
     pub unsafe fn new(
         entry: &Entry,
         window: &Window,
-    ) -> Result<Self, MyError> 
+    ) -> Result<Self, StdError> 
     {
         let application_info = vk::ApplicationInfo::builder()
         .application_version(vk::make_version(1, 2, 0))

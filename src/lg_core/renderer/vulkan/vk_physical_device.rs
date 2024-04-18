@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{lg_core::renderer::vulkan::vk_swapchain::SwapchainSupport, MyError};
+use crate::{lg_core::renderer::vulkan::vk_swapchain::SwapchainSupport, StdError};
 use vulkanalia::{
     prelude::v1_2::*,
     vk,
@@ -20,7 +20,7 @@ impl VkPhysicalDevice {
     pub unsafe fn new(
         instance_data: &VkInstance,
         surface: &vk::SurfaceKHR,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         Ok(Self {
             device: pick_physical_device(instance_data.get_instance(), surface)?
@@ -34,7 +34,7 @@ impl VkPhysicalDevice {
 pub unsafe fn pick_physical_device(
     instance: &Instance, 
     surface: &vk::SurfaceKHR,
-) -> Result<vk::PhysicalDevice, MyError> 
+) -> Result<vk::PhysicalDevice, StdError> 
 {
     if let Some((_, physical_device)) = instance.enumerate_physical_devices()?
         .iter()
@@ -64,7 +64,7 @@ unsafe fn check_physical_device(
     instance: &Instance,
     surface: &vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
-) -> Result<usize, MyError>
+) -> Result<usize, StdError>
 {
     check_physical_device_extensions(
         instance,
@@ -106,7 +106,7 @@ unsafe fn check_physical_device(
 unsafe fn check_physical_device_extensions(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
-) -> Result<(), MyError>
+) -> Result<(), StdError>
 {
     let extensions = instance
         .enumerate_device_extension_properties(physical_device, None)?

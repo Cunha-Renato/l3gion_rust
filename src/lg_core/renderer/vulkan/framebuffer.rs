@@ -3,7 +3,7 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::MyError;
+use crate::StdError;
 
 use super::{vk_device::VkDevice, vk_image::VkImage};
 
@@ -16,7 +16,7 @@ pub unsafe fn create_framebuffers(
     depth_image_data: &VkImage,
     width: u32,
     height: u32,
-) -> Result<Vec<vk::Framebuffer>, MyError>
+) -> Result<Vec<vk::Framebuffer>, StdError>
 {
     let framebuffers = swapchain_image_views
         .iter()

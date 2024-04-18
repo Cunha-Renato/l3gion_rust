@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBOId, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, MyError};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBOId, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, StdError};
 
 use super::{framebuffer, shader::Shader, vk_descriptor::VkDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_manager::VkMemoryManager, vk_renderpass::{get_depth_format, VkRenderPassBuilder}, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
 
@@ -39,7 +41,7 @@ impl VkPipeline {
         swapchain: &VkSwapchain,
         memory_manager: Rfc<VkMemoryManager>,
         mut info: VkPipelineCreateInfo,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let dev = device.borrow();
         let v_device = dev.get_device();
@@ -218,7 +220,7 @@ impl VkPipeline {
         swapchain: &VkSwapchain,
         memory_manager: Rfc<VkMemoryManager>,
         msaa_samples: vk::SampleCountFlags,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let model = VkUniformBuffer::new::<ModelUBOId>(
             &mut memory_manager.borrow_mut()
@@ -234,8 +236,8 @@ impl VkPipeline {
                 | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT,
             attachments_count: 3,
             shaders: vec![
-                Shader::new(&device.borrow(), "assets/shaders/compiled/2DShader_v.spv")?,
-                Shader::new(&device.borrow(), "assets/shaders/compiled/2DShader_f.spv")?,
+                Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/2DShader_v.spv"))?,
+                Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/2DShader_f.spv"))?,
             ],
             viewport: vk::Viewport::builder()
                 .x(0.0)
@@ -321,7 +323,7 @@ impl VkPipeline {
         physical_device: &VkPhysicalDevice,
         swapchain: &VkSwapchain,
         memory_manager: Rfc<VkMemoryManager>,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let model = VkUniformBuffer::new::<ModelUBOId>(
             &mut memory_manager.borrow_mut()
@@ -337,8 +339,8 @@ impl VkPipeline {
                 | vk::ImageUsageFlags::TRANSFER_SRC,
             attachments_count: 2,
             shaders: vec![
-                Shader::new(&device.borrow(), "assets/shaders/compiled/obj_picker_v.spv")?,
-                Shader::new(&device.borrow(), "assets/shaders/compiled/obj_picker_f.spv")?,
+                Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/obj_picker_v.spv"))?,
+                Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/obj_picker_f.spv"))?,
             ],
             viewport: vk::Viewport::builder()
                 .x(0.0)
@@ -402,7 +404,7 @@ impl VkPipeline {
             info
         )
     }
-    pub unsafe fn destroy(&mut self, device: &VkDevice) -> Result<(), MyError>{
+    pub unsafe fn destroy(&mut self, device: &VkDevice) -> Result<(), StdError>{
         let v_device = device.get_device();
         
         for dd in &mut self.descriptor_data {

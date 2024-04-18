@@ -1,11 +1,12 @@
 #![allow(non_camel_case_types)]
 
+use std::ptr::copy_nonoverlapping as memcpy;
 use std::{collections::HashMap, ffi::c_void};
 use vulkanalia::{
     prelude::v1_2::*, vk
 };
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
-use super::{vk_buffer::VkBuffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
+use super::{vk_buffer::{self, VkBuffer}, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_physical_device::VkPhysicalDevice};
 
 const SIZE_OF_MEGABYTES: u64 = 1_000_000;
 const MEMORY_BLOCK_SIZE: u64 = 256 * SIZE_OF_MEGABYTES;
@@ -67,7 +68,7 @@ impl VkMemoryManager {
         device: Rfc<VkDevice>,
         instance: &VkInstance,
         physical_device: &VkPhysicalDevice,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let heap_indices = vec![
             (get_memory_type_index(instance, physical_device, VkMemoryUsageFlags::GPU)?, VkMemoryUsageFlags::GPU),
@@ -106,7 +107,7 @@ impl VkMemoryManager {
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
         mip_levels: u32,
-    ) -> Result<Rfc<VkImage>, MyError>
+    ) -> Result<Rfc<VkImage>, StdError>
     {
         let info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::_2D)
@@ -161,7 +162,7 @@ impl VkMemoryManager {
         &mut self,
         image: &vk::Image,
         memory_usage: VkMemoryUsageFlags,
-    ) -> Result<Rfc<VkMemoryRegion>, MyError>
+    ) -> Result<Rfc<VkMemoryRegion>, StdError>
     {
         let heap = self.heaps.get_mut(&memory_usage).unwrap();
         let requirements = self.device.borrow().get_device().get_image_memory_requirements(*image);
@@ -206,7 +207,7 @@ impl VkMemoryManager {
         size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
         properties: VkMemoryUsageFlags
-    ) -> Result<Rfc<VkBuffer>, MyError> 
+    ) -> Result<Rfc<VkBuffer>, StdError> 
     {
         let buffer_info = vk::BufferCreateInfo::builder()
             .size(size)
@@ -223,11 +224,91 @@ impl VkMemoryManager {
         
         Ok(buffer)
     }
+    pub unsafe fn new_vertex_buffer<T>(
+        &mut self,
+        vertices: &[T],
+        size: u64,
+    ) -> Result<Rfc<VkBuffer>, StdError>
+    {
+        let staging_buffer = self.new_buffer(
+            size, 
+            vk::BufferUsageFlags::TRANSFER_SRC, 
+            VkMemoryUsageFlags::CPU_GPU,
+        )?;
+
+        // Copy (staging)
+        let memory = self.map_buffer(staging_buffer.clone(), 0, size, vk::MemoryMapFlags::empty())?;
+        memcpy(vertices.as_ptr(), memory.cast(), vertices.len());
+        self.unmap_buffer(staging_buffer.clone())?;
+
+        // Create (vertex)
+        let vertex_buffer = self.new_buffer(
+            size, 
+            vk::BufferUsageFlags::TRANSFER_DST 
+                | vk::BufferUsageFlags::VERTEX_BUFFER, 
+            VkMemoryUsageFlags::GPU
+        )?;
+
+        // Copy (vertex)
+        vk_buffer::copy_buffer(
+            &self.device.borrow(), 
+            staging_buffer.borrow().buffer, 
+            vertex_buffer.borrow().buffer, 
+            size
+        )?;
+
+        // Cleanup
+        self.destroy_buffer(staging_buffer)?;
+        
+        Ok(vertex_buffer)
+    }
+    pub unsafe fn new_index_buffer(
+        &mut self,
+        indices: &[u32],
+        size: u64,
+    ) -> Result<Rfc<VkBuffer>, StdError>
+    {
+        let staging_buffer  = self.new_buffer(
+            size, 
+            vk::BufferUsageFlags::TRANSFER_SRC, 
+            VkMemoryUsageFlags::CPU_GPU,
+        )?;
+
+        // Copy (staging)
+        let memory = self.map_buffer(staging_buffer.clone(), 0, size, vk::MemoryMapFlags::empty())?;
+        memcpy(indices.as_ptr(), memory.cast(), indices.len());
+        self.unmap_buffer(staging_buffer.clone())?;
+
+        // Create (vertex)
+
+        let index_buffer = self.new_buffer(
+            size, 
+            vk::BufferUsageFlags::TRANSFER_DST 
+                | vk::BufferUsageFlags::INDEX_BUFFER, 
+            VkMemoryUsageFlags::GPU,
+        )?;
+
+        // Copy (vertex)
+
+        vk_buffer::copy_buffer(
+            &self.device.borrow(), 
+            staging_buffer.borrow().buffer, 
+            index_buffer.borrow().buffer, 
+            size
+        )?;
+
+        // Cleanup
+
+        self.destroy_buffer(staging_buffer)?;
+        
+        Ok(index_buffer)
+    }
+
     unsafe fn alloc_buffer(
         &mut self,
         buffer: &vk::Buffer,
         memory_usage: VkMemoryUsageFlags        
-    ) -> Result<Rfc<VkMemoryRegion>, MyError> {
+    ) -> Result<Rfc<VkMemoryRegion>, StdError> {
         let heap = self.heaps.get_mut(&memory_usage).unwrap();
         let requirements = self.device.borrow().get_device().get_buffer_memory_requirements(*buffer);
         
@@ -270,7 +351,7 @@ impl VkMemoryManager {
         &self,
         image: &vk::Image,
         region: Rfc<VkMemoryRegion>
-    ) -> Result<(), MyError>
+    ) -> Result<(), StdError>
     {
         let memory = self.heaps.get(&region.borrow().memory_usage).unwrap().image_memory.as_ref().unwrap();
         self.device.borrow().get_device().bind_image_memory(*image, memory.memory, region.borrow().begin)?;
@@ -281,7 +362,7 @@ impl VkMemoryManager {
         &self,
         buffer: &vk::Buffer,
         region: Rfc<VkMemoryRegion>,
-    ) -> Result<(), MyError>
+    ) -> Result<(), StdError>
     {
         let memory = self.heaps.get(&region.borrow().memory_usage).unwrap().buffer_memory.as_ref().unwrap();
         self.device.borrow().get_device().bind_buffer_memory(*buffer, memory.memory, region.borrow().begin)?;
@@ -289,7 +370,7 @@ impl VkMemoryManager {
         Ok(())
     }
     
-    pub unsafe fn map_image(&mut self, image: Rfc<VkImage>, flags: vk::MemoryMapFlags) -> Result<(), MyError> {
+    pub unsafe fn map_image(&mut self, image: Rfc<VkImage>, flags: vk::MemoryMapFlags) -> Result<(), StdError> {
         if let Some(memory) = &self.heaps.get(&image.borrow().region.borrow().memory_usage).unwrap().image_memory {
             self.device.borrow().get_device().map_memory(
                 memory.memory, 
@@ -304,7 +385,7 @@ impl VkMemoryManager {
 
         Ok(())
     }
-    pub unsafe fn map_buffer(&mut self, buffer: Rfc<VkBuffer>, offset: u64, size: u64, flags: vk::MemoryMapFlags) -> Result<*mut c_void,  MyError> {
+    pub unsafe fn map_buffer(&mut self, buffer: Rfc<VkBuffer>, offset: u64, size: u64, flags: vk::MemoryMapFlags) -> Result<*mut c_void,  StdError> {
         if let Some(memory) = &self.heaps.get(&buffer.borrow().region.borrow().memory_usage).unwrap().buffer_memory {
             return Ok(self.device.borrow().get_device().map_memory(
                 memory.memory, 
@@ -318,7 +399,7 @@ impl VkMemoryManager {
         }
     }
 
-    pub unsafe fn unmap_image(&mut self, image: Rfc<VkImage>)-> Result<(), MyError> {
+    pub unsafe fn unmap_image(&mut self, image: Rfc<VkImage>)-> Result<(), StdError> {
         if let Some(memory) = &self.heaps.get(&image.borrow().region.borrow().memory_usage).unwrap().image_memory {
             self.device.borrow().get_device().unmap_memory(memory.memory);
         }
@@ -328,7 +409,7 @@ impl VkMemoryManager {
         
         Ok(())
     }
-    pub unsafe fn unmap_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+    pub unsafe fn unmap_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), StdError> {
         if let Some(memory) = &self.heaps.get(&buffer.borrow().region.borrow().memory_usage).unwrap().buffer_memory {
             self.device.borrow().get_device().unmap_memory(memory.memory);
         }
@@ -339,7 +420,7 @@ impl VkMemoryManager {
         Ok(())
     }
 
-    pub unsafe fn free_image(&mut self, image: Rfc<VkImage>) -> Result<(), MyError>{
+    pub unsafe fn free_image(&mut self, image: Rfc<VkImage>) -> Result<(), StdError>{
         let heap = self.heaps.get_mut(&image.borrow().region.borrow().memory_usage).unwrap();
         let regions = &mut heap.image_regions;
         
@@ -356,7 +437,7 @@ impl VkMemoryManager {
         
         Err("Trying to free memory that doesn't exists (VkMemoryManager)".into())
     }
-    pub unsafe fn free_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+    pub unsafe fn free_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), StdError> {
         let heap = self.heaps.get_mut(&buffer.borrow().region.borrow().memory_usage).unwrap();
         let regions = &mut heap.buffer_regions;
         
@@ -374,13 +455,13 @@ impl VkMemoryManager {
         Err("Trying to free memory that doesn't exists (VkMemoryManager)".into())
     }
 
-    pub unsafe fn destroy_image(&mut self, image: Rfc<VkImage>) -> Result<(), MyError> {
+    pub unsafe fn destroy_image(&mut self, image: Rfc<VkImage>) -> Result<(), StdError> {
         self.free_image(image.clone())?;
         image.borrow_mut().destroy(&self.device.borrow());
         
         Ok(())
     }
-    pub unsafe fn destroy_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), MyError> {
+    pub unsafe fn destroy_buffer(&mut self, buffer: Rfc<VkBuffer>) -> Result<(), StdError> {
         self.free_buffer(buffer.clone())?;
         self.device.borrow().get_device().destroy_buffer(buffer.borrow().buffer, None);
         
@@ -399,7 +480,7 @@ impl VkMemoryManager {
     }
     
     // Return the begin for the new region, based on best fit
-    fn find_best_fit(heap_size: u64, required_size: u64, regions: &Vec<Rfc<VkMemoryRegion>>) -> Result<u64, MyError> {
+    fn find_best_fit(heap_size: u64, required_size: u64, regions: &Vec<Rfc<VkMemoryRegion>>) -> Result<u64, StdError> {
         let mut best = 0;
         let mut found = false;
         
@@ -464,7 +545,7 @@ unsafe fn get_memory_type_index(
     instance: &VkInstance,
     physical_device: &VkPhysicalDevice,
     properties: VkMemoryUsageFlags,
-) -> Result<u32, MyError>
+) -> Result<u32, StdError>
 {
     let properties = properties.map_vulkan();
     let memory = instance

@@ -6,7 +6,7 @@ use vulkanalia::{
         SurfaceKHR,
     }, 
 };
-use crate::MyError;
+use crate::StdError;
 use super::{vk_physical_device::VkPhysicalDevice, vk_instance::VkInstance, vk_queue::VkQueue};
 
 pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
@@ -27,7 +27,7 @@ impl QueueFamilyIndices {
         instance: &Instance,
         surface: &SurfaceKHR,
         physical_device: vk::PhysicalDevice
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let properties = instance
             .get_physical_device_queue_family_properties(physical_device);
@@ -97,7 +97,7 @@ impl VkDevice {
         instance: &VkInstance,
         physical_device: &VkPhysicalDevice,
         surface: &SurfaceKHR,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let device  = create_logical_device(
             instance, 
@@ -147,7 +147,7 @@ impl VkDevice {
         self.queues.transfer.free_command_buffers(&self);
     }
     
-    pub unsafe fn allocate_command_buffers(&mut self, queue_family: VkQueueFamily, lenght: u32) -> Result<(), MyError> {
+    pub unsafe fn allocate_command_buffers(&mut self, queue_family: VkQueueFamily, lenght: u32) -> Result<(), StdError> {
         match queue_family {
             VkQueueFamily::GRAPHICS => self.queues.graphics.allocate_command_buffers(&self.device, lenght),
             VkQueueFamily::PRESENT => self.queues.present.allocate_command_buffers(&self.device, lenght),
@@ -161,7 +161,7 @@ unsafe fn create_logical_device(
     instance: &VkInstance,
     physical_device: &VkPhysicalDevice,
     surface: &SurfaceKHR
-) -> Result<Device, MyError>
+) -> Result<Device, StdError>
 {
     let indices = QueueFamilyIndices::get(instance.get_instance(), surface, *physical_device.get_device())?;
     let mut unique_indices = HashSet::new();

@@ -10,6 +10,7 @@ pub mod helper;
 pub mod uniform_buffer_object;
 
 use std::borrow::BorrowMut;
+use std::path::Path;
 use std::{borrow::Borrow, mem::size_of};
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -23,9 +24,10 @@ use vulkanalia::{
     window as vk_window, 
     Entry, 
 };
-use crate::MyError;
+use crate::StdError;
 use helper::RendererData;
 use self::uniform_buffer_object::ModelUBOId;
+use self::vulkan::shader::read_folder;
 use self::{uniform_buffer_object::{ModelUBO, ViewProjUBO}, vulkan::vk_memory_manager::VkMemoryManager};
 use self::camera::Camera;
 use self::object_storage::ObjectStorage;
@@ -36,11 +38,6 @@ use self::{object::Object, vertex::Vertex, vulkan::{vk_pipeline::*, vk_swapchain
 use super::{lg_types::reference::Rfc, uuid::UUID};
 
 const MAX_PIPELINES: u32 = 21;
-
-enum Pipelines {
-    DEFAULT,
-    OBJECT_PICKER,
-}
 
 pub struct Renderer {
     window: Rfc<Window>,
@@ -57,7 +54,10 @@ pub struct Renderer {
     camera: Rfc<Camera>,
 }
 impl Renderer {
-    pub unsafe fn init(window: Window) -> Result<(Self, Rfc<Window>), MyError> {
+    pub unsafe fn init(window: Window) -> Result<(Self, Rfc<Window>), StdError> {
+        // Compiling the shaders
+        read_folder("resources/shaders", "resources/shaders/compiled")?;
+
         let mut data = RendererData::default();
         let entry = helper::create_entry()?; 
         let instance = VkInstance::new(&entry, &window)?;
@@ -107,7 +107,6 @@ impl Renderer {
 
         helper::create_sync_objects(device.borrow().get_device(), &mut data)?;
 
-
         Ok((Self {
             window: window.clone(),
             _entry: entry,
@@ -131,7 +130,7 @@ impl Renderer {
         self.camera = camera;        
     }
     
-    pub unsafe fn draw(&mut self, object: Rfc<Object<Vertex>>) -> Result<(), MyError> {
+    pub unsafe fn draw(&mut self, object: Rfc<Object<Vertex>>) -> Result<(), StdError> {
         optick::event!();
 
         self.objects.insert(
@@ -145,7 +144,7 @@ impl Renderer {
     }
     pub unsafe fn render(
         &mut self,
-    ) -> Result<(), MyError>
+    ) -> Result<(), StdError>
     {
         optick::event!();
         // Wait for gpu to finish the rendering
@@ -227,7 +226,7 @@ impl Renderer {
 
         Ok(())
     }
-    unsafe fn update_camera_buffer(&mut self) -> Result<(), MyError> {
+    unsafe fn update_camera_buffer(&mut self) -> Result<(), StdError> {
         let ubo = ViewProjUBO { 
             view: *self.camera.borrow().get_view_matrix(),
             proj: self.camera.borrow().get_projection_matrix(),
@@ -255,7 +254,7 @@ impl Renderer {
         }
         Ok(())
     }
-    unsafe fn update_object_uniforms(&mut self) -> Result<(), MyError>
+    unsafe fn update_object_uniforms(&mut self) -> Result<(), StdError>
     {
         for pipeline in &mut self.pipelines {
             let mut offset = 0;
@@ -306,7 +305,7 @@ impl Renderer {
 
         Ok(())
     }
-    pub unsafe fn destroy(&mut self) -> Result<(), MyError> {
+    pub unsafe fn destroy(&mut self) -> Result<(), StdError> {
         self.device.borrow().get_device().device_wait_idle().unwrap();
         
         self.destroy_swapchain()?;
@@ -329,7 +328,7 @@ impl Renderer {
         Ok(())
     }
     
-    unsafe fn prepare_cmd_buffer(&mut self, index: usize) -> Result<(), MyError>
+    unsafe fn prepare_cmd_buffer(&mut self, index: usize) -> Result<(), StdError>
     {
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
@@ -379,12 +378,12 @@ impl Renderer {
                 self.device.borrow().get_device().cmd_bind_vertex_buffers(
                     *command_buffer, 
                     0, 
-                    &[object.vertex_buffer.as_ref().unwrap().buffer.borrow().buffer], 
+                    &[object.vertex_buffer.as_ref().unwrap().borrow().buffer], 
                     &[0]
                 );
                 self.device.borrow().get_device().cmd_bind_index_buffer(
                     *command_buffer, 
-                    object.index_buffer.as_ref().unwrap().buffer.borrow().buffer, 
+                    object.index_buffer.as_ref().unwrap().borrow().buffer, 
                     0, 
                     vk::IndexType::UINT32
                 );
@@ -417,7 +416,7 @@ impl Renderer {
         
         Ok(())
     }
-    unsafe fn destroy_swapchain(&mut self) -> Result<(), MyError>{
+    unsafe fn destroy_swapchain(&mut self) -> Result<(), StdError>{
         self.device.borrow().free_command_buffers();
 
         for p in &mut self.pipelines {
@@ -429,7 +428,7 @@ impl Renderer {
         
         Ok(())
     }
-    unsafe fn recreate_swapchain(&mut self) -> Result<(), MyError> {
+    unsafe fn recreate_swapchain(&mut self) -> Result<(), StdError> {
         self.device.borrow().get_device().device_wait_idle()?;
         
         self.destroy_swapchain()?;

@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use winit::window::Window;
 
-use crate::{lg_core::test_layer::TestLayer, MyError};
+use crate::{as_dyn, lg_core::test_layer::TestLayer, StdError};
 use super::{
     event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::Renderer
 };
@@ -18,7 +18,7 @@ pub struct Application {
     layers: Vec<Rfc<dyn Layer>>,
 }
 impl Application {
-    pub fn new(window: Window) -> Result<Self, MyError> {
+    pub fn new(window: Window) -> Result<Self, StdError> {
         // optick::start_capture();
         optick::event!();
         
@@ -32,11 +32,7 @@ impl Application {
             input,
         };
         
-        let layers = vec![Rc::new(RefCell::new(TestLayer::new(renderer.clone())))];
-        let layers: Vec<Rfc<dyn Layer>> = layers
-            .iter()
-            .map(|layer| Rfc::from_rc_refcell(&(layer.clone() as Rc<RefCell<dyn Layer>>)))
-            .collect();
+        let layers = vec![as_dyn!(TestLayer::new(renderer.clone()), dyn Layer)];
         
         for layer in &layers {
             layer.borrow_mut().init(window.clone())?;
@@ -49,7 +45,7 @@ impl Application {
         })
     }
     
-    pub fn destroy(&mut self) -> Result<(), MyError>{
+    pub fn destroy(&mut self) -> Result<(), StdError>{
         optick::event!();
         for layer in &self.layers {
             layer.borrow_mut().destroy()?;
@@ -61,7 +57,7 @@ impl Application {
         Ok(())
     }
      
-    pub fn on_update(&mut self) -> Result<(), MyError>{
+    pub fn on_update(&mut self) -> Result<(), StdError>{
         optick::next_frame();
         optick::event!();
         
@@ -80,7 +76,7 @@ impl Application {
         Ok(())
     }
 
-    pub fn on_event(&mut self, event: &LgEvent) -> Result<(), MyError>{
+    pub fn on_event(&mut self, event: &LgEvent) -> Result<(), StdError>{
         optick::event!();
         for layer in &self.layers {
             layer.borrow_mut().on_event(event)?;

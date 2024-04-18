@@ -1,0 +1,9 @@
+---
+name: obj_picker_f
+node_type: Fragment
+value: ""
+children:
+  - name: texSampler
+    node_type: "1"
+    value: ""
+    children: []

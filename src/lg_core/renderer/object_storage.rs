@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Instant};
-use crate::{lg_core::{lg_types::reference::Rfc, uuid::UUID}, MyError};
-use super::{object::Object, vulkan::{vk_device::VkDevice, vk_index_buffer::VkIndexBuffer, vk_instance::VkInstance, vk_memory_manager::VkMemoryManager, vk_object::VkObject, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture, vk_vertex_buffer::VkVertexBuffer}};
+use crate::{lg_core::{lg_types::reference::Rfc, uuid::UUID}, StdError};
+use super::{object::Object, vulkan::{vk_device::VkDevice, vk_instance::VkInstance, vk_memory_manager::VkMemoryManager, vk_object::VkObject, vk_physical_device::VkPhysicalDevice, vk_texture::VkTexture}};
 
 pub struct ObjectData<T> {
     pub object: Rfc<VkObject<T>>,
@@ -39,16 +39,12 @@ impl<T: Clone> ObjectStorage<T> {
         self.objects.entry(borrow.borrow().uuid())
             .and_modify(|od| od.insertion_time = Instant::now())
             .or_insert_with(|| {
-                let vertex_buffer = Some(VkVertexBuffer::new(
-                    &self.device.borrow(), 
-                    &mut mem_manager,
+                let vertex_buffer = Some(mem_manager.new_vertex_buffer(
                     &borrow.borrow().vertices, 
                     borrow.borrow().vertex_size(),
                 ).unwrap());
         
-                let index_buffer = Some(VkIndexBuffer::new(
-                    &self.device.borrow(), 
-                    &mut mem_manager,
+                let index_buffer = Some(mem_manager.new_index_buffer(
                     &borrow.borrow().indices, 
                     borrow.borrow().index_size(),
                 ).unwrap());
@@ -86,7 +82,7 @@ impl<T: Clone> ObjectStorage<T> {
     pub fn get_objects(&self) -> &HashMap<UUID, ObjectData<T>> {
         &self.objects
     }
-    pub unsafe fn destroy_inactive_objects(&mut self) -> Result<(), MyError>{
+    pub unsafe fn destroy_inactive_objects(&mut self) -> Result<(), StdError>{
         let elapsed_time = self.timer.elapsed().as_secs();
 
         if elapsed_time >= 5 {
@@ -106,18 +102,18 @@ impl<T: Clone> ObjectStorage<T> {
         
         Ok(())
     }
-    unsafe fn destroy_resources(&self, uuid: &UUID) -> Result<(), MyError>{
+    unsafe fn destroy_resources(&self, uuid: &UUID) -> Result<(), StdError>{
         self.objects.get(uuid).unwrap().object.borrow_mut().destroy(&mut self.memory_manager.borrow_mut())?;
 
         Ok(())
     }
-    unsafe fn remove(&mut self, uuid: &UUID) -> Result<(), MyError> {
+    unsafe fn remove(&mut self, uuid: &UUID) -> Result<(), StdError> {
         self.destroy_resources(uuid)?;
         self.objects.remove(uuid);
         
         Ok(())
     }
-    pub unsafe fn destroy(&mut self) -> Result<(), MyError>{
+    pub unsafe fn destroy(&mut self) -> Result<(), StdError>{
         for (uuid, _) in &self.objects {
             self.destroy_resources(uuid)?;
         }

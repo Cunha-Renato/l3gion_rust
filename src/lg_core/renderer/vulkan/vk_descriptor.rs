@@ -4,7 +4,7 @@ use vulkanalia::{
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
 use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_memory_manager::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
 pub(crate) const MAX_SETS: usize = 500;
@@ -23,13 +23,13 @@ impl VkDescriptorData {
         shaders: &[Shader],
         memory_manager: Rfc<VkMemoryManager>,
         buffers: Vec<VkUniformBuffer>,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let mut layouts = Vec::new();
         
         let mut shader_infos = Vec::new();
         for shader in shaders {
-            shader_infos.append(&mut shader.get_descriptors()?);
+            shader_infos.append(&mut shader.descriptors.clone());
         }
 
         for _ in 0..MAX_SETS {
@@ -118,7 +118,7 @@ impl VkDescriptorData {
     pub fn get_sets(&self, obj_index: usize) -> &Vec<vk::DescriptorSet> {
         &self.sets[obj_index]
     }
-    pub unsafe fn destroy(&mut self) -> Result<(), MyError> {
+    pub unsafe fn destroy(&mut self) -> Result<(), StdError> {
         let dev = self.device.borrow();
         let device = dev.get_device();
         
@@ -141,7 +141,7 @@ unsafe fn create_sets(
     device: &VkDevice,
     layouts: &Vec<Vec<vk::DescriptorSetLayout>>,
     pool: &vk::DescriptorPool,
-) -> Result<Vec<Vec<vk::DescriptorSet>>, MyError>
+) -> Result<Vec<Vec<vk::DescriptorSet>>, StdError>
 {
     let mut result = Vec::new();
     for layouts_vec in layouts {
@@ -155,7 +155,7 @@ unsafe fn create_sets(
 
     Ok(result)
 }
-unsafe fn create_pool(device: &VkDevice, max_set_pools: u32, shader_infos: &[shader::ShaderDescriptor]) -> Result<vk::DescriptorPool, MyError>
+unsafe fn create_pool(device: &VkDevice, max_set_pools: u32, shader_infos: &[shader::ShaderDescriptor]) -> Result<vk::DescriptorPool, StdError>
 {
     let mut pool_sizes = Vec::new();
     
@@ -175,7 +175,7 @@ unsafe fn create_pool(device: &VkDevice, max_set_pools: u32, shader_infos: &[sha
 }
 
 // TODO: Currently it only works with descriptor per layout (which is bad). Fix!!!!
-unsafe fn get_layouts(device: &VkDevice, shader_infos: &[shader::ShaderDescriptor]) -> Result<Vec<vk::DescriptorSetLayout>, MyError> {
+unsafe fn get_layouts(device: &VkDevice, shader_infos: &[shader::ShaderDescriptor]) -> Result<Vec<vk::DescriptorSetLayout>, StdError> {
     let mut result = Vec::new();
 
     let mut shader_infos = shader_infos.to_vec();

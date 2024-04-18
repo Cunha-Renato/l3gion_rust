@@ -3,7 +3,7 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
 
 use super::{vk_device::VkDevice, vk_memory_manager::VkMemoryRegion};
 
@@ -30,7 +30,7 @@ pub unsafe fn copy_buffer_to_image(
     image: vk::Image,
     width: u32,
     height: u32,
-) -> Result<(), MyError>
+) -> Result<(), StdError>
 {
     let command_buffer = device.get_transfer_queue().begin_single_time_commands(device)?;
 
@@ -69,7 +69,7 @@ pub unsafe fn copy_buffer(
     source: vk::Buffer,
     destination: vk::Buffer,
     size: vk::DeviceSize,
-) -> Result<(), MyError>
+) -> Result<(), StdError>
 {
     let command_buffer = device.get_transfer_queue().begin_single_time_commands(device)?;
     

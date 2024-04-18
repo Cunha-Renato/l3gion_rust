@@ -14,7 +14,7 @@ use l3gion_rust::{
     },
     window::get_event_loop
 };
-use l3gion_rust::MyError;
+use l3gion_rust::StdError;
 
 use sllog::warn;
 use winit::event::{ElementState, MouseScrollDelta};
@@ -28,7 +28,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-fn main() -> Result<(), MyError> {
+fn main() -> Result<(), StdError> {
     env::set_var("LOG", "4");
 
     // Window

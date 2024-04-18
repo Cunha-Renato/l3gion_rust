@@ -3,7 +3,7 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::texture::Texture}, MyError};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::texture::Texture}, StdError};
 use super::{vk_buffer, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_manager::{VkMemoryManager, VkMemoryUsageFlags}, vk_physical_device::VkPhysicalDevice};
 
 pub struct VkTexture {
@@ -18,7 +18,7 @@ impl VkTexture {
         physical_device: &VkPhysicalDevice,
         memory_manager: &mut VkMemoryManager,
         texture: Rfc<Texture>
-    ) -> Result<Self, MyError> 
+    ) -> Result<Self, StdError> 
     {
         let tex = texture;
         let texture = tex.borrow();
@@ -111,7 +111,7 @@ impl VkTexture {
         })
     }
     
-    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), MyError>{
+    pub unsafe fn destroy(&mut self, device: &VkDevice, memory_manager: &mut VkMemoryManager) -> Result<(), StdError>{
         device.get_device().destroy_sampler(self.sampler, None);
         memory_manager.destroy_image(self.image.clone())?;
         
@@ -127,7 +127,7 @@ unsafe fn generate_mipmaps(
     width: u32,
     height: u32,
     mip_levels: u32
-) -> Result<(), MyError>
+) -> Result<(), StdError>
 {
     // TODO: Aparently it's not common to generate mipmaps in the runtime, so you must find a way to do that in the texture itself!
 

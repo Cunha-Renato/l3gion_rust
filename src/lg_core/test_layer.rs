@@ -1,7 +1,7 @@
 use nalgebra_glm as glm;
 use sllog::*;
 use winit::window::Window;
-use crate::{utils::tools::to_radians, MyError};
+use crate::{utils::tools::to_radians, StdError};
 
 use super::{event::MouseEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
 
@@ -30,12 +30,12 @@ impl TestLayer {
     }
 }
 impl Layer for TestLayer {
-    fn init(&mut self, window: Rfc<Window>) -> Result<(), MyError>{
+    fn init(&mut self, window: Rfc<Window>) -> Result<(), StdError>{
         // Load textures
-        let grid = Rfc::new(Texture::new("assets/textures/grid.png")?);
-        let viking = Rfc::new(Texture::new("assets/textures/viking_room.png")?);
-        let black = Rfc::new(Texture::new("assets/textures/black.png")?);
-        let white = Rfc::new(Texture::new("assets/textures/white.png")?);
+        let grid = Rfc::new(Texture::new("resources/textures/grid.png")?);
+        let viking = Rfc::new(Texture::new("resources/textures/viking_room.png")?);
+        let black = Rfc::new(Texture::new("resources/textures/black.png")?);
+        let white = Rfc::new(Texture::new("resources/textures/white.png")?);
 
         self.textures.grid = grid;
         self.textures.viking = viking;
@@ -89,7 +89,7 @@ impl Layer for TestLayer {
         Ok(())
     }
 
-    fn on_update(&mut self, input: &LgInput) -> Result<(), MyError>{
+    fn on_update(&mut self, input: &LgInput) -> Result<(), StdError>{
         self.main_camera.borrow_mut().on_update(input);
         
         unsafe {
@@ -103,7 +103,7 @@ impl Layer for TestLayer {
         Ok(())
     }
 
-    fn on_event(&mut self, event: &super::event::LgEvent) -> Result<(), MyError> {
+    fn on_event(&mut self, event: &super::event::LgEvent) -> Result<(), StdError> {
         self.main_camera.borrow_mut().on_event(event);
         
         match event {
@@ -118,7 +118,7 @@ impl Layer for TestLayer {
         Ok(())
     }
 
-    fn destroy(&mut self) -> Result<(), MyError> {
+    fn destroy(&mut self) -> Result<(), StdError> {
         
         Ok(())
     }

@@ -3,7 +3,7 @@ use sllog::*;
 use vulkanalia:: {
     loader::{LibloadingLoader, LIBRARY}, prelude::v1_2::*, vk, Entry, Instance
 };
-use crate::MyError;
+use crate::StdError;
 use super::vulkan::{vk_device::QueueFamilyIndices, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain};
 
 // CONSTANTS
@@ -29,7 +29,7 @@ pub struct RendererData {
 }
 
 // Helper
-pub unsafe fn create_entry() -> Result<Entry, MyError> {
+pub unsafe fn create_entry() -> Result<Entry, StdError> {
     let loader = LibloadingLoader::new(LIBRARY)?;
     let entry = Entry::new(loader).map_err(|b| error!("{}", b)).unwrap();
 
@@ -40,7 +40,7 @@ pub unsafe fn create_logical_device(
     physical_device: &vk::PhysicalDevice,
     indices: &QueueFamilyIndices,
     instance: &Instance,
-) -> Result<(Device, (vk::Queue, vk::Queue)), MyError>
+) -> Result<(Device, (vk::Queue, vk::Queue)), StdError>
 {
     let mut unique_indices = HashSet::new();
     unique_indices.insert(indices.graphics);
@@ -85,7 +85,7 @@ pub unsafe fn create_logical_device(
     Ok((device, (graphics_queue, present_queue)))
 }
 
-pub unsafe fn get_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<vk::Format, MyError>
+pub unsafe fn get_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<vk::Format, StdError>
 {
     let canditates = &[
         vk::Format::D32_SFLOAT,
@@ -108,7 +108,7 @@ unsafe fn get_supported_format(
     canditates: &[vk::Format],
     tiling: vk::ImageTiling,
     features: vk::FormatFeatureFlags
-) -> Result<vk::Format, MyError>
+) -> Result<vk::Format, StdError>
 {
     match canditates
         .iter()
@@ -134,7 +134,7 @@ unsafe fn get_supported_format(
 pub unsafe fn create_sync_objects(
     device: &Device, 
     data: &mut RendererData,
-) -> Result<(), MyError>
+) -> Result<(), StdError>
 {
     let semaphore_info = vk::SemaphoreCreateInfo::builder();
     let fence_info = vk::FenceCreateInfo::builder()

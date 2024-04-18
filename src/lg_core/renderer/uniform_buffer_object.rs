@@ -1,5 +1,7 @@
 use nalgebra_glm as glm;
 
+pub trait Descriptor {}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct ViewProjUBO {
@@ -22,3 +24,8 @@ pub struct ModelUBOId {
 pub struct StorageBuffer {
     pub data: u32,
 }
+
+impl Descriptor for ViewProjUBO {}
+impl Descriptor for ModelUBO {}
+impl Descriptor for ModelUBOId {}
+impl Descriptor for StorageBuffer {}

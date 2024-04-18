@@ -35,3 +35,10 @@ impl<T: ?Sized> Clone for Rfc<T> {
         Self { data: self.data.clone() }
     }
 }
+
+#[macro_export]
+macro_rules! as_dyn {
+    ($val:expr, $data_type:ty) => {
+        Rfc::from_rc_refcell(&(Rc::new(RefCell::new($val)) as Rc<RefCell<$data_type>>))
+    };
+}

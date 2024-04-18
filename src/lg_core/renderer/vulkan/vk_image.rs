@@ -2,7 +2,7 @@ use vulkanalia::{
     prelude::v1_2::*, vk
 };
 
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
 
 use super::{vk_device::VkDevice, vk_memory_manager::VkMemoryRegion};
 #[derive(Default)]
@@ -36,7 +36,7 @@ impl VkImage {
         mip_levels: u32,
         old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
-    ) -> Result<(), MyError>
+    ) -> Result<(), StdError>
     {
         let (src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask) = match (old_layout, new_layout) {
             (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (

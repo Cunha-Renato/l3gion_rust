@@ -1,7 +1,7 @@
 use vulkanalia::{
     prelude::v1_2::*, vk,
 };
-use crate::MyError;
+use crate::StdError;
 
 use super::{vk_command_pool, vk_device::VkDevice};
 
@@ -14,7 +14,7 @@ impl VkQueue {
     pub unsafe fn new(
         device: &Device,
         queue_indice: u32,
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let queue = device.get_device_queue(queue_indice, 0);
         let pool = vk_command_pool::create_command_pool(device, queue_indice)?;
@@ -30,7 +30,7 @@ impl VkQueue {
         &mut self, 
         device: &Device,
         lenght: u32
-    ) -> Result<(), MyError> 
+    ) -> Result<(), StdError> 
     {
         let allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(self.command_pool)
@@ -44,7 +44,7 @@ impl VkQueue {
     pub unsafe fn begin_single_time_commands(
         &self,
         device: &VkDevice
-    ) -> Result<vk::CommandBuffer, MyError>
+    ) -> Result<vk::CommandBuffer, StdError>
     {
         let info = vk::CommandBufferAllocateInfo::builder()
         .level(vk::CommandBufferLevel::PRIMARY)
@@ -64,7 +64,7 @@ impl VkQueue {
         &self,
         device: &VkDevice,
         command_buffer: vk::CommandBuffer
-    ) -> Result<(), MyError>
+    ) -> Result<(), StdError>
     {
         let device = device.get_device();
         device.end_command_buffer(command_buffer)?;

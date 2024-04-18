@@ -2,12 +2,12 @@ use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::MyError;
+use crate::StdError;
 
 pub unsafe fn create_command_pool(
     device: &Device,
     queue_indice: u32,
-) -> Result<vk::CommandPool, MyError>
+) -> Result<vk::CommandPool, StdError>
 {
     let info = vk::CommandPoolCreateInfo::builder()
         .flags(vk::CommandPoolCreateFlags::TRANSIENT

@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use vulkanalia::vk;
-use crate::{lg_core::lg_types::reference::Rfc, MyError};
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
 use super::{vk_buffer::VkBuffer, vk_memory_manager::{VkMemoryManager, VkMemoryUsageFlags}};
 
 const MAX_SIZE: u64 = 1000;
@@ -15,7 +15,7 @@ pub struct VkUniformBuffer {
 impl VkUniformBuffer {
     pub unsafe fn new<T>(
         memory_manager: &mut VkMemoryManager
-    ) -> Result<Self, MyError>
+    ) -> Result<Self, StdError>
     {
         let range = size_of::<T>() as u64;
         let size = range * MAX_SIZE;
@@ -32,7 +32,7 @@ impl VkUniformBuffer {
             offset: 0,
         })
     }
-    pub unsafe fn from_buffer(memory_manager: &mut VkMemoryManager, other: &Self) -> Result<Self, MyError> {
+    pub unsafe fn from_buffer(memory_manager: &mut VkMemoryManager, other: &Self) -> Result<Self, StdError> {
         let range = other.range;
         let size = other.size;
         let offset = other.offset;

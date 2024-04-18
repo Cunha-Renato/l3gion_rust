@@ -3,7 +3,7 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::MyError;
+use crate::StdError;
 
 use super::vk_device::VkDevice;
 
@@ -22,7 +22,7 @@ pub struct VkRenderPassBuilder {
     current_subpass: usize,
 }
 impl VkRenderPassBuilder {
-    pub unsafe fn build(self, device: &VkDevice) -> Result<vk::RenderPass, MyError> {
+    pub unsafe fn build(self, device: &VkDevice) -> Result<vk::RenderPass, StdError> {
         let device = device.get_device();
         
         let subpasses = self.subpasses.iter().map(|pass|  {
@@ -97,7 +97,7 @@ impl VkRenderPassBuilder {
         self
     }
 }
-pub unsafe fn get_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<vk::Format, MyError>
+pub unsafe fn get_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<vk::Format, StdError>
 {
     let canditates = &[
         vk::Format::D32_SFLOAT,
@@ -119,7 +119,7 @@ unsafe fn get_supported_format(
     canditates: &[vk::Format],
     tiling: vk::ImageTiling,
     features: vk::FormatFeatureFlags
-) -> Result<vk::Format, MyError>
+) -> Result<vk::Format, StdError>
 {
     match canditates
         .iter()

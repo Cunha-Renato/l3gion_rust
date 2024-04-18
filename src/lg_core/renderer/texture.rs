@@ -1,5 +1,5 @@
 use std::mem::size_of;
-use crate::{lg_core::uuid::UUID, MyError};
+use crate::{lg_core::uuid::UUID, StdError};
 
 #[derive(Default)]
 pub struct Texture {
@@ -11,7 +11,7 @@ pub struct Texture {
     mip_level: u32,
 }
 impl Texture {
-    pub fn new(path: &str) -> Result<Self, MyError> {
+    pub fn new(path: &str) -> Result<Self, StdError> {
         let image = image::io::Reader::open(path)?.decode()?;
 
         let width = image.width();

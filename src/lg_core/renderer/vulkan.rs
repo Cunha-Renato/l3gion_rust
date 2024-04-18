@@ -4,8 +4,6 @@ pub mod framebuffer;
 pub mod vk_pipeline;
 pub mod vk_buffer;
 pub mod vk_texture;
-pub mod vk_vertex_buffer;
-pub mod vk_index_buffer;
 pub mod vk_swapchain;
 pub mod vk_instance;
 pub mod vk_device;

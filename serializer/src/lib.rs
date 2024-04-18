@@ -1,8 +1,5 @@
+pub type StdError = Box<dyn std::error::Error>;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-use crate::MyError;
-
-pub trait NodeInfo {}
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct YamlNode {
@@ -15,22 +12,22 @@ impl YamlNode {
     pub fn push(&mut self, other: Self) {
         self.children.push(other);
     }
-    pub fn serialize(&self, path: &str, name: &str) -> Result<(), MyError> {
+    pub fn serialize(&self, path: &str, name: &str) -> Result<(), StdError> {
         serialize(&self, path, name)?;
         Ok(())
     }
-    pub fn deserialize(path: &str, name: &str) -> Result<Self, MyError> {
+    pub fn deserialize(path: &str, name: &str) -> Result<Self, StdError> {
         deserialize(path, name)
     }
 }
 
-pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), MyError> {
-    let path = path.to_string() + name + ".yaml";
+pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), StdError> {
+    let path = format!("{}/{}.yaml", path, name);
     std::fs::write(path, serde_yaml::to_string(value)?)?;
     Ok(())
 }
-pub fn deserialize<T: DeserializeOwned>(path: &str, name: &str) -> Result<T, MyError> {
-    let path = path.to_string() + name + ".yaml";
+pub fn deserialize<T: DeserializeOwned>(path: &str, name: &str) -> Result<T, StdError> {
+    let path = format!("{}/{}.yaml", path, name);
     let content = std::fs::read_to_string(path)?;
     let result: T = serde_yaml::from_str(&content)?;
 

@@ -1,0 +1,29 @@
+---
+name: obj_picker_v
+node_type: Vertex
+value: ""
+children:
+  - name: ViewProjUBO
+    node_type: "6"
+    value: ""
+    children:
+      - name: view
+        node_type: f32
+        value: "7"
+        children: []
+      - name: proj
+        node_type: f32
+        value: "7"
+        children: []
+  - name: ModelUBO_DYNAMIC
+    node_type: "8"
+    value: ""
+    children:
+      - name: data
+        node_type: f32
+        value: "7"
+        children: []
+      - name: id
+        node_type: u32
+        value: "4"
+        children: []

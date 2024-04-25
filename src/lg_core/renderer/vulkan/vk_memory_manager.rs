@@ -42,6 +42,11 @@ pub struct VkMemoryRegion {
     size: u64,
     memory_usage: VkMemoryUsageFlags,
 }
+impl VkMemoryRegion {
+    pub fn get_size(&self) -> u64 {
+        self.size
+    }
+}
 
 struct VkMemory {
     memory: vk::DeviceMemory,

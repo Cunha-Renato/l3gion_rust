@@ -9,7 +9,7 @@ use super::{
 pub struct AppCore {
     _window: Rfc<Window>,
     renderer: Rfc<Renderer>,
-    pub input: LgInput,
+    pub input: Rfc<LgInput>,
 }
 
 pub struct Application {
@@ -23,7 +23,7 @@ impl Application {
         optick::event!();
         
         let (renderer, window) = unsafe {Renderer::init(window)?};
-        let input = LgInput::new();
+        let input = Rfc::new(LgInput::new());
 
         let renderer = Rfc::new(renderer);
         let core = AppCore {
@@ -32,7 +32,7 @@ impl Application {
             input,
         };
         
-        let layers = vec![as_dyn!(TestLayer::new(renderer.clone()), dyn Layer)];
+        let layers = vec![as_dyn!(TestLayer::new(core.input.clone(), renderer.clone()), dyn Layer)];
         
         for layer in &layers {
             layer.borrow_mut().init(window.clone())?;
@@ -65,7 +65,7 @@ impl Application {
         self.resized = false;
 
         for layer in &self.layers {
-            layer.borrow_mut().on_update(&self.core.input)?;
+            layer.borrow_mut().on_update()?;
         }
 
         // Rendering

@@ -55,7 +55,7 @@ impl Shader {
 
         let module = spirv::Module::from_words(words_from_bytes(&bytes));
 
-        let descriptors = serialize_and_get_descriptors(&module, &name)?;
+        let (descriptors, stage) = serialize_and_get_descriptors(&module, &name)?;
 
         let bytecode = vulkanalia::bytecode::Bytecode::new(&bytes)?;
         let info = vk::ShaderModuleCreateInfo::builder()
@@ -65,7 +65,7 @@ impl Shader {
         let module = device.create_shader_module(&info, None)?;
         
         let info = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(descriptors[0].shader_stage)
+            .stage(string_to_shader_stage(&stage)?)
             .module(module)
             .name(b"main\0")
             .build();
@@ -82,7 +82,7 @@ impl Shader {
         device.destroy_shader_module(self.module, None);
     }
 }
-unsafe fn serialize_and_get_descriptors(module: &spirv::Module, name: &str) -> Result<Vec<ShaderDescriptor>, StdError> {
+unsafe fn serialize_and_get_descriptors(module: &spirv::Module, name: &str) -> Result<(Vec<ShaderDescriptor>, String), StdError> {
     let mut ast = spirv::Ast::<spirv_cross::glsl::Target>::parse(module)?;
 
     let mut shader_node = YamlNode {
@@ -97,8 +97,10 @@ unsafe fn serialize_and_get_descriptors(module: &spirv::Module, name: &str) -> R
     shader_node.push(serialize_resource("UniformBuffer", &ast_resources.uniform_buffers));
     shader_node.push(serialize_resource("StorageBuffer", &ast_resources.storage_buffers));
     shader_node.push(serialize_resource("CombinedImageSampler", &ast_resources.sampled_images));
+    shader_node.push(serialize_resource("StorageImage", &ast_resources.storage_images));
     
-    clean_serialization(&mut ast, shader_node, STORE_PATH, name)
+    let stage = shader_node.node_type.clone();
+    Ok((clean_serialization(&mut ast, shader_node, STORE_PATH, name)?, stage))
 }
 fn clean_serialization(ast: &mut spirv::Ast<spirv_cross::glsl::Target>, node: YamlNode, path: &str, name: &str) -> Result<Vec<ShaderDescriptor>, StdError> {
     let mut new_node = YamlNode {
@@ -143,9 +145,7 @@ fn clean_serialization(ast: &mut spirv::Ast<spirv_cross::glsl::Target>, node: Ya
                     for (i, ty) in member_types.iter().enumerate() {
                         let mut new_types = YamlNode::default();
                         new_types.name = ast.get_member_name(ds_id, i as u32)?;
-                        let (ty, fmt) = convert_types(ast, ty)?;
-                        new_types.node_type = ty;
-                        new_types.value = fmt;
+                        new_types.node_type = convert_types(ast, ty)?;
 
                         new_main_children.push(new_types);
                     }
@@ -201,6 +201,7 @@ fn get_descriptor_type(ds_type: &str, dynamic: bool) -> Result<vk::DescriptorTyp
         ("StorageBuffer", false) => vk::DescriptorType::STORAGE_BUFFER,
         ("StorageBuffer", true) => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
         ("CombinedImageSampler", _) => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+        ("StorageImage", _) => vk::DescriptorType::STORAGE_IMAGE,
         
         (_, _) => return Err(format!("Descriptor type of {} not suported! (shader)", ds_type).into())        
     })
@@ -237,30 +238,84 @@ fn get_type(vec_size: u32, columns: u32) -> ShaderPrimitiveTypes {
         _ => ShaderPrimitiveTypes::None
     }
 }
-fn convert_types(ast: &spirv::Ast<glsl::Target>, ty: &u32) -> Result<(String, String), StdError> {
-    let (var_type, value) = match ast.get_type(*ty)? {
+fn convert_types(ast: &spirv::Ast<glsl::Target>, ty: &u32) -> Result<String, StdError> {
+    let var_type = match ast.get_type(*ty)? {
         Type::Int { vecsize, columns, .. } => {
-            ("i32", get_type(vecsize, columns))
+            match get_type(vecsize, columns) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "i32",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::IVec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::IVec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::IVec4",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::Mat2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::Mat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::Mat4",
+            }
         },
         Type::UInt { vecsize, columns, .. } => {
-            ("u32", get_type(vecsize, columns))
+            match get_type(vecsize, columns) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "u32",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::UVec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::UVec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::UVec4",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::Mat2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::Mat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::Mat4",
+            }
         },
         Type::Int64 { vecsize, .. } => {
-            ("i64", get_type(vecsize, 0))
+            match get_type(vecsize, 0) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "i64",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::I64Vec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::I64Vec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::I64Vec4",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::DMat2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::DMat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::DMat4",
+            }
         },
         Type::UInt64 { vecsize, .. } => {
-            ("i32", get_type(vecsize, 0))
+            match get_type(vecsize, 0) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "u64",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::U64Vec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::U64Vec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::U64Vec3",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::DMat2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::DMat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::DMat4",
+            }
         },
         Type::Float { vecsize, columns, .. } => {
-            ("f32", get_type(vecsize, columns))
+            match get_type(vecsize, columns) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "f32",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::Vec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::Vec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::Vec4",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::Mat2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::Mat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::Mat4",
+            }
         },
         Type::Double { vecsize, columns, .. } => {
-            ("f64", get_type(vecsize, columns))
+            match get_type(vecsize, columns) {
+                ShaderPrimitiveTypes::None => "Error",
+                ShaderPrimitiveTypes::Unit => "f64",
+                ShaderPrimitiveTypes::Vec2 => "nalgebra_glm::DVec2",
+                ShaderPrimitiveTypes::Vec3 => "nalgebra_glm::DVec3",
+                ShaderPrimitiveTypes::Vec4 => "nalgebra_glm::DVec4",
+                ShaderPrimitiveTypes::Mat2 => "nalgebra_glm::DMat2x2",
+                ShaderPrimitiveTypes::Mat3 => "nalgebra_glm::DMat3",
+                ShaderPrimitiveTypes::Mat4 => "nalgebra_glm::DMat4",
+            }
         },
-        _ => ("UNKNOWN", ShaderPrimitiveTypes::None)
+        _ => "Error"
     };
     
-    Ok((var_type.to_string(), (value as u32).to_string()))
+    Ok(var_type.to_string())
 }
 pub fn string_to_shader_stage(name: &str) -> Result<vk::ShaderStageFlags, StdError> {
     match name {

@@ -3,7 +3,7 @@ name: obj_picker_f
 node_type: Fragment
 value: ""
 children:
-  - name: texSampler
-    node_type: "1"
+  - name: image
+    node_type: "3"
     value: ""
     children: []

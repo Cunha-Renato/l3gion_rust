@@ -109,7 +109,7 @@ impl Camera {
         {
             let mouse = input.get_mouse_position();
             let delta = (mouse - self.initial_mouse_position) * 0.003;
-            self.initial_mouse_position = *mouse;  
+            self.initial_mouse_position = mouse;  
 
             if input.is_mouse_button_pressed(MouseButton::Right) {
                 self.mouse_pan(&delta);

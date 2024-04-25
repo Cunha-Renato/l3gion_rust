@@ -13,10 +13,10 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec2 inTexCoord;
 
-layout(location = 0) out uint outId;
+layout(location = 0) out uvec4 outId;
 
 void main() {
-    gl_Position = u_ViewProjection.view * u_ViewProjection.proj * u_Model.data * vec4(inPosition, 1.0);
+    gl_Position = u_ViewProjection.proj * u_ViewProjection.view * u_Model.data * vec4(inPosition, 1.0);
 
-    outId = u_Model.id.x;
+    outId = u_Model.id;
 }

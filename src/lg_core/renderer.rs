@@ -7,12 +7,9 @@ pub mod vulkan;
 pub mod object;
 pub mod object_storage;
 pub mod helper;
-pub mod uniform_buffer_object;
 
 use std::borrow::BorrowMut;
-use std::path::Path;
 use std::{borrow::Borrow, mem::size_of};
-use std::ptr::copy_nonoverlapping as memcpy;
 
 use nalgebra_glm as glm;
 use vulkanalia::vk::KhrSurfaceExtension;
@@ -24,11 +21,12 @@ use vulkanalia::{
     window as vk_window, 
     Entry, 
 };
+use crate::lg_core::renderer::vulkan::vk_buffer;
 use crate::StdError;
 use helper::RendererData;
-use self::uniform_buffer_object::ModelUBOId;
 use self::vulkan::shader::read_folder;
-use self::{uniform_buffer_object::{ModelUBO, ViewProjUBO}, vulkan::vk_memory_manager::VkMemoryManager};
+use self::vulkan::vk_buffer::VkBuffer;
+use self::vulkan::vk_memory_manager::VkMemoryManager;
 use self::camera::Camera;
 use self::object_storage::ObjectStorage;
 use self::vulkan::vk_device::{VkDevice, VkQueueFamily};
@@ -36,8 +34,10 @@ use self::vulkan::vk_instance::VkInstance;
 use self::vulkan::vk_physical_device::VkPhysicalDevice;
 use self::{object::Object, vertex::Vertex, vulkan::{vk_pipeline::*, vk_swapchain::VkSwapchain}};
 use super::{lg_types::reference::Rfc, uuid::UUID};
+use proc_macros;
 
 const MAX_PIPELINES: u32 = 21;
+proc_macros::generate_struct!();
 
 pub struct Renderer {
     window: Rfc<Window>,
@@ -50,6 +50,7 @@ pub struct Renderer {
     objects: ObjectStorage<Vertex>,
     frame_active_objects: Vec<UUID>,
     frame: usize,
+    obj_picking_buffer: Rfc<VkBuffer>,
     pub resized: bool,
     camera: Rfc<Camera>,
 }
@@ -57,7 +58,6 @@ impl Renderer {
     pub unsafe fn init(window: Window) -> Result<(Self, Rfc<Window>), StdError> {
         // Compiling the shaders
         read_folder("resources/shaders", "resources/shaders/compiled")?;
-
         let mut data = RendererData::default();
         let entry = helper::create_entry()?; 
         let instance = VkInstance::new(&entry, &window)?;
@@ -102,6 +102,12 @@ impl Renderer {
             memory_manager.clone(), 
         )?;
         let pipelines = vec![pp1, pp2];
+        let buffer = memory_manager.borrow_mut().new_buffer(
+            (data.swapchain.extent.width * data.swapchain.extent.height * 4 * size_of::<u32>() as u32) as u64,
+            vk::BufferUsageFlags::TRANSFER_DST 
+                | vk::BufferUsageFlags::STORAGE_BUFFER, 
+            vulkan::vk_memory_manager::VkMemoryUsageFlags::CPU,
+        )?;
 
         let window = Rfc::new(window);
 
@@ -121,8 +127,9 @@ impl Renderer {
             ),
             frame_active_objects: Vec::new(),
             frame: 0,
+            obj_picking_buffer: buffer,
             resized: false,
-            camera: Rfc::default()
+            camera: Rfc::default(),
         },
         window.clone()))
     }
@@ -142,19 +149,15 @@ impl Renderer {
         
         Ok(())
     }
-    pub unsafe fn render(
-        &mut self,
-    ) -> Result<(), StdError>
-    {
+    pub unsafe fn render(&mut self) -> Result<(), StdError> {
         optick::event!();
-        // Wait for gpu to finish the rendering
         self.device.borrow().get_device().wait_for_fences(
             &[self.data.sync_objects[self.frame].render_fence],
             true, 
             u64::MAX
         )?;
         self.device.borrow().get_device().reset_fences(&[self.data.sync_objects[self.frame].render_fence])?;
-        
+
         let result = self.device
             .borrow()
             .get_device()
@@ -227,37 +230,31 @@ impl Renderer {
         Ok(())
     }
     unsafe fn update_camera_buffer(&mut self) -> Result<(), StdError> {
-        let ubo = ViewProjUBO { 
+        let ubo = ViewProjUBO_2DShader_v { 
             view: *self.camera.borrow().get_view_matrix(),
             proj: self.camera.borrow().get_projection_matrix(),
         };
 
         for pipeline in &mut self.pipelines {
             for i in 0..self.frame_active_objects.len() {
-                let memory = self.memory_manager.borrow_mut().map_buffer(
-                    pipeline.descriptor_data[self.frame].buffers[1].buffer.clone(),
+                pipeline.update_buffer(
+                    &ubo, 
+                    self.frame, 
                     0,
-                    size_of::<ViewProjUBO>() as u64,
-                    vk::MemoryMapFlags::empty(),
-                )?;
-                memcpy(&ubo, memory.cast(), 1);
-
-                self.memory_manager.borrow_mut().unmap_buffer(pipeline.descriptor_data[self.frame].buffers[1].buffer.clone())?;
-                
-                pipeline.descriptor_data[self.frame].update_buffer(
-                    1,
-                    0,
-                    0,
+                    1, 
+                    0, 
+                    0, 
                     i
-                );
+                )?;
             }
         }
         Ok(())
     }
     unsafe fn update_object_uniforms(&mut self) -> Result<(), StdError>
     {
-        for pipeline in &mut self.pipelines {
+        for (i, pipeline) in &mut self.pipelines.iter_mut().enumerate() {
             let mut offset = 0;
+            let mut offset_ubo_id = 0;
             for (obj_index, fa_object) in self.frame_active_objects.iter().enumerate() {
                 let object = self.objects
                     .get_objects()
@@ -269,37 +266,50 @@ impl Renderer {
                 let texture = object.vk_texture.as_ref().unwrap();
                 let transform = &object.object.borrow().transform;
                 
-                // Def Pipeline
                 let data = glm::scaling(&transform.scale)
                     * glm::rotate(&glm::Mat4::identity(), transform.angle, &transform.rotation_axis)
                     * glm::translate(&glm::Mat4::identity(), &transform.position);
-                let ubo = ModelUBOId { data, id: glm::UVec4::new(obj_index as u32, 0, 0, 0) };
 
-                // Copy
+                let ubo = ModelUBO_DYNAMIC_2DShader_v { 
+                    data, 
+                };
+                let ubo_id = ModelUBO_DYNAMIC_obj_picker_v {
+                    data,
+                    id: glm::UVec4::new(obj_index as u32, u32::MAX/2, 2, 1),
+                };
 
-                let memory = self.memory_manager.borrow_mut().map_buffer(
-                    pipeline.descriptor_data[self.frame].buffers[0].buffer.clone(),
-                    offset,
-                    size_of::<ModelUBO>() as u64,
-                    vk::MemoryMapFlags::empty(),
-                )?;
-                memcpy(&ubo, memory.cast(), 1);
-                self.memory_manager.borrow_mut().unmap_buffer(pipeline.descriptor_data[self.frame].buffers[0].buffer.clone())?;
+                if i == 0 {
+                    pipeline.update_buffer(
+                        &ubo,
+                        self.frame,
+                        offset,
+                        0,
+                        2,
+                        0,
+                        obj_index,
+                    )?;
+                    pipeline.update_sampled_image(
+                        &texture.borrow(),
+                        self.frame,
+                        1,
+                        0,
+                        obj_index
+                    );
+                } else {
+                    pipe
+                    pipeline.update_buffer(
+                        &ubo_id, 
+                        self.frame, 
+                        offset_ubo_id, 
+                        0, 
+                        2, 
+                        0, 
+                        obj_index
+                    )?;
+                }
 
-                pipeline.descriptor_data[self.frame].update_buffer(
-                    0,
-                    2,
-                    0,
-                    obj_index,
-                );
-                pipeline.descriptor_data[self.frame].update_sampled_image(
-                    &texture.borrow(),
-                    1,
-                    0,
-                    obj_index
-                );
-
-                offset += size_of::<ModelUBOId>() as u64;
+                offset += size_of::<ModelUBO_DYNAMIC_2DShader_v>() as u64;
+                offset_ubo_id += size_of::<ModelUBO_DYNAMIC_obj_picker_v>() as u64;
             }
         }
 
@@ -308,6 +318,7 @@ impl Renderer {
     pub unsafe fn destroy(&mut self) -> Result<(), StdError> {
         self.device.borrow().get_device().device_wait_idle().unwrap();
         
+        self.memory_manager.borrow_mut().destroy_buffer(self.obj_picking_buffer.clone())?;
         self.destroy_swapchain()?;
     
         // Objects
@@ -328,6 +339,59 @@ impl Renderer {
         Ok(())
     }
     
+    pub unsafe fn get_selected(&self, x: usize, y: usize) -> Result<Option<usize>, StdError> {
+        let image = self.pipelines[1].images[0].clone();
+        vk_buffer::copy_image_to_buffer(&self.device.borrow(), self.obj_picking_buffer.clone(), &image.borrow())?;
+        
+        // This is *mut c_void
+        let content = self.memory_manager.borrow_mut().map_buffer(
+            self.obj_picking_buffer.clone(), 
+            0, 
+            self.obj_picking_buffer.borrow().region.borrow().get_size(), 
+            vk::MemoryMapFlags::empty()
+        )?;
+        
+        // I need the RGBA values here
+        let content_slice = unsafe {
+            std::slice::from_raw_parts(content as *const u8, self.data.swapchain.extent.width as usize * self.data.swapchain.extent.width as usize * 16)
+        };
+        
+        // Calculate the offset to the pixel at (x, y)
+        let offset = (y * self.data.swapchain.extent.width as usize + x) * 16; // 16 bytes per pixel (4 channels * 4 bytes per channel)
+        
+        // Access the pixel data
+        let r = f32::from_ne_bytes([
+            content_slice[offset],
+            content_slice[offset + 1],
+            content_slice[offset + 2],
+            content_slice[offset + 3],
+        ]);
+        let g = f32::from_ne_bytes([
+            content_slice[offset + 4],
+            content_slice[offset + 5],
+            content_slice[offset + 6],
+            content_slice[offset + 7],
+        ]) as u32;
+        let b = f32::from_ne_bytes([
+            content_slice[offset + 8],
+            content_slice[offset + 9],
+            content_slice[offset + 10],
+            content_slice[offset + 11],
+        ]);
+        let a = f32::from_ne_bytes([
+            content_slice[offset + 12],
+            content_slice[offset + 13],
+            content_slice[offset + 14],
+            content_slice[offset + 15],
+        ]);
+
+        self.memory_manager.borrow_mut().unmap_buffer(self.obj_picking_buffer.clone())?;
+        
+        println!("{r}, {g}, {b}, {a}");
+        println!("{}", u32::MAX/2);
+
+        Ok(Some(0))
+    }
     unsafe fn prepare_cmd_buffer(&mut self, index: usize) -> Result<(), StdError>
     {
         let render_area = vk::Rect2D::builder()
@@ -347,11 +411,19 @@ impl Renderer {
             self.device.borrow().get_device().begin_command_buffer(*command_buffer, &info)?;
             
             // Begin render pass
-            let color_clear_value = vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
-                },
-            }; 
+            let color_clear_value = if pp_index == 0 {
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                }
+            } else {
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        uint32: [0, 0, 0, 1],
+                    },
+                }
+            };
             let depth_clear_value = vk::ClearValue {
                 depth_stencil: vk::ClearDepthStencilValue { depth: 1.0, stencil: 0 },
             };
@@ -367,6 +439,7 @@ impl Renderer {
             self.device.borrow().get_device().cmd_bind_pipeline(*command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 
             let mut ubo_offset = 0;
+            let offsets = [size_of::<ModelUBO_DYNAMIC_2DShader_v>(), size_of::<ModelUBO_DYNAMIC_obj_picker_v>()];
             for (obj_index, fa_object) in self.frame_active_objects.iter().enumerate() {
                 let object = self.objects
                     .get_objects()
@@ -395,7 +468,7 @@ impl Renderer {
                     pipeline.descriptor_data[self.frame].get_sets(obj_index).as_slice(),
                     &[ubo_offset]
                 );
-                ubo_offset += size_of::<ModelUBOId>() as u32;
+                ubo_offset += offsets[pp_index] as u32;
                 
                 // Draw call
                 self.device.borrow().get_device().cmd_draw_indexed(

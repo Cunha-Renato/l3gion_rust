@@ -5,7 +5,7 @@ use vulkanalia::{
     vk,
 };
 use crate::{lg_core::lg_types::reference::Rfc, StdError};
-use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_memory_manager::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
+use super::{shader::{self, Shader, ShaderDescriptor}, vk_device::VkDevice, vk_image::VkImage, vk_memory_manager::VkMemoryManager, vk_texture::VkTexture, vk_uniform_buffer::VkUniformBuffer};
 
 pub(crate) const MAX_SETS: usize = 500;
 pub struct VkDescriptorData {
@@ -15,6 +15,7 @@ pub struct VkDescriptorData {
     pool: vk::DescriptorPool,
     sets: Vec<Vec<vk::DescriptorSet>>,
     pub buffers: Vec<VkUniformBuffer>,
+    pub images: Vec<Rfc<VkImage>>,
     memory_manager: Rfc<VkMemoryManager>,
 }
 impl VkDescriptorData {
@@ -23,6 +24,7 @@ impl VkDescriptorData {
         shaders: &[Shader],
         memory_manager: Rfc<VkMemoryManager>,
         buffers: Vec<VkUniformBuffer>,
+        images: Vec<Rfc<VkImage>>,
     ) -> Result<Self, StdError>
     {
         let mut layouts = Vec::new();
@@ -48,6 +50,7 @@ impl VkDescriptorData {
             pool,
             sets,
             buffers,
+            images,
             memory_manager,
         })
     }
@@ -115,6 +118,36 @@ impl VkDescriptorData {
             &[] as &[vk::CopyDescriptorSet]
         )
     }
+    pub unsafe fn update_storage_image(
+        &mut self,
+        image: &VkImage,
+        set_index: usize,
+        binding: u32,
+        obj_index: usize,
+    ) {
+        let info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image.view);
+
+        let image_info = &[info];
+        
+        let ds_info = self.descriptor_infos
+            .iter()
+            .find(|ds| ds.binding == binding && ds.set == set_index as u32)
+            .unwrap();
+
+        let image_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.sets[obj_index][set_index])
+            .dst_binding(ds_info.binding)
+            .dst_array_element(0)
+            .descriptor_type(ds_info.ds_type)
+            .image_info(image_info);
+
+        self.device.borrow().get_device().update_descriptor_sets(
+            &[image_write], 
+            &[] as &[vk::CopyDescriptorSet]
+        )
+    }
     pub fn get_sets(&self, obj_index: usize) -> &Vec<vk::DescriptorSet> {
         &self.sets[obj_index]
     }
@@ -131,6 +164,9 @@ impl VkDescriptorData {
 
         for b in &self.buffers {
             self.memory_manager.borrow_mut().destroy_buffer(b.buffer.clone())?;
+        }
+        for i in &self.images {
+            self.memory_manager.borrow_mut().destroy_image(i.clone())?;
         }
 
         Ok(())

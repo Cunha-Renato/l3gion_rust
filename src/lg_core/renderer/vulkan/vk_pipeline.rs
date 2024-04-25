@@ -1,25 +1,28 @@
-use std::path::Path;
-
+use std::{mem::size_of, path::Path};
+use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia:: {
     prelude::v1_2::*, 
     vk,
 };
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, uniform_buffer_object::{ModelUBOId, ViewProjUBO}, vertex::{Vertex, VkVertex}}}, StdError};
+use crate::lg_core::renderer::{ModelUBO_DYNAMIC_2DShader_v, ModelUBO_DYNAMIC_obj_picker_v, ViewProjUBO_2DShader_v, ViewProjUBO_obj_picker_v};
+use crate::{lg_core::{lg_types::reference::Rfc, renderer::{helper, vertex::{Vertex, VkVertex}}}, StdError};
 
+use super::vk_texture::VkTexture;
 use super::{framebuffer, shader::Shader, vk_descriptor::VkDescriptorData, vk_device::VkDevice, vk_image::VkImage, vk_instance::VkInstance, vk_memory_manager::VkMemoryManager, vk_renderpass::{get_depth_format, VkRenderPassBuilder}, vk_physical_device::VkPhysicalDevice, vk_swapchain::VkSwapchain, vk_uniform_buffer::VkUniformBuffer};
 
 pub struct VkPipelineCreateInfo {
     msaa_samples: vk::SampleCountFlags,
-    color_format: vk::Format,
-    color_image_usage: vk::ImageUsageFlags,
-    attachments_count: u32,
+    images: Vec<Rfc<VkImage>>,
+    present: bool,
     shaders: Vec<Shader>,
     viewport: vk::Viewport,
     scissor: vk::Rect2D,
     dynamic_states: Vec<vk::DynamicState>,
     render_pass: vk::RenderPass,
     uniform_buffers: Vec<VkUniformBuffer>,
+    desc_images: Vec<Rfc<VkImage>>,
     should_present: bool,
+    enable_blend: bool,
 }
 
 pub struct VkPipeline {
@@ -29,8 +32,7 @@ pub struct VkPipeline {
     pub descriptor_data: Vec<VkDescriptorData>,
     pub framebuffers: Vec<vk::Framebuffer>,
     pub render_pass: vk::RenderPass,
-    pub color_image: Rfc<VkImage>,
-    pub depth_image: Rfc<VkImage>,
+    pub images: Vec<Rfc<VkImage>>,
     pub present: bool,
 }
 impl VkPipeline {
@@ -91,15 +93,20 @@ impl VkPipeline {
             .max_depth_bounds(1.0)
             .stencil_test_enable(false);
 
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
-            .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .color_blend_op(vk::BlendOp::ADD)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .alpha_blend_op(vk::BlendOp::ADD);
+        let color_blend_attachment = if info.enable_blend {
+            vk::PipelineColorBlendAttachmentState::builder()
+                .color_write_mask(vk::ColorComponentFlags::all())
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .alpha_blend_op(vk::BlendOp::ADD)
+        } else {
+            vk::PipelineColorBlendAttachmentState::builder()
+                .blend_enable(false)
+        };
         let attachments = &[color_blend_attachment];
 
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
@@ -120,6 +127,7 @@ impl VkPipeline {
                 &info.shaders,
                 memory_manager.clone(),
                 uniform_buffers,
+                info.desc_images.clone()
             )?);
         }
 
@@ -137,36 +145,13 @@ impl VkPipeline {
             .iter()
             .map(|s| s.info) 
             .collect();
-            
-        let color_image = memory_manager.borrow_mut().new_image(
-            swapchain.extent.width, 
-            swapchain.extent.height, 
-            info.color_format, 
-            vk::ImageAspectFlags::COLOR, 
-            info.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            info.color_image_usage,
-            1
-        )?;
-
-        let depth_image = memory_manager.borrow_mut().new_image(
-            swapchain.extent.width, 
-            swapchain.extent.height, 
-            helper::get_depth_format(instance.get_instance(), physical_device.get_device())?, 
-            vk::ImageAspectFlags::DEPTH, 
-            info.msaa_samples, 
-            vk::ImageTiling::OPTIMAL, 
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
-            1
-        )?;
         
         let framebuffers = framebuffer::create_framebuffers(
             &device.borrow(),
             &info.render_pass,
-            info.attachments_count, 
+            info.present,
             &swapchain.views, 
-            &color_image.borrow(), 
-            &depth_image.borrow(), 
+            &info.images,
             swapchain.extent.width, 
             swapchain.extent.height
         )?;
@@ -206,12 +191,56 @@ impl VkPipeline {
             layout,
             pipeline,
             descriptor_data,
-            color_image,
-            depth_image,
+            images: info.images,
             framebuffers,
             render_pass: info.render_pass,
             present: info.should_present,
         })
+    }
+    pub unsafe fn update_buffer<T>(
+        &mut self, 
+        data: &T,
+        frame: usize,
+        offset: u64,
+        buffer_index: usize,
+        set_index: usize,
+        binding: u32,
+        object_index: usize,
+    ) -> Result<(), StdError>
+    {
+        let memory = self.memory_manager.borrow_mut().map_buffer(
+            self.descriptor_data[frame].buffers[buffer_index].buffer.clone(),
+            offset, 
+            size_of::<T>() as u64, 
+            vk::MemoryMapFlags::empty()
+        )?;
+        memcpy(data, memory.cast(), 1);
+        
+        self.memory_manager.borrow_mut().unmap_buffer(self.descriptor_data[frame].buffers[buffer_index].buffer.clone())?;
+        
+        self.descriptor_data[frame].update_buffer(
+            buffer_index, 
+            set_index, 
+            binding, 
+            object_index
+        );
+        
+        Ok(())
+    }
+    pub unsafe fn update_sampled_image(
+        &mut self,
+        texture: &VkTexture,
+        frame: usize,
+        set_index: usize,
+        binding: u32,
+        object_index: usize
+    ) {
+        self.descriptor_data[frame].update_sampled_image(
+            texture, 
+            set_index, 
+            binding, 
+            object_index
+        );
     }
     pub unsafe fn get_2d(
         device: Rfc<VkDevice>,
@@ -222,19 +251,38 @@ impl VkPipeline {
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self, StdError>
     {
-        let model = VkUniformBuffer::new::<ModelUBOId>(
+        let model = VkUniformBuffer::new::<ModelUBO_DYNAMIC_2DShader_v>(
             &mut memory_manager.borrow_mut()
         )?;
-        let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
+        let view_proj = VkUniformBuffer::new::<ViewProjUBO_2DShader_v>(
             &mut memory_manager.borrow_mut()
         )?;
-
+        let mut images = Vec::new();
+        images.push(memory_manager.borrow_mut().new_image(
+            swapchain.extent.width, 
+            swapchain.extent.height, 
+            swapchain.format,
+            vk::ImageAspectFlags::COLOR, 
+            msaa_samples,
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::COLOR_ATTACHMENT, 
+            1
+        )?);
+        images.push(memory_manager.borrow_mut().new_image(
+            swapchain.extent.width, 
+            swapchain.extent.height, 
+            helper::get_depth_format(instance.get_instance(), physical_device.get_device())?, 
+            vk::ImageAspectFlags::DEPTH, 
+            msaa_samples,
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
+            1
+        )?);
         let info = VkPipelineCreateInfo {
             msaa_samples,
-            color_format: swapchain.format,
-            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT,
-            attachments_count: 3,
+            enable_blend: true,
+            present: true,
+            images,
             shaders: vec![
                 Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/2DShader_v.spv"))?,
                 Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/2DShader_f.spv"))?,
@@ -305,6 +353,7 @@ impl VkPipeline {
                 )
                 .build(&device.borrow())?,
             uniform_buffers: vec![model, view_proj],
+            desc_images: vec![],
             should_present: true,
         };
         
@@ -325,19 +374,38 @@ impl VkPipeline {
         memory_manager: Rfc<VkMemoryManager>,
     ) -> Result<Self, StdError>
     {
-        let model = VkUniformBuffer::new::<ModelUBOId>(
+        let model = VkUniformBuffer::new::<ModelUBO_DYNAMIC_obj_picker_v>(
             &mut memory_manager.borrow_mut()
         )?;
-        let view_proj = VkUniformBuffer::new::<ViewProjUBO>(
+        let view_proj = VkUniformBuffer::new::<ViewProjUBO_obj_picker_v>(
             &mut memory_manager.borrow_mut()
         )?;
-        
+        let mut images = Vec::new();
+        images.push(memory_manager.borrow_mut().new_image(
+            swapchain.extent.width, 
+            swapchain.extent.height, 
+            swapchain.format,
+            vk::ImageAspectFlags::COLOR, 
+            vk::SampleCountFlags::_1,
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::COLOR_ATTACHMENT, 
+            1
+        )?);
+        images.push(memory_manager.borrow_mut().new_image(
+            swapchain.extent.width, 
+            swapchain.extent.height, 
+            helper::get_depth_format(instance.get_instance(), physical_device.get_device())?, 
+            vk::ImageAspectFlags::DEPTH, 
+            vk::SampleCountFlags::_1,
+            vk::ImageTiling::OPTIMAL, 
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT, 
+            1
+        )?);
         let info = VkPipelineCreateInfo {
             msaa_samples: vk::SampleCountFlags::_1,
-            color_format: vk::Format::R8G8B8A8_SRGB,
-            color_image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_SRC,
-            attachments_count: 2,
+            images,
+            enable_blend: true,
+            present: false,
             shaders: vec![
                 Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/obj_picker_v.spv"))?,
                 Shader::new(&device.borrow().get_device(), Path::new("resources/shaders/compiled/obj_picker_f.spv"))?,
@@ -356,8 +424,8 @@ impl VkPipeline {
                 .build(),
             dynamic_states: vec![],
             render_pass: VkRenderPassBuilder::begin()
-                .add_attachment(vk::AttachmentDescription::builder()
-                    .format(vk::Format::R8G8B8A8_SRGB)
+            .add_attachment(vk::AttachmentDescription::builder()
+                    .format(swapchain.format)
                     .samples(vk::SampleCountFlags::_1)
                     .load_op(vk::AttachmentLoadOp::CLEAR)
                     .store_op(vk::AttachmentStoreOp::STORE)
@@ -392,6 +460,18 @@ impl VkPipeline {
                 )
                 .build(&device.borrow())?,
             uniform_buffers: vec![model, view_proj],
+            desc_images: vec![
+                memory_manager.borrow_mut().new_image(
+                    swapchain.extent.width, 
+                    swapchain.extent.height, 
+                    vk::Format::R32G32B32A32_UINT, 
+                    vk::ImageAspectFlags::COLOR, 
+                    vk::SampleCountFlags::_1, 
+                    vk::ImageTiling::OPTIMAL, 
+                    vk::ImageUsageFlags::STORAGE, 
+                    1
+                )?
+            ],
             should_present: false,
         };
         
@@ -411,8 +491,9 @@ impl VkPipeline {
             dd.destroy()?;
         }
 
-        self.memory_manager.borrow_mut().destroy_image(self.color_image.clone())?;
-        self.memory_manager.borrow_mut().destroy_image(self.depth_image.clone())?;
+        for img in &self.images {
+            self.memory_manager.borrow_mut().destroy_image(img.clone())?;
+        }
 
         self.framebuffers
             .iter()

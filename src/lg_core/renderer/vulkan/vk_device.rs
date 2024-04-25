@@ -192,6 +192,7 @@ unsafe fn create_logical_device(
         .collect::<Vec<_>>();
     
     let features = vk::PhysicalDeviceFeatures::builder()
+        .fragment_stores_and_atomics(true)
         .sampler_anisotropy(true)
         .sample_rate_shading(true);
     

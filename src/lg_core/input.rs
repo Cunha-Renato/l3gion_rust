@@ -33,8 +33,8 @@ impl LgInput {
         self.mouse_position.x = x;
         self.mouse_position.y = y;
     }
-    pub fn get_mouse_position(&self) -> &glm::Vec2 {
-        &self.mouse_position
+    pub fn get_mouse_position(&self) -> glm::Vec2 {
+        self.mouse_position
     }
 
     pub fn set_key_state(&mut self, key_code: VKeyCode, state: bool) {

@@ -3,17 +3,16 @@ use vulkanalia:: {
     vk,
 };
 
-use crate::StdError;
+use crate::{lg_core::lg_types::reference::Rfc, StdError};
 
 use super::{vk_device::VkDevice, vk_image::VkImage};
 
 pub unsafe fn create_framebuffers(
     device: &VkDevice,
     render_pass: &vk::RenderPass,
-    attachments_count: u32,
+    present: bool,
     swapchain_image_views: &Vec<vk::ImageView>,
-    color_image_data: &VkImage,
-    depth_image_data: &VkImage,
+    images: &[Rfc<VkImage>],
     width: u32,
     height: u32,
 ) -> Result<Vec<vk::Framebuffer>, StdError>
@@ -23,13 +22,10 @@ pub unsafe fn create_framebuffers(
         .map(|i| {
             let mut attachments = Vec::new();
             
-            if attachments_count > 0 {
-                attachments.push(color_image_data.view);
+            for img in images {
+                attachments.push(img.borrow().view);
             }
-            if attachments_count > 1 {
-                attachments.push(depth_image_data.view);
-            }
-            if attachments_count > 2 {
+            if present {
                 attachments.push(*i);
             }
             

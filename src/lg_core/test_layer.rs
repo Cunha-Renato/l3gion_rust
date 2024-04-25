@@ -3,7 +3,7 @@ use sllog::*;
 use winit::window::Window;
 use crate::{utils::tools::to_radians, StdError};
 
-use super::{event::MouseEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}};
+use super::{event::{MouseButton, MouseEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::{camera::Camera, object::{Object, Transformation}, texture::Texture, vertex::Vertex, Renderer}, uuid::UUID};
 
 #[derive(Default)]
 struct Textures {
@@ -15,16 +15,19 @@ struct Textures {
 
 pub struct TestLayer {
     renderer: Rfc<Renderer>,
+    input: Rfc<LgInput>,
+
     objects: Vec<Vec<Rfc<Object<Vertex>>>>,
     main_camera: Rfc<Camera>,
     textures: Textures,
 }
 impl TestLayer {
-    pub fn new(renderer: Rfc<Renderer>) -> Self {        
+    pub fn new(input: Rfc<LgInput>, renderer: Rfc<Renderer>) -> Self {        
         Self {
             objects: Vec::new(),
             main_camera: Rfc::default(),
             renderer,
+            input,
             textures: Textures::default(),
         }
     }
@@ -89,8 +92,8 @@ impl Layer for TestLayer {
         Ok(())
     }
 
-    fn on_update(&mut self, input: &LgInput) -> Result<(), StdError>{
-        self.main_camera.borrow_mut().on_update(input);
+    fn on_update(&mut self) -> Result<(), StdError>{
+        self.main_camera.borrow_mut().on_update(&self.input.borrow());
         
         unsafe {
             for vec in &self.objects {
@@ -109,6 +112,12 @@ impl Layer for TestLayer {
         match event {
             super::event::LgEvent::MouseEvent(me) => {
                 match me {
+                    MouseEvent::ButtonEvent(be) if be.button == MouseButton::Left && be.pressed => {
+                        let mouse_pos = self.input.borrow().get_mouse_position();
+                        unsafe {
+                            self.renderer.borrow_mut().get_selected(mouse_pos.x as usize, mouse_pos.y as usize)?;
+                        }
+                    }
                     _ => (), 
                 }
             },

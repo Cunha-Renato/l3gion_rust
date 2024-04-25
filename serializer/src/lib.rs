@@ -1,7 +1,7 @@
 pub type StdError = Box<dyn std::error::Error>;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct YamlNode {
     pub name: String,
     pub node_type: String,

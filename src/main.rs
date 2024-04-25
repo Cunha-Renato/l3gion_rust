@@ -19,7 +19,7 @@ use l3gion_rust::StdError;
 use sllog::warn;
 use winit::event::{ElementState, MouseScrollDelta};
 use winit::{
-    dpi::LogicalSize,
+    dpi::PhysicalSize,
     event::{
         Event,
         WindowEvent
@@ -35,7 +35,7 @@ fn main() -> Result<(), StdError> {
     let event_loop = get_event_loop();
     let window = WindowBuilder::new()
         .with_title("Vulkan Tutorial (Rust)")
-        .with_inner_size(LogicalSize::new(1080, 720))
+        .with_inner_size(PhysicalSize::new(1080, 720))
         .build(&event_loop)?;
 
     // App
@@ -71,7 +71,7 @@ fn main() -> Result<(), StdError> {
                         if let Some(key_code) = input.virtual_keycode {
                             let state = input.state == ElementState::Pressed;
 
-                            app.core.input.set_key_state(key_code.into(), state);
+                            app.core.input.borrow_mut().set_key_state(key_code.into(), state);
                             app.on_event(&l3gion_rust::lg_core::event::LgEvent::KeyEvent(KeyEvent {
                                 code: input.scancode,
                                 key: key_code.into(),
@@ -88,14 +88,14 @@ fn main() -> Result<(), StdError> {
                         };
                         let btn_state = state == ElementState::Pressed;
 
-                        app.core.input.set_mouse_state(button, btn_state);
+                        app.core.input.borrow_mut().set_mouse_state(button, btn_state);
                         app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
                             button: button,
                             pressed: btn_state,
                         }))).unwrap();
                     },
                     WindowEvent::CursorMoved { position, .. } => {
-                        app.core.input.set_mouse_position(position.x as f32, position.y as f32);
+                        app.core.input.borrow_mut().set_mouse_position(position.x as f32, position.y as f32);
                         app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
                             position: (position.x, position.y),
                         }))).unwrap();

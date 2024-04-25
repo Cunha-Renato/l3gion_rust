@@ -76,7 +76,6 @@ unsafe fn check_physical_device(
     
     let features = instance
         .get_physical_device_features(physical_device);
-    
 
     let result = match properties.device_type {
         vk::PhysicalDeviceType::DISCRETE_GPU => 0,

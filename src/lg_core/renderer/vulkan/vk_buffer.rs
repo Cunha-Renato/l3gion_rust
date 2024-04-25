@@ -5,7 +5,7 @@ use vulkanalia:: {
 
 use crate::{lg_core::lg_types::reference::Rfc, StdError};
 
-use super::{vk_device::VkDevice, vk_memory_manager::VkMemoryRegion};
+use super::{vk_device::VkDevice, vk_image::VkImage, vk_memory_manager::VkMemoryRegion};
 
 #[derive(Debug)]
 pub struct VkBuffer {
@@ -61,6 +61,44 @@ pub unsafe fn copy_buffer_to_image(
     );
 
     device.get_transfer_queue().end_single_time_commands(device, command_buffer)?;
+
+    Ok(())
+}
+pub unsafe fn copy_image_to_buffer(
+    device: &VkDevice,
+    buffer: Rfc<VkBuffer>,
+    image: &VkImage,
+) -> Result<(), StdError>
+{
+    let command_buffer = device.get_graphics_queue().begin_single_time_commands(device)?;
+
+    let copy_region = vk::BufferImageCopy {
+        buffer_offset: 0,
+        buffer_row_length: 0,
+        buffer_image_height: 0,
+        image_subresource: vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+        image_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
+        image_extent: vk::Extent3D {
+            width: image.width,
+            height: image.height,
+            depth: 1,
+        },
+    };
+
+    device.get_device().cmd_copy_image_to_buffer(
+        command_buffer, 
+        image.image, 
+        vk::ImageLayout::TRANSFER_SRC_OPTIMAL, 
+        buffer.borrow().buffer, 
+        &[copy_region]
+    );
+
+    device.get_graphics_queue().end_single_time_commands(device, command_buffer)?;
 
     Ok(())
 }

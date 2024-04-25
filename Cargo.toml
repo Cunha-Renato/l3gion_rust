@@ -1,4 +1,4 @@
-workspace = { members = [ "serializer" ] }
+workspace = { members = [ "serializer", "proc_macros" ] }
 [package]
 name = "l3gion_rust"
 version = "0.1.0"
@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 serializer = { path = "serializer" }
+proc_macros = { path = "proc_macros" }
 optick = "=1.3.4"
 rand = "0.8.5"
 image = "0.25.0"

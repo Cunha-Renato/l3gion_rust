@@ -32,6 +32,7 @@ pub fn init_opengl(event_loop: &winit::event_loop::EventLoop<()>, window_builder
 
     let contex_attributes = glutin::context::ContextAttributesBuilder::new()
         .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(3, 3))))
+        .with_debug(true)
         .build(Some(raw_window_handle));
 
     let (gl_context, gl_surface) = unsafe { 

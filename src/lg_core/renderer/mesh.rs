@@ -6,12 +6,12 @@ use super::{opengl::opengl_vertex::GlVertex, vertex::LgVertex};
 pub struct LgMesh<T: LgVertex + GlVertex> {
     uuid: UUID,
     pub vertices: Vec<T>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<u32>,
 }
 impl<T: LgVertex + GlVertex> LgMesh<T> {
     pub fn new(
         vertices: Vec<T>,
-        indices: Vec<u16>,
+        indices: Vec<u32>,
     ) -> Self
     {
         Self {

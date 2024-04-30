@@ -3,9 +3,8 @@ extern crate gl;
 use std::{collections::HashMap, ffi::CString};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use sllog::info;
-use crate::{lg_core::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgMesh, vertex::LgVertex, Renderer}}, StdError};
-
-use super::{opengl_program::GlProgram, opengl_shader::GlShader, opengl_vertex::GlVertex, opengl_vertex_array::GlVertexArray, utils};
+use crate::{gl_check, lg_core::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgMesh, vertex::LgVertex, Renderer}}, StdError};
+use super::{opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex::GlVertex, opengl_vertex_array::GlVertexArray, utils};
 
 pub(crate) struct GlSpecs {
     pub(crate) gl_context: glutin::context::PossiblyCurrentContext,
@@ -16,6 +15,7 @@ pub(crate) struct GlSpecs {
 #[derive(Default, Debug)]
 struct GlStorage {
     shaders: HashMap<u128, Rfc<GlShader>>,
+    textures: HashMap<u128, Rfc<GlTexture>>,
     programs: HashMap<u128, GlProgram>,
     vaos: HashMap<u128, GlVertexArray>,
 }
@@ -32,8 +32,16 @@ impl GlRenderer {
         });
         
         unsafe {
-            gl::Enable(gl::DEBUG_OUTPUT);
-            gl::DebugMessageCallback(Some(utils::debug_callback), std::ptr::null());
+            gl_check!(gl::Enable(gl::DEBUG_OUTPUT));
+            gl_check!(gl::DebugMessageCallback(Some(utils::debug_callback), std::ptr::null()));
+            
+            gl_check!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
+            gl_check!(gl::Enable(gl::BLEND));
+            
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
         }
         
         Self {
@@ -69,6 +77,19 @@ impl Renderer for GlRenderer {
             }.clone());
         }
 
+        // Texture
+        let texture = match self.storage.textures.entry(material.texture().borrow().uuid().get_value()) {
+            std::collections::hash_map::Entry::Occupied(tex) => tex.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                info!("GlTexture, FROM LGTEXTURE: {}, being chached! (OpenGL)", material.texture().borrow().uuid().get_value());
+                let texture = Rfc::new(GlTexture::new(material.texture().clone()));
+                texture.borrow().bind();
+                texture.borrow().load();
+
+                entry.insert(texture)
+            },
+        };
+
         // Shader Program
         let program = match self.storage.programs.entry(material.uuid().get_value()) {
             std::collections::hash_map::Entry::Occupied(prg) => prg.into_mut(),
@@ -83,31 +104,41 @@ impl Renderer for GlRenderer {
             }
         };
 
-        // Update the vertex_buffer.
-        program.vertex_buffer().set_data(&mesh.vertices, gl::STATIC_DRAW);
-
         // VertexArray 1 per mesh
         let vao = match self.storage.vaos.entry(mesh.uuid().get_value()) {
             std::collections::hash_map::Entry::Occupied(vao) => vao.into_mut(),
             std::collections::hash_map::Entry::Vacant(entry) => {
                 let vao = entry.insert(GlVertexArray::new());
-
+                vao.bind();
+                vao.bind_buffers();
                 T::set_attrib_locations(vao, program)?;
                 
+                // Update the vertex_buffer and the index_buffer.
+                vao.vertex_buffer().set_data(&mesh.vertices, gl::STATIC_DRAW);
+                vao.index_buffer().set_data(&mesh.indices, gl::STATIC_DRAW);
+                vao.unbind();
+
                 info!("VAO, FROM MESH: {}, being cached! (OpenGL)", mesh.uuid().get_value());
 
                 vao
             }
         };
+        
+        gl_check!(gl::ClearColor(0.5, 0.1, 0.2, 1.0));
+        gl_check!(gl::Clear(gl::COLOR_BUFFER_BIT));
 
-        gl::ClearColor(0.0, 0.0, 1.0, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-
-        program.bind();
+        texture.borrow().bind();
+        texture.borrow().load();
         vao.bind();
-        gl::DrawArrays(gl::TRIANGLES, 0, 3);
-        program.unbind();
+        program.bind();
+        gl_check!(gl::DrawElements(
+            gl::TRIANGLES, 
+            mesh.indices.len() as i32, 
+            gl::UNSIGNED_INT, 
+            std::ptr::null()
+        ));
         vao.unbind();
+        program.unbind();
 
         Ok(())
     }
@@ -118,7 +149,7 @@ impl Renderer for GlRenderer {
             std::num::NonZeroU32::new(new_size.1).unwrap(),
         );
 
-        gl::Viewport(0, 0, new_size.0 as i32, new_size.1 as i32);
+        gl_check!(gl::Viewport(0, 0, new_size.0 as i32, new_size.1 as i32));
 
         Ok(())
     }

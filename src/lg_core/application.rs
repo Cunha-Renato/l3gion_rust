@@ -1,87 +1,72 @@
-use std::{cell::RefCell, rc::Rc};
+use crate::StdError;
 
-use winit::window::Window;
-
-use crate::{as_dyn, lg_core::test_layer::TestLayer, StdError};
 use super::{
-    event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::Renderer
+    lg_types::reference::Rfc, 
+    renderer::{
+        opengl::opengl_init, 
+        LgRenderer, Renderer
+    }, 
+    test_scene::TestScene
 };
-pub struct AppCore {
-    _window: Rfc<Window>,
-    renderer: Rfc<Renderer>,
-    pub input: Rfc<LgInput>,
-}
 
+pub struct ApplicationCore {
+    pub _window: winit::window::Window,
+    pub renderer: Rfc<LgRenderer>,
+}
 pub struct Application {
-    pub resized: bool,
-    pub core: AppCore,
-    layers: Vec<Rfc<dyn Layer>>,
+    core: Rfc<ApplicationCore>,
+    scene: TestScene,
 }
 impl Application {
-    pub fn new(window: Window) -> Result<Self, StdError> {
-        // optick::start_capture();
-        optick::event!();
-        
-        let (renderer, window) = unsafe {Renderer::init(window)?};
-        let input = Rfc::new(LgInput::new());
+    pub fn new_vulkan() -> Self {
+        todo!()
+    }
+    pub fn new_opengl(event_loop: &winit::event_loop::EventLoop<()>) -> Result<Self, StdError> {
+        let window_builder = winit::window::WindowBuilder::new()
+            .with_inner_size(winit::dpi::LogicalSize{ width: 1080, height: 720 })
+            .with_title("L3gion");
 
-        let renderer = Rfc::new(renderer);
-        let core = AppCore {
-            _window: window.clone(),
-            renderer: renderer.clone(),
-            input,
-        };
-        
-        let layers = vec![as_dyn!(TestLayer::new(core.input.clone(), renderer.clone()), dyn Layer)];
-        
-        for layer in &layers {
-            layer.borrow_mut().init(window.clone())?;
-        }
+        let (window, gl_specs) = opengl_init::init_opengl(event_loop, window_builder)?;
 
+        let renderer = Rfc::new(LgRenderer::opengl(gl_specs));
+        let core = Rfc::new(ApplicationCore {
+            _window: window,
+            renderer
+        });
+        let scene = TestScene::new(core.clone());
+        
         Ok(Self {
-            resized: false,
             core,
-            layers,
+            scene,
         })
+    } 
+    pub fn request_redraw(&self) {
+        self.core.borrow()._window.request_redraw();
     }
-    
-    pub fn destroy(&mut self) -> Result<(), StdError>{
-        optick::event!();
-        for layer in &self.layers {
-            layer.borrow_mut().destroy()?;
-        }
-
-        unsafe { self.core.renderer.borrow_mut().destroy().unwrap() }
-        // optick::stop_capture("profiling");
-        
-        Ok(())
-    }
-     
     pub fn on_update(&mut self) -> Result<(), StdError>{
-        optick::next_frame();
-        optick::event!();
-        
-        self.core.renderer.borrow_mut().resized = self.resized;
-        self.resized = false;
+        self.scene.on_update();
 
-        for layer in &self.layers {
-            layer.borrow_mut().on_update()?;
+        unsafe {
+            self.core.borrow().renderer.borrow_mut().render()?;
+            
+            Ok(())
         }
-
-        // Rendering
-        unsafe { 
-            self.core.renderer.borrow_mut().render()?;
-        }
-        
-        Ok(())
     }
+    pub fn on_event(&mut self, event: winit::event::Event<()>) {
+        match event {
 
-    pub fn on_event(&mut self, event: &LgEvent) -> Result<(), StdError>{
-        optick::event!();
-        for layer in &self.layers {
-            layer.borrow_mut().on_event(event)?;
+            _ => ()            
         }
-        
-        Ok(())
+    }
+    pub fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
+        unsafe {
+            self.core.borrow().renderer.borrow().resize(new_size)?;
+            
+            Ok(())
+        }
+    }
+    pub fn destroy(&mut self) {
+        self.scene.destroy();
+        unsafe { self.core.borrow_mut().renderer.borrow_mut().destroy().unwrap(); }
     }
 }

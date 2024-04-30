@@ -1,9 +1,0 @@
----
-name: obj_picker_f
-node_type: Fragment
-value: ""
-children:
-  - name: image
-    node_type: "3"
-    value: ""
-    children: []

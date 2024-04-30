@@ -6,7 +6,7 @@ pub struct Texture {
     uuid: UUID,
     width: u32,
     height: u32,
-    pixels: Vec<u8>,
+    bytes: Vec<u8>,
     size: u64,
     mip_level: u32,
 }
@@ -16,14 +16,14 @@ impl Texture {
 
         let width = image.width();
         let height = image.height();
-        let pixels = image.as_bytes().to_vec();
-        let size = (pixels.len() * size_of::<u8>()) as u64;
+        let bytes = image.as_bytes().to_vec();
+        let size = (bytes.len() * size_of::<u8>()) as u64;
 
         Ok(Self {
             uuid: UUID::generate(),
             width,
             height,
-            pixels,
+            bytes,
             size,
             mip_level: (width.max(height) as f32).log2().floor() as u32 + 1,
         })
@@ -39,8 +39,8 @@ impl Texture {
     pub fn height(&self) -> u32 {
         self.height
     }
-    pub fn pixels(&self) -> &[u8] {
-        &self.pixels
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
     }
     pub fn size(&self) -> u64 {
         self.size

@@ -1,4 +1,4 @@
-pub type StdError = Box<dyn std::error::Error>;
+type StdError = Box<dyn std::error::Error>;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

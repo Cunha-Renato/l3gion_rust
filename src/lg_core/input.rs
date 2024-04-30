@@ -1,25 +1,42 @@
-use std::collections::HashMap;
+use std::sync::{Mutex, MutexGuard};
+use std::{collections::HashMap, sync::OnceLock};
 
 use nalgebra_glm as glm;
 
+use crate::StdError;
+
 use super::event::{
-    VKeyCode,
+    LgKeyCode,
     MouseButton,
 };
 
+static INPUT: OnceLock<Mutex<LgInput>> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct LgInput {
-    key_states: HashMap<VKeyCode, bool>,    
+    key_states: HashMap<LgKeyCode, bool>,    
     mouse_states: HashMap<MouseButton, bool>,
     mouse_position: glm::Vec2,
 }
 impl LgInput {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { 
             key_states: HashMap::new(),
             mouse_states: HashMap::new(),
             mouse_position: glm::vec2(0.0, 0.0),
         }
+    }
+    
+    pub fn get() -> Result<MutexGuard<'static, LgInput>, StdError> {
+        if INPUT.get().is_none() {
+            println!("Is None");
+            match INPUT.set(Mutex::new(LgInput::new())) {
+                Err(_) => return Err("Failed to create Input! (LgInput)".into()),
+                _ => ()
+            }
+        }
+
+        Ok(INPUT.get().unwrap().lock()?)
     }
 
     pub fn set_mouse_state(&mut self, button: MouseButton, state: bool) {
@@ -37,10 +54,10 @@ impl LgInput {
         self.mouse_position
     }
 
-    pub fn set_key_state(&mut self, key_code: VKeyCode, state: bool) {
+    pub fn set_key_state(&mut self, key_code: LgKeyCode, state: bool) {
         self.key_states.insert(key_code, state);
     }
-    pub fn is_key_pressed(&self, key: VKeyCode) -> bool {
+    pub fn is_key_pressed(&self, key: LgKeyCode) -> bool {
         *self.key_states.get(&key)
             .unwrap_or_else(|| &false)
     }

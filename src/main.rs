@@ -1,117 +1,64 @@
 use std::env;
 
-use l3gion_rust::{
-    lg_core::{
-        application::Application,
-        event::{
+use l3gion_rust::lg_core::{
+        application::Application, event::{
             KeyEvent,
             MouseButton,
             MouseButtonEvent,
             MouseEvent,
             MouseMoveEvent,
             MouseScrollEvent,
-        }
-    },
-    window::get_event_loop
-};
+        }, input::LgInput
+    };
 use l3gion_rust::StdError;
 
-use sllog::warn;
-use winit::event::{ElementState, MouseScrollDelta};
+use winit::{event::{ElementState, MouseScrollDelta}, event_loop};
 use winit::{
     dpi::PhysicalSize,
     event::{
         Event,
         WindowEvent
     },
-    event_loop::ControlFlow,
     window::WindowBuilder,
 };
 
 fn main() -> Result<(), StdError> {
     env::set_var("LOG", "4");
+    env::set_var("OPEN_GL", "1");
+    env::remove_var("VULKAN");
 
-    // Window
-    let event_loop = get_event_loop();
-    let window = WindowBuilder::new()
-        .with_title("Vulkan Tutorial (Rust)")
-        .with_inner_size(PhysicalSize::new(1080, 720))
-        .build(&event_loop)?;
-
-    // App
-    let mut app = Application::new(window)?;
-    let mut destroying = false;
-    let mut minimized = false;
+    let event_loop = winit::event_loop::EventLoop::new()?;
     
-    event_loop.run(move |event, _, control_flow| {
+    let mut app = if env::var("OPEN_GL").is_ok() {
+        Application::new_opengl(&event_loop)?
+    } else if env::var("VULKAN").is_ok() {
+        Application::new_vulkan()
+    } else {
+        return Err("A graphics API must be specified! (Set env var as OPEN_GL = 1, or VULKAN = 1)".into());
+    };
+
+    let _ = event_loop.run(move |event, window_target| {
         match event {
-            Event::MainEventsCleared if !destroying && !minimized => {
-                match app.on_update() {
-                    Err(e) => warn!("{:#?}", e),
-                    _ => ()
-                }
-            }
-            Event::WindowEvent {event, .. } => {
-                match event {
-                    WindowEvent::CloseRequested => {
-                        destroying = true;
-                        *control_flow = ControlFlow::Exit;
-                        app.destroy().unwrap();
-                    },
-                    WindowEvent::Resized(size) => {
-                        if size.width == 0 || size.height == 0 {
-                            minimized = true;
-                        }
-                        else {
-                            minimized = false;
-                            app.resized = true;
-                        }
-                    },
-                    WindowEvent::KeyboardInput { input, .. } => {
-                        if let Some(key_code) = input.virtual_keycode {
-                            let state = input.state == ElementState::Pressed;
-
-                            app.core.input.borrow_mut().set_key_state(key_code.into(), state);
-                            app.on_event(&l3gion_rust::lg_core::event::LgEvent::KeyEvent(KeyEvent {
-                                code: input.scancode,
-                                key: key_code.into(),
-                                pressed: state,
-                            })).unwrap();
-                        }
-                    },
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        let button = match button {
-                            winit::event::MouseButton::Left => MouseButton::Left,
-                            winit::event::MouseButton::Right => MouseButton::Right,
-                            winit::event::MouseButton::Middle => MouseButton::Middle,
-                            winit::event::MouseButton::Other(val) => MouseButton::Other(val),
-                        };
-                        let btn_state = state == ElementState::Pressed;
-
-                        app.core.input.borrow_mut().set_mouse_state(button, btn_state);
-                        app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
-                            button: button,
-                            pressed: btn_state,
-                        }))).unwrap();
-                    },
-                    WindowEvent::CursorMoved { position, .. } => {
-                        app.core.input.borrow_mut().set_mouse_position(position.x as f32, position.y as f32);
-                        app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
-                            position: (position.x, position.y),
-                        }))).unwrap();
-                    },
-                    WindowEvent::MouseWheel { delta, .. } => {
-                        if let MouseScrollDelta::LineDelta(x, y) = delta {
-                            app.on_event(&l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ScrollEvent(MouseScrollEvent {
-                                delta: (x, y),
-                            }))).unwrap();
-                        }
-                    },
-                    _ => {}
-                }
-            }
-            _ => {}
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::CloseRequested => {
+                    app.destroy();
+                    window_target.exit()
+                },
+                winit::event::WindowEvent::Resized(window_size) => {
+                    if window_size.width > 0 && window_size.height > 0 {
+                        app.resize(window_size.into()).unwrap()
+                    }
+                },
+                winit::event::WindowEvent::RedrawRequested => {
+                    app.on_update().unwrap();
+                },
+                _ => ()
+            },
+            winit::event::Event::AboutToWait => app.request_redraw(),
+            _ => (),
         }
     });
+    
+    Ok(())
 }
 

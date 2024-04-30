@@ -39,6 +39,6 @@ impl<T: ?Sized> Clone for Rfc<T> {
 #[macro_export]
 macro_rules! as_dyn {
     ($val:expr, $data_type:ty) => {
-        Rfc::from_rc_refcell(&(Rc::new(RefCell::new($val)) as Rc<RefCell<$data_type>>))
+        Rfc::from_rc_refcell(&(std::rc::Rc::new(std::cell::RefCell::new($val)) as std::rc::Rc<std::cell::RefCell<$data_type>>))
     };
 }

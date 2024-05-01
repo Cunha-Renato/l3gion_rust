@@ -1,16 +1,16 @@
 use crate::lg_core::uuid::UUID;
 
-use super::{opengl::opengl_vertex::GlVertex, vertex::LgVertex};
+use super::vertex::Vertex;
 
 #[derive(Debug, Clone)]
-pub struct LgMesh<T: LgVertex + GlVertex> {
+pub struct LgMesh {
     uuid: UUID,
-    pub vertices: Vec<T>,
-    pub indices: Vec<u32>,
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
 }
-impl<T: LgVertex + GlVertex> LgMesh<T> {
+impl LgMesh {
     pub fn new(
-        vertices: Vec<T>,
+        vertices: Vec<Vertex>,
         indices: Vec<u32>,
     ) -> Self
     {
@@ -19,6 +19,12 @@ impl<T: LgVertex + GlVertex> LgMesh<T> {
             vertices,
             indices,
         }
+    }
+    pub fn vertices(&self) -> &[Vertex] {
+        &self.vertices
+    }
+    pub fn indices(&self) -> &[u32] {
+        &self.indices
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid

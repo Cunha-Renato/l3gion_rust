@@ -33,6 +33,7 @@ impl GlTexture {
         ));
 
         gl_check!(gl::GenerateMipmap(gl::TEXTURE_2D));
+        gl_check!(gl::GenerateTextureMipmap(self.id));
     }
 }
 impl Drop for GlTexture {

@@ -1,6 +1,7 @@
 use crate::StdError;
 
-use self::{material::LgMaterial, mesh::LgMesh, opengl::{opengl_renderer::{GlRenderer, GlSpecs}, opengl_vertex::GlVertex}, vertex::LgVertex};
+use self::opengl::opengl_renderer::{GlRenderer, GlSpecs};
+use super::entity::LgEntity;
 
 pub mod vertex;
 pub mod mesh;
@@ -45,8 +46,8 @@ impl Renderer for LgRenderer {
         self.get_mut()?.end_batch()
     }
 
-    unsafe fn draw<T: LgVertex + GlVertex>(&mut self, mesh: &LgMesh<T>, material: &LgMaterial) -> Result<(), StdError> {
-        self.get_mut()?.draw(mesh, material)
+    unsafe fn draw(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+        self.get_mut()?.draw(entity)
     }
 
     unsafe fn render(&mut self) -> Result<(), StdError> {
@@ -65,7 +66,7 @@ impl Renderer for LgRenderer {
 pub(crate) trait Renderer {
     unsafe fn begin_batch(&mut self) -> Result<(), StdError>;
     unsafe fn end_batch(&mut self) -> Result<(), StdError>;
-    unsafe fn draw<T: LgVertex + GlVertex>(&mut self, mesh: &LgMesh<T>, material: &LgMaterial) -> Result<(), StdError>;
+    unsafe fn draw(&mut self, entity: &LgEntity) -> Result<(), StdError>;
     unsafe fn render(&mut self) -> Result<(), StdError>;
     unsafe fn destroy(&mut self) -> Result<(), StdError>;
     unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>;

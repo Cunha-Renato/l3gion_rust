@@ -3,8 +3,8 @@ extern crate gl;
 use std::{collections::HashMap, ffi::CString};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use sllog::info;
-use crate::{gl_check, lg_core::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgMesh, vertex::LgVertex, Renderer}}, StdError};
-use super::{opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex::GlVertex, opengl_vertex_array::GlVertexArray, utils};
+use crate::{gl_check, lg_core::{entity::LgEntity, lg_types::reference::Rfc, renderer::Renderer}, StdError};
+use super::{opengl_mesh::GlMesh, opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex_array::GlVertexArray, utils};
 
 pub(crate) struct GlSpecs {
     pub(crate) gl_context: glutin::context::PossiblyCurrentContext,
@@ -20,9 +20,18 @@ struct GlStorage {
     vaos: HashMap<u128, GlVertexArray>,
 }
 
+#[derive(Default)]
+struct DrawSpec {
+    texture_uuid: u128,
+    vao_uuid: u128,
+    indices_len: usize,
+    program_uuid: u128,
+}
+
 pub(crate) struct GlRenderer {
     specs: GlSpecs,
     storage: GlStorage,
+    to_render: Vec<DrawSpec>
 }
 impl GlRenderer {
     pub fn new(specs: GlSpecs) -> Self {
@@ -46,7 +55,8 @@ impl GlRenderer {
         
         Self {
             specs,
-            storage: GlStorage::default()
+            storage: GlStorage::default(),
+            to_render: Vec::new(),
         }
     }
 }
@@ -59,12 +69,14 @@ impl Renderer for GlRenderer {
         
         Ok(())
     }
-    unsafe fn draw<T: LgVertex + GlVertex>(
+    unsafe fn draw(
         &mut self, 
-        mesh: &LgMesh<T>, 
-        material: &LgMaterial
+        entity: &LgEntity
     ) -> Result<(), StdError> 
     {   
+        let mesh = entity.mesh().borrow();
+        let material = entity.material().borrow();
+
         // Shaders
         let mut shaders = Vec::new();
         for s in material.shaders() {
@@ -83,6 +95,7 @@ impl Renderer for GlRenderer {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 info!("GlTexture, FROM LGTEXTURE: {}, being chached! (OpenGL)", material.texture().borrow().uuid().get_value());
                 let texture = Rfc::new(GlTexture::new(material.texture().clone()));
+
                 texture.borrow().bind();
                 texture.borrow().load();
 
@@ -111,11 +124,11 @@ impl Renderer for GlRenderer {
                 let vao = entry.insert(GlVertexArray::new());
                 vao.bind();
                 vao.bind_buffers();
-                T::set_attrib_locations(vao, program)?;
+                mesh.set_attrib_locations(vao, program)?;
                 
                 // Update the vertex_buffer and the index_buffer.
-                vao.vertex_buffer().set_data(&mesh.vertices, gl::STATIC_DRAW);
-                vao.index_buffer().set_data(&mesh.indices, gl::STATIC_DRAW);
+                vao.vertex_buffer().set_data(mesh.vertices(), gl::STATIC_DRAW);
+                vao.index_buffer().set_data(mesh.indices(), gl::STATIC_DRAW);
                 vao.unbind();
 
                 info!("VAO, FROM MESH: {}, being cached! (OpenGL)", mesh.uuid().get_value());
@@ -124,21 +137,12 @@ impl Renderer for GlRenderer {
             }
         };
         
-        gl_check!(gl::ClearColor(0.5, 0.1, 0.2, 1.0));
-        gl_check!(gl::Clear(gl::COLOR_BUFFER_BIT));
-
-        texture.borrow().bind();
-        texture.borrow().load();
-        vao.bind();
-        program.bind();
-        gl_check!(gl::DrawElements(
-            gl::TRIANGLES, 
-            mesh.indices.len() as i32, 
-            gl::UNSIGNED_INT, 
-            std::ptr::null()
-        ));
-        vao.unbind();
-        program.unbind();
+        self.to_render.push(DrawSpec {
+            texture_uuid: material.texture().borrow().uuid().get_value(),
+            program_uuid: material.uuid().get_value(),
+            vao_uuid: mesh.uuid().get_value(),
+            indices_len: mesh.indices().len(),
+        });
 
         Ok(())
     }
@@ -155,8 +159,32 @@ impl Renderer for GlRenderer {
     }
     
     unsafe fn render(&mut self) -> Result<(), StdError> {
-        self.specs.gl_surface.swap_buffers(&self.specs.gl_context)?;
+        gl_check!(gl::ClearColor(0.5, 0.1, 0.2, 1.0));
+        gl_check!(gl::Clear(gl::COLOR_BUFFER_BIT));
         
+        self.to_render
+            .iter()
+            .for_each(|r| {
+                let texture = self.storage.textures.get(&r.texture_uuid).unwrap();
+                let vao = self.storage.vaos.get(&r.vao_uuid).unwrap();
+                let program = self.storage.programs.get(&r.program_uuid).unwrap();
+                
+                texture.borrow().bind();
+                vao.bind();
+                program.bind();
+                gl_check!(gl::DrawElements(
+                    gl::TRIANGLES,
+                    r.indices_len as i32,
+                    gl::UNSIGNED_INT,
+                    std::ptr::null()
+                ));
+                vao.unbind();
+                program.unbind();
+            });
+        self.to_render.clear();
+
+        self.specs.gl_surface.swap_buffers(&self.specs.gl_context)?;
+
         Ok(())
     }
     

@@ -2,7 +2,7 @@ use crate::StdError;
 
 use super::{
     application::ApplicationCore, entity::LgEntity, event::LgEvent, lg_types::reference::Rfc, renderer::{
-        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, vertex::Vertex
+        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::LgUniform, vertex::Vertex
     }
 };
 use crate::lg_core::renderer::Renderer;
@@ -48,7 +48,7 @@ struct MaterialStorage {
     red: Rfc<LgMaterial>,
 }
 impl MaterialStorage {
-    fn new(shader_storage: &ShaderStorage, tex_storage: &TexStorage) -> Self {
+    fn new(shader_storage: &ShaderStorage, uniforms: Vec<LgUniform>) -> Self {
         let grid = Rfc::new(LgMaterial::new(vec![
                 shader_storage.std_v.clone(),
                 shader_storage.std_f.clone(),

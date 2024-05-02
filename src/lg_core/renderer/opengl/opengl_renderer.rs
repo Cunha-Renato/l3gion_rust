@@ -117,7 +117,7 @@ impl Renderer for GlRenderer {
             }
         };
 
-        // VertexArray 1 per mesh
+        // One VertexArray per Mesh
         let vao = match self.storage.vaos.entry(mesh.uuid().get_value()) {
             std::collections::hash_map::Entry::Occupied(vao) => vao.into_mut(),
             std::collections::hash_map::Entry::Vacant(entry) => {

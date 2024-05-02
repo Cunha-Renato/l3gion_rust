@@ -19,7 +19,6 @@ use winit::{
         Event,
         WindowEvent
     },
-    window::WindowBuilder,
 };
 
 fn main() -> Result<(), StdError> {

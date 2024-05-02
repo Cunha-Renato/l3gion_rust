@@ -21,50 +21,50 @@ impl TexStorage {
     }
 }
 
+struct ShaderStorage {
+    std_v: Rfc<LgShader>,
+    std_f: Rfc<LgShader>,
+}
+impl ShaderStorage {
+    fn new() -> Self {
+        Self {
+            std_v: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .src_code(std::path::Path::new("resources/shaders/src/std_v.vert")).unwrap()
+                .build()
+            ),
+            std_f: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .src_code(std::path::Path::new("resources/shaders/src/std_f.frag")).unwrap()
+                .build()
+            )
+        }
+    }
+}
+
 struct MaterialStorage {
     grid: Rfc<LgMaterial>,
     viking: Rfc<LgMaterial>,
     red: Rfc<LgMaterial>,
 }
 impl MaterialStorage {
-    fn new(tex_storage: &TexStorage) -> Self {
+    fn new(shader_storage: &ShaderStorage, tex_storage: &TexStorage) -> Self {
         let grid = Rfc::new(LgMaterial::new(vec![
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
-                .src_code(std::path::Path::new("resources/shaders/src/std_v.vert")).unwrap()
-                .build()
-            ),
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
-                .src_code(std::path::Path::new("resources/shaders/src/std_f.frag")).unwrap()
-                .build()
-            )],
+                shader_storage.std_v.clone(),
+                shader_storage.std_f.clone(),
+            ],
             tex_storage.grid.clone()
         ));
         let viking = Rfc::new(LgMaterial::new(vec![
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
-                .src_code(std::path::Path::new("resources/shaders/src/std_v.vert")).unwrap()
-                .build()
-            ),
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
-                .src_code(std::path::Path::new("resources/shaders/src/std_f.frag")).unwrap()
-                .build()
-            )],
+                shader_storage.std_v.clone(),
+                shader_storage.std_f.clone(),
+            ],
             tex_storage.viking.clone()
         ));
         let red = Rfc::new(LgMaterial::new(vec![
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
-                .src_code(std::path::Path::new("resources/shaders/src/std_v.vert")).unwrap()
-                .build()
-            ),
-            Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
-                .src_code(std::path::Path::new("resources/shaders/src/red_f.frag")).unwrap()
-                .build()
-            )],
+                shader_storage.std_v.clone(),
+                shader_storage.std_f.clone(),
+            ],
             tex_storage.viking.clone()
         ));
         
@@ -75,7 +75,6 @@ impl MaterialStorage {
         }
     }
 }
-
 
 struct MeshStorage {
     big_quad: Rfc<LgMesh>,
@@ -134,6 +133,7 @@ pub struct TestScene {
     meshes: MeshStorage,
     materials: MaterialStorage,
     textures: TexStorage,
+    shaders: ShaderStorage,
     
     big: LgEntity,
     smol: LgEntity,
@@ -141,23 +141,25 @@ pub struct TestScene {
 impl TestScene {
     pub fn new(core: Rfc<ApplicationCore>) -> Self {
         let textures = TexStorage::new().unwrap();
-        let materials = MaterialStorage::new(&textures);
+        let shaders = ShaderStorage::new();
+        let materials = MaterialStorage::new(&shaders, &textures);
         let meshes = MeshStorage::new();
 
         let big = LgEntity::new(meshes.big_quad.clone(), materials.grid.clone()).unwrap();
-        let smol = LgEntity::new(meshes.med_quad.clone(), materials.red.clone()).unwrap();
+        let smol = LgEntity::new(meshes.med_quad.clone(), materials.grid.clone()).unwrap();
+
         Self {
             app_core: core,
             meshes,
             materials,
             textures,
+            shaders,
             
             big,
             smol,
-        } 
+        }
     }
     pub fn init(&mut self) {
-        
     }
     pub fn on_update(&mut self) {
         unsafe {

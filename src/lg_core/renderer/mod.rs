@@ -8,6 +8,7 @@ pub mod mesh;
 pub mod material;
 pub mod texture;
 pub mod shader;
+pub mod uniform;
 
 pub(crate) mod opengl;
 

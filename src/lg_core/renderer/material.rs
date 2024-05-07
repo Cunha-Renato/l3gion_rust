@@ -6,13 +6,15 @@ use super::{shader::LgShader, texture::LgTexture, uniform::LgUniform};
 pub struct LgMaterial {
     uuid: UUID,
     shaders: Vec<Rfc<LgShader>>,
-    uniforms: Vec<LgUniform>,
+    texture: Option<Rfc<LgTexture>>,
+    pub uniforms: Vec<LgUniform>,
 }
 impl LgMaterial {
-    pub fn new(shaders: Vec<Rfc<LgShader>>, uniforms: Vec<LgUniform>) -> Self {
+    pub fn new(shaders: Vec<Rfc<LgShader>>, texture: Option<Rfc<LgTexture>>, uniforms: Vec<LgUniform>) -> Self {
         Self {
             uuid: UUID::generate(),
             shaders,
+            texture,
             uniforms,
         }
     }
@@ -22,7 +24,7 @@ impl LgMaterial {
     pub fn shaders(&self) -> &[Rfc<LgShader>] {
         &self.shaders
     }
-    pub fn uniforms(&self) -> &[LgUniform] {
-        &self.uniforms
+    pub fn texture(&self) -> &Option<Rfc<LgTexture>> {
+        &self.texture
     }
 }

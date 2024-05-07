@@ -2,6 +2,7 @@ pub(crate) mod opengl_init;
 pub(crate) mod opengl_renderer;
 pub(crate) mod opengl_shader;
 pub(crate) mod opengl_buffer;
+pub(crate) mod opengl_uniform_buffer;
 pub(crate) mod opengl_texture;
 pub(crate) mod opengl_mesh;
 pub(crate) mod utils;

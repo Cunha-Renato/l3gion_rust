@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 use crate::gl_check;
 
 #[derive(Debug)]
@@ -15,6 +17,13 @@ impl GlBuffer {
     pub unsafe fn bind(&self) {
         gl_check!(gl::BindBuffer(self.target, self.id));
     }
+    pub unsafe fn bind_base(&self, binding_index: usize) {
+        gl_check!(gl::BindBufferBase(
+            self.target, 
+            binding_index as gl::types::GLuint, 
+            self.id
+        ));
+    }
     pub unsafe fn unbind(&self) {
         gl_check!(gl::BindBuffer(self.target, 0));
     }
@@ -26,6 +35,28 @@ impl GlBuffer {
             data_bytes.as_ptr() as *const _,
             usage
         ));
+    }
+    pub unsafe fn set_data_full(
+        &self,
+        size: usize,
+        data: *const c_void,
+        usage: gl::types::GLuint
+    ) {
+        gl_check!(gl::BufferData(
+            self.target, 
+            size as gl::types::GLsizeiptr, 
+            data, 
+            usage
+        ));
+    }
+    pub unsafe fn map(&self, access: gl::types::GLenum) -> *mut std::ffi::c_void {
+        let result;
+        gl_check!(result = gl::MapBuffer(self.target, access));
+        
+        result
+    }
+    pub unsafe fn unmap(&self) {
+        gl_check!(gl::UnmapBuffer(self.target));
     }
     pub fn id(&self) -> gl::types::GLuint {
         self.id

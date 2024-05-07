@@ -1,6 +1,6 @@
 use crate::StdError;
 
-use self::opengl::opengl_renderer::{GlRenderer, GlSpecs};
+use self::{material::LgMaterial, opengl::opengl_renderer::{GlRenderer, GlSpecs}, uniform::{GlUniform, LgUniform}};
 use super::entity::LgEntity;
 
 pub mod vertex;
@@ -62,11 +62,16 @@ impl Renderer for LgRenderer {
     unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         self.get()?.resize(new_size)
     }
+    
+    unsafe fn read_buffer<T: Clone>(&mut self, material: &LgMaterial, uniform: usize) -> Result<T, StdError> {
+        self.get_mut()?.read_buffer(material, uniform)
+    }
 }
 
 pub(crate) trait Renderer {
     unsafe fn begin_batch(&mut self) -> Result<(), StdError>;
     unsafe fn end_batch(&mut self) -> Result<(), StdError>;
+    unsafe fn read_buffer<T: Clone>(&mut self, material: &LgMaterial, uniform: usize) -> Result<T, StdError>;
     unsafe fn draw(&mut self, entity: &LgEntity) -> Result<(), StdError>;
     unsafe fn render(&mut self) -> Result<(), StdError>;
     unsafe fn destroy(&mut self) -> Result<(), StdError>;

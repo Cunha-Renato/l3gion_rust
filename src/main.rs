@@ -12,7 +12,7 @@ use l3gion_rust::lg_core::{
     };
 use l3gion_rust::StdError;
 
-use winit::{event::{ElementState, MouseScrollDelta}, event_loop};
+use winit::{event::MouseScrollDelta, event_loop};
 use winit::{
     dpi::PhysicalSize,
     event::{
@@ -50,6 +50,52 @@ fn main() -> Result<(), StdError> {
                 },
                 winit::event::WindowEvent::RedrawRequested => {
                     app.on_update().unwrap();
+                },
+                winit::event::WindowEvent::KeyboardInput { event, .. } => {
+                    match event.physical_key {
+                        winit::keyboard::PhysicalKey::Code(key_code) => {
+                            LgInput::get().unwrap().set_key_state(
+                                key_code.into(), 
+                                event.state.is_pressed()
+                            );
+
+                            app.on_event(l3gion_rust::lg_core::event::LgEvent::KeyEvent( KeyEvent {
+                                code: 0,
+                                key: key_code.into(),
+                                pressed: event.state.is_pressed(),
+                            }))
+                        },
+                        _ => ()
+                    }
+                },
+                winit::event::WindowEvent::MouseInput { state, button, .. } => {
+                    let button = match button {
+                        winit::event::MouseButton::Left => MouseButton::Left,
+                            winit::event::MouseButton::Right => MouseButton::Right,
+                            winit::event::MouseButton::Middle => MouseButton::Middle,
+                            winit::event::MouseButton::Other(val) => MouseButton::Other(val),
+                            _ => MouseButton::Other(0)
+                    };
+                    LgInput::get().unwrap().set_mouse_state(button, state.is_pressed());
+
+                    app.on_event(l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
+                        button,
+                        pressed: state.is_pressed(),
+                    })));
+                },
+                winit::event::WindowEvent::CursorMoved { position, .. } => {
+                    LgInput::get().unwrap().set_mouse_position(position.x as f32, position.y as f32);
+
+                    app.on_event(l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
+                        position: (position.x, position.y),
+                    })));
+                },
+                winit::event::WindowEvent::MouseWheel { delta, .. } => {
+                    if let MouseScrollDelta::LineDelta(x, y) = delta {
+                        app.on_event(l3gion_rust::lg_core::event::LgEvent::MouseEvent(MouseEvent::ScrollEvent(MouseScrollEvent {
+                            delta: (x, y),
+                        })));
+                    }
                 },
                 _ => ()
             },

@@ -1,6 +1,7 @@
 #version 450
 
 in vec2 vert_tex_coord;
+
 out vec4 frag_color;
 
 uniform sampler2D texture0;

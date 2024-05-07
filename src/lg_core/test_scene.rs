@@ -1,12 +1,17 @@
-use crate::StdError;
+use std::{borrow::Borrow, mem::size_of};
+
+use crate::{lg_core::input::LgInput, StdError};
 
 use super::{
-    application::ApplicationCore, entity::LgEntity, event::LgEvent, lg_types::reference::Rfc, renderer::{
-        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::LgUniform, vertex::Vertex
+    application::ApplicationCore, entity::LgEntity, event::{LgEvent, MouseEvent}, lg_types::reference::Rfc, renderer::{
+        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::{GlUniform, LgUniform}, vertex::Vertex
     }
 };
 use crate::lg_core::renderer::Renderer;
 use nalgebra_glm as glm;
+use winit::window;
+
+const DEPTH_ARRAY_SCALE: usize = 10_000;
 
 struct TexStorage {
     grid: Rfc<LgTexture>,
@@ -24,6 +29,10 @@ impl TexStorage {
 struct ShaderStorage {
     std_v: Rfc<LgShader>,
     std_f: Rfc<LgShader>,
+    uniform_v: Rfc<LgShader>,
+    uniform_f: Rfc<LgShader>,
+    obj_picker_v: Rfc<LgShader>,
+    obj_picker_f: Rfc<LgShader>,
 }
 impl ShaderStorage {
     fn new() -> Self {
@@ -37,6 +46,26 @@ impl ShaderStorage {
                 .stage(super::renderer::shader::ShaderStage::FRAGMENT)
                 .src_code(std::path::Path::new("resources/shaders/src/std_f.frag")).unwrap()
                 .build()
+            ),
+            uniform_v: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .src_code(std::path::Path::new("resources/shaders/src/uniform_v.vert")).unwrap()
+                .build()
+            ),
+            uniform_f: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .src_code(std::path::Path::new("resources/shaders/src/uniform_f.frag")).unwrap()
+                .build()
+            ),
+            obj_picker_v: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .src_code(std::path::Path::new("resources/shaders/src/obj_picker_v.vert")).unwrap()
+                .build()
+            ),
+            obj_picker_f: Rfc::new(LgShader::builder()
+                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .src_code(std::path::Path::new("resources/shaders/src/obj_picker_f.frag")).unwrap()
+                .build()
             )
         }
     }
@@ -46,32 +75,53 @@ struct MaterialStorage {
     grid: Rfc<LgMaterial>,
     viking: Rfc<LgMaterial>,
     red: Rfc<LgMaterial>,
+    uniform_color: Rfc<LgMaterial>,
+    obj_picker: Rfc<LgMaterial>,
 }
 impl MaterialStorage {
-    fn new(shader_storage: &ShaderStorage, uniforms: Vec<LgUniform>) -> Self {
+    fn new(shader_storage: &ShaderStorage, tex_storage: &TexStorage) -> Self {
         let grid = Rfc::new(LgMaterial::new(vec![
                 shader_storage.std_v.clone(),
                 shader_storage.std_f.clone(),
             ],
-            tex_storage.grid.clone()
+            Some(tex_storage.grid.clone()),
+            Vec::new()
         ));
         let viking = Rfc::new(LgMaterial::new(vec![
                 shader_storage.std_v.clone(),
                 shader_storage.std_f.clone(),
             ],
-            tex_storage.viking.clone()
+            Some(tex_storage.viking.clone()),
+            Vec::new(),
         ));
         let red = Rfc::new(LgMaterial::new(vec![
                 shader_storage.std_v.clone(),
                 shader_storage.std_f.clone(),
             ],
-            tex_storage.viking.clone()
+            Some(tex_storage.viking.clone()),
+            Vec::new(),
+        ));
+        let uniform_color = Rfc::new(LgMaterial::new(vec![
+                shader_storage.uniform_v.clone(),
+                shader_storage.uniform_f.clone(),
+            ],
+            None,
+            Vec::new(),
+        ));
+        let obj_picker = Rfc::new(LgMaterial::new(vec![
+                shader_storage.obj_picker_v.clone(),
+                shader_storage.obj_picker_f.clone(),
+            ],
+            None,
+            Vec::new(),
         ));
         
         Self {
             grid,
             viking,
             red,
+            uniform_color,
+            obj_picker,
         }
     }
 }
@@ -128,6 +178,48 @@ impl MeshStorage {
     }
 }
 
+#[repr(C)]
+struct UBO {
+    data: glm::Vec4,
+}
+impl GlUniform for UBO {
+    fn size(&self) -> usize {
+        size_of::<Self>()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[repr(C, align(16))]
+#[derive(Debug, Clone)]
+struct SSBO {
+    data: glm::Vec4,
+}
+impl GlUniform for SSBO {
+    fn size(&self) -> usize {
+        size_of::<Self>()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct Data {
+    mouse_position: glm::Vec2,    
+    uuid: u32,
+}
+impl GlUniform for Data {
+    fn size(&self) -> usize {
+        size_of::<Self>()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 pub struct TestScene {
     app_core: Rfc<ApplicationCore>,
     meshes: MeshStorage,
@@ -139,17 +231,53 @@ pub struct TestScene {
     smol: LgEntity,
 }
 impl TestScene {
-    pub fn new(core: Rfc<ApplicationCore>) -> Self {
+    pub fn new(app_core: Rfc<ApplicationCore>) -> Self {
         let textures = TexStorage::new().unwrap();
         let shaders = ShaderStorage::new();
         let materials = MaterialStorage::new(&shaders, &textures);
         let meshes = MeshStorage::new();
 
-        let big = LgEntity::new(meshes.big_quad.clone(), materials.grid.clone()).unwrap();
-        let smol = LgEntity::new(meshes.med_quad.clone(), materials.grid.clone()).unwrap();
+        let mut big = LgEntity::new(meshes.big_quad.clone(), materials.obj_picker.clone()).unwrap();
+        let mut smol = LgEntity::new(meshes.med_quad.clone(), materials.obj_picker.clone()).unwrap();
+        
+        // Setting the uniform for smol
+        let mut data = Data {
+            mouse_position: glm::vec2(0.0, 0.0),
+            uuid: 10,
+        };
+        smol.uniforms.push(LgUniform::new(
+            "data", 
+            super::renderer::uniform::LgUniformType::STRUCT, 
+            0, 
+            0, 
+            data.clone()
+        ));
+        data.uuid = 20;
+        big.uniforms.push(LgUniform::new(
+            "data", 
+            super::renderer::uniform::LgUniformType::STRUCT, 
+            0, 
+            0, 
+            data
+        ));
+        
+        // Setting the uniform for obj_picker material
+        let ssbo = SSBO {
+            data: glm::Vec4::new(0.0, 0.0, 0.0, 0.0),
+        };
+        materials.obj_picker
+            .borrow_mut()
+            .uniforms = vec![LgUniform::new(
+                "ssbo", 
+                super::renderer::uniform::LgUniformType::STORAGE_BUFFER, 
+                2, 
+                0, 
+                ssbo
+            ),
+        ];
 
         Self {
-            app_core: core,
+            app_core,
             meshes,
             materials,
             textures,
@@ -161,18 +289,56 @@ impl TestScene {
     }
     pub fn init(&mut self) {
     }
+    fn update_entity(&mut self) {
+        let mut data = Data {
+            mouse_position: LgInput::get().unwrap().get_mouse_position(),
+            uuid: 10,
+        };
+        data.mouse_position.y = self.app_core.borrow().window.borrow().size().1 as f32 - data.mouse_position.y;
+        self.smol.uniforms[0] = LgUniform::new(
+            "data", 
+            super::renderer::uniform::LgUniformType::STRUCT, 
+            0, 
+            0, 
+            data.clone()
+        );
+        data.uuid = 20;
+        self.big.uniforms[0] = LgUniform::new(
+            "data", 
+            super::renderer::uniform::LgUniformType::STRUCT, 
+            0, 
+            0, 
+            data.clone()
+        );
+    }
     pub fn on_update(&mut self) {
+        self.update_entity();
+        
         unsafe {
-            self.app_core.borrow_mut().renderer.borrow_mut().draw(
+            self.app_core.borrow().renderer.borrow_mut().draw(
                 &self.big
             ).unwrap();
-            self.app_core.borrow_mut().renderer.borrow_mut().draw(
+            self.app_core.borrow().renderer.borrow_mut().draw(
                 &self.smol
             ).unwrap()
         }
     }
     pub fn on_event(&mut self, event: &LgEvent) {
-        
+        match event {
+            LgEvent::WindowEvent(_) => (),
+                LgEvent::KeyEvent(_) => (),
+                LgEvent::MouseEvent(event) => {
+                    if let MouseEvent::ButtonEvent(_) = event {
+                        let ssbo = unsafe { self.app_core.borrow()
+                            .renderer.borrow_mut()
+                            .read_buffer::<SSBO>(&self.materials.obj_picker.borrow(), 0)
+                            .unwrap()
+                        };
+                        
+                        println!("{:?}", ssbo.data);
+                    }
+                },
+        }
     }
     pub fn destroy(&mut self) {
 

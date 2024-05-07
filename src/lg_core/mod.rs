@@ -6,5 +6,6 @@ pub mod application;
 pub mod renderer;
 pub mod camera;
 pub mod entity;
+pub mod window;
 
 pub mod test_scene;

@@ -1,10 +1,13 @@
 extern crate gl;
-
+use std::mem::size_of;
+use std::ptr::copy_nonoverlapping as memcpy;
 use std::{collections::HashMap, ffi::CString};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use sllog::info;
-use crate::{gl_check, lg_core::{entity::LgEntity, lg_types::reference::Rfc, renderer::Renderer}, StdError};
-use super::{opengl_mesh::GlMesh, opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex_array::GlVertexArray, utils};
+use crate::lg_core::renderer::uniform::LgUniform;
+use crate::{gl_check, lg_core::{entity::LgEntity, lg_types::reference::Rfc, renderer::{material::LgMaterial, Renderer}}, StdError};
+use super::opengl_uniform_buffer::GlUniformBuffer;
+use super::{opengl_buffer::GlBuffer, opengl_mesh::GlMesh, opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex_array::GlVertexArray, utils};
 
 pub(crate) struct GlSpecs {
     pub(crate) gl_context: glutin::context::PossiblyCurrentContext,
@@ -18,14 +21,17 @@ struct GlStorage {
     textures: HashMap<u128, Rfc<GlTexture>>,
     programs: HashMap<u128, GlProgram>,
     vaos: HashMap<u128, GlVertexArray>,
+    entity_ubos: HashMap<u128, Vec<GlUniformBuffer>>,
+    material_ubos: HashMap<u128, Vec<GlUniformBuffer>>,
 }
 
 #[derive(Default)]
 struct DrawSpec {
-    texture_uuid: u128,
+    texture_uuid: Option<u128>,
     vao_uuid: u128,
     indices_len: usize,
     program_uuid: u128,
+    entity_uuid: u128,
 }
 
 pub(crate) struct GlRenderer {
@@ -83,24 +89,28 @@ impl Renderer for GlRenderer {
             shaders.push(match self.storage.shaders.entry(s.borrow().uuid().get_value()) {
                 std::collections::hash_map::Entry::Occupied(shdr) => shdr.into_mut(),
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    info!("GlShader: {}, being chached! (OpenGL)", s.borrow().uuid().get_value());
+                    info!("[OpenGL]: GlShader: {}, being chached!", s.borrow().uuid().get_value());
                     entry.insert(Rfc::new(GlShader::new(s.clone())?))
                 },
             }.clone());
         }
 
         // Texture
-        let texture = match self.storage.textures.entry(material.texture().borrow().uuid().get_value()) {
-            std::collections::hash_map::Entry::Occupied(tex) => tex.into_mut(),
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                info!("GlTexture, FROM LGTEXTURE: {}, being chached! (OpenGL)", material.texture().borrow().uuid().get_value());
-                let texture = Rfc::new(GlTexture::new(material.texture().clone()));
+        let (_gl_tex, gl_tex_id) = if let Some(texture) = material.texture() {
+            (Some(match self.storage.textures.entry(texture.borrow().uuid().get_value()) {
+                std::collections::hash_map::Entry::Occupied(tex) => tex.into_mut(),
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    info!("[OpenGL]: GlTexture, FROM LGTEXTURE: {}, being chached!", texture.borrow().uuid().get_value());
+                    let texture = Rfc::new(GlTexture::new(texture.clone()));
 
-                texture.borrow().bind();
-                texture.borrow().load();
+                    texture.borrow().bind();
+                    texture.borrow().load();
 
-                entry.insert(texture)
-            },
+                    entry.insert(texture)
+                },
+            }), Some(texture.borrow().uuid().get_value()))
+        } else {
+            (None, None)
         };
 
         // Shader Program
@@ -111,14 +121,96 @@ impl Renderer for GlRenderer {
                     .add_shaders(shaders)
                     .build()?;
                 
-                info!("GlProgram, FROM MATERIAL: {}, being cached! (OpenGL)", material.uuid().get_value());
+                info!("[OpenGL]: GlProgram, FROM MATERIAL: {}, being cached!", material.uuid().get_value());
                 
                 entry.insert(program)
             }
         };
+        if self.storage.material_ubos.get(&material.uuid().get_value()).is_none() {
+            program.bind();
+            let ubos: Vec<GlUniformBuffer> = material.uniforms
+                .iter()
+                .map(|u| {
+                    let usage = match u.u_type() {
+                        crate::lg_core::renderer::uniform::LgUniformType::STRUCT => gl::UNIFORM_BUFFER,
+                        crate::lg_core::renderer::uniform::LgUniformType::STORAGE_BUFFER => gl::SHADER_STORAGE_BUFFER,
+                        _ => gl::UNIFORM_BUFFER
+                    };
+
+                    let buffer = Rfc::new(GlBuffer::new(usage));
+                    let ubo = GlUniformBuffer::new(buffer, u.binding());
+                    ubo.bind();
+                    ubo.bind_base();
+                    ubo.buffer.borrow().set_data_full(
+                        u.data.size(), 
+                        u.data(), 
+                        gl::STATIC_DRAW
+                    );
+                    ubo.unbind();
+                    info!("[OpenGL]: Uniform Buffer 
+                        name: {}
+                        type: {:?}
+                        set: {}
+                        binding: {}", u.name(), u.u_type(), u.set(), u.binding()
+                    );
+                    ubo
+                }).collect();
+            program.unbind();
+
+            self.storage.material_ubos.insert(material.uuid().get_value(), ubos);
+        }
+
+        program.bind();
+        if let Some(ubos) = self.storage.entity_ubos.get(&entity.uuid().get_value()) {
+            // Update buffers
+            for (i, ubo) in ubos.iter().enumerate() {
+                let entity_uniform = &entity.uniforms[i];
+
+                ubo.bind();
+                ubo.bind_base();
+                ubo.buffer.borrow().set_data_full(
+                    entity_uniform.data.size(), 
+                    entity_uniform.data(), 
+                    gl::STATIC_DRAW
+                );
+                ubo.unbind();
+            }
+                
+        } else {
+            let ubos: Vec<GlUniformBuffer> = entity.uniforms
+                .iter()
+                .map(|u| {
+                    let usage = match u.u_type() {
+                        crate::lg_core::renderer::uniform::LgUniformType::STRUCT => gl::UNIFORM_BUFFER,
+                        crate::lg_core::renderer::uniform::LgUniformType::STORAGE_BUFFER => gl::SHADER_STORAGE_BUFFER,
+                        _ => gl::UNIFORM_BUFFER
+                    };
+
+                    let buffer = Rfc::new(GlBuffer::new(usage));
+                    let ubo = GlUniformBuffer::new(buffer, u.binding());
+                    ubo.bind();
+                    ubo.bind_base();
+                    ubo.buffer.borrow().set_data_full(
+                        u.data.size(), 
+                        u.data(), 
+                        gl::STATIC_DRAW
+                    );
+                    ubo.unbind();
+                    info!("[OpenGL]: Uniform Buffer 
+                        name: {}
+                        type: {:?}
+                        set: {}
+                        binding: {}", u.name(), u.u_type(), u.set(), u.binding()
+                    );
+                    ubo
+                }).collect();
+
+            self.storage.entity_ubos.insert(entity.uuid().get_value(), ubos);
+        }
+        program.unbind();
 
         // One VertexArray per Mesh
-        let vao = match self.storage.vaos.entry(mesh.uuid().get_value()) {
+        let _vao = match self.storage.vaos.entry(mesh.uuid().get_value()) {
             std::collections::hash_map::Entry::Occupied(vao) => vao.into_mut(),
             std::collections::hash_map::Entry::Vacant(entry) => {
                 let vao = entry.insert(GlVertexArray::new());
@@ -131,15 +223,16 @@ impl Renderer for GlRenderer {
                 vao.index_buffer().set_data(mesh.indices(), gl::STATIC_DRAW);
                 vao.unbind();
 
-                info!("VAO, FROM MESH: {}, being cached! (OpenGL)", mesh.uuid().get_value());
+                info!("[OpenGL]: VAO, FROM MESH: {}, being cached!", mesh.uuid().get_value());
 
                 vao
             }
         };
         
         self.to_render.push(DrawSpec {
-            texture_uuid: material.texture().borrow().uuid().get_value(),
+            texture_uuid: gl_tex_id,
             program_uuid: material.uuid().get_value(),
+            entity_uuid: entity.uuid().get_value(),
             vao_uuid: mesh.uuid().get_value(),
             indices_len: mesh.indices().len(),
         });
@@ -165,13 +258,26 @@ impl Renderer for GlRenderer {
         self.to_render
             .iter()
             .for_each(|r| {
-                let texture = self.storage.textures.get(&r.texture_uuid).unwrap();
                 let vao = self.storage.vaos.get(&r.vao_uuid).unwrap();
                 let program = self.storage.programs.get(&r.program_uuid).unwrap();
+                let material_ubos = self.storage.material_ubos.get(&r.program_uuid).unwrap();
+
+                let entity_ubos = match self.storage.entity_ubos.get(&r.entity_uuid) {
+                    Some(val) => val.clone(),
+                    None => Vec::new()
+                };
+
+
+                if let Some(tex_id) = r.texture_uuid { 
+                    let texture = self.storage.textures.get(&tex_id).unwrap();
+                    texture.borrow().bind();
+                };
                 
-                texture.borrow().bind();
                 vao.bind();
                 program.bind();
+                material_ubos.iter().for_each(|u| u.bind_base());
+                entity_ubos.iter().for_each(|u| u.bind_base());
+
                 gl_check!(gl::DrawElements(
                     gl::TRIANGLES,
                     r.indices_len as i32,
@@ -188,6 +294,22 @@ impl Renderer for GlRenderer {
         Ok(())
     }
     
+    unsafe fn read_buffer<T: Clone>(&mut self, material: &LgMaterial, uniform: usize) -> Result<T, StdError> {
+        gl_check!(gl::MemoryBarrier(gl::UNIFORM_BARRIER_BIT));
+        if let Some(ubos) = self.storage.material_ubos.get(&material.uuid().get_value()) {
+            if let Some(ubo) = ubos.get(uniform) {
+                ubo.bind();
+                let data = ubo.buffer.borrow().map(gl::READ_ONLY) as *const T;
+                let result = (*data).clone();
+                ubo.buffer.borrow().unmap();
+
+                return Ok(result);
+            }
+        }
+
+        Err("Couldn't find buffer! (OpenGL)".into())
+    }    
+
     unsafe fn destroy(&mut self) -> Result<(), StdError> {
         
         Ok(())

@@ -1,4 +1,4 @@
-use glutin::{config::GlConfig, context::NotCurrentGlContext, display::{GetGlDisplay, GlDisplay}};
+use glutin::{config::GlConfig, context::NotCurrentGlContext, display::{GetGlDisplay, GlDisplay}, surface::GlSurface};
 use glutin_winit::GlWindow;
 use sllog::info;
 use raw_window_handle::HasRawWindowHandle;
@@ -31,7 +31,7 @@ pub fn init_opengl(event_loop: &winit::event_loop::EventLoop<()>, window_builder
     let gl_display = gl_config.display();
 
     let contex_attributes = glutin::context::ContextAttributesBuilder::new()
-        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(3, 3))))
+        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(4, 2))))
         .with_debug(true)
         .build(Some(raw_window_handle));
 

@@ -29,7 +29,6 @@ impl LgInput {
     
     pub fn get() -> Result<MutexGuard<'static, LgInput>, StdError> {
         if INPUT.get().is_none() {
-            println!("Is None");
             match INPUT.set(Mutex::new(LgInput::new())) {
                 Err(_) => return Err("Failed to create Input! (LgInput)".into()),
                 _ => ()

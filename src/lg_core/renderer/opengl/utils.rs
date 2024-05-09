@@ -4,7 +4,7 @@ use sllog::error;
 macro_rules! gl_vertex {
     ($struct_name:ident, $($fields:tt), *) => {
         impl GlVertex for $struct_name {
-            unsafe fn set_attrib_locations(vao: &mut GlVertexArray, program: &mut GlProgram) -> Result<(), StdError> {
+            unsafe fn set_attrib_locations(vao: &GlVertexArray, program: &mut GlProgram) -> Result<(), StdError> {
                 const fn size_of_raw<T>(_: *const T) -> usize {
                     core::mem::size_of::<T>()
                 }

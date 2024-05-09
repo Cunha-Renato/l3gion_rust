@@ -5,7 +5,10 @@ pub(crate) mod opengl_buffer;
 pub(crate) mod opengl_uniform_buffer;
 pub(crate) mod opengl_texture;
 pub(crate) mod opengl_mesh;
+pub(crate) mod opengl_material;
+pub(crate) mod opengl_object_chache;
 pub(crate) mod utils;
+
 pub mod opengl_program; // Leaking, for now I don't know how to not
 pub mod opengl_vertex_array;
 pub mod opengl_vertex;

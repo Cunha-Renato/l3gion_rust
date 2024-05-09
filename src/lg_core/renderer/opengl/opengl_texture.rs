@@ -1,6 +1,6 @@
 use crate::{gl_check, lg_core::{lg_types::reference::Rfc, renderer::texture::LgTexture}};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct GlTexture {
     id: gl::types::GLuint,
     texture: Rfc<LgTexture>,

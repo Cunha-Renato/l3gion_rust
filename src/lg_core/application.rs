@@ -47,9 +47,9 @@ impl Application {
         self.core.borrow()._window.request_redraw();
     }
     pub fn on_update(&mut self) -> Result<(), StdError>{
+        self.scene.on_update();
         unsafe { self.core.borrow().renderer.borrow_mut().render()?; }
         
-        self.scene.on_update();
         Ok(())
     }
     pub fn on_event(&mut self, event: LgEvent) {

@@ -54,6 +54,11 @@ impl GlShader {
         self.id
     }
 }
+impl PartialEq for GlShader {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
 impl Drop for GlShader {
     fn drop(&mut self) {
         unsafe {

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug)]
 pub struct Rfc<T: ?Sized> {
     data: Rc<RefCell<T>>,
 }
@@ -35,7 +35,11 @@ impl<T: ?Sized> Clone for Rfc<T> {
         Self { data: self.data.clone() }
     }
 }
-
+impl<T: PartialEq> PartialEq for Rfc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        *self.data.borrow() == *other.data.borrow()
+    }
+}
 #[macro_export]
 macro_rules! as_dyn {
     ($val:expr, $data_type:ty) => {

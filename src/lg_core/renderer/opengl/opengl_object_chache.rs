@@ -31,7 +31,11 @@ impl GlObjectsCache {
         let texture = match self.textures.entry(texture.borrow().uuid().clone()) {
             std::collections::hash_map::Entry::Occupied(tex) => tex.into_mut(),
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(Rfc::new(GlTexture::new(texture.clone())))
+                let texture = Rfc::new(GlTexture::new(texture.clone()));
+                texture.borrow().bind();
+                texture.borrow().load();
+
+                entry.insert(texture)
             },
         };
         

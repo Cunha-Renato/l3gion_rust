@@ -11,15 +11,7 @@ use l3gion_rust::lg_core::{
         }, input::LgInput
     };
 use l3gion_rust::StdError;
-
-use winit::{event::MouseScrollDelta, event_loop};
-use winit::{
-    dpi::PhysicalSize,
-    event::{
-        Event,
-        WindowEvent
-    },
-};
+use winit::event::MouseScrollDelta;
 
 fn main() -> Result<(), StdError> {
     env::set_var("LOG", "4");

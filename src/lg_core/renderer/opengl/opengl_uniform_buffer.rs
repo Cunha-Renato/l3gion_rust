@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::lg_core::{lg_types::reference::Rfc, renderer::uniform::LgUniform};
 
 use super::opengl_buffer::GlBuffer;

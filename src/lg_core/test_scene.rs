@@ -234,8 +234,8 @@ impl TestScene {
         let materials = MaterialStorage::new(&shaders, &textures);
         let meshes = MeshStorage::new();
 
-        let mut big = LgEntity::new(meshes.big_quad.clone(), materials.grid.clone()).unwrap();
-        let mut smol = LgEntity::new(meshes.med_quad.clone(), materials.obj_picker.clone()).unwrap();
+        let big = LgEntity::new(meshes.big_quad.clone(), materials.grid.clone()).unwrap();
+        let mut smol = LgEntity::new(meshes.med_quad.clone(), materials.viking.clone()).unwrap();
         
         // Setting the uniform for smol
         let mut data = Data {
@@ -250,13 +250,6 @@ impl TestScene {
             data.clone()
         ));
         data.uuid = 20;
-        /* big.uniforms.push(LgUniform::new(
-            "data", 
-            super::renderer::uniform::LgUniformType::STRUCT, 
-            0, 
-            0, 
-            data
-        )); */
         
         // Setting the uniform for obj_picker material
         let ssbo = SSBO {
@@ -300,13 +293,6 @@ impl TestScene {
             data.clone()
         );
         data.uuid = 20;
-        /* self.big.uniforms[0] = LgUniform::new(
-            "data", 
-            super::renderer::uniform::LgUniformType::STRUCT, 
-            0, 
-            0, 
-            data.clone()
-        ) */;
     }
     pub fn on_update(&mut self) {
         self.update_entity();
@@ -326,13 +312,13 @@ impl TestScene {
                 LgEvent::KeyEvent(_) => (),
                 LgEvent::MouseEvent(event) => {
                     if let MouseEvent::ButtonEvent(_) = event {
-                        let ssbo = unsafe { self.app_core.borrow()
+                        /* let ssbo = unsafe { self.app_core.borrow()
                             .renderer.borrow_mut()
                             .read_buffer::<SSBO>(&self.materials.obj_picker.borrow(), 0)
                             .unwrap()
                         };
                         
-                        println!("{:?}", ssbo.data);
+                        println!("{:?}", ssbo.data) */;
                     }
                 },
         }

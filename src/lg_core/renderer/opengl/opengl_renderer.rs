@@ -1,10 +1,9 @@
 extern crate gl;
-use std::{borrow::Borrow, collections::HashMap, ffi::CString};
+use std::ffi::CString;
 use glutin::{display::GlDisplay, surface::GlSurface};
-use sllog::info;
-use crate::{gl_check, lg_core::{entity::LgEntity, lg_types::reference::Rfc, renderer::{material::LgMaterial, Renderer}, uuid::UUID}, StdError};
-use super::{opengl_material::GlMaterial, opengl_object_chache::GlObjectsCache, opengl_uniform_buffer::GlUniformBuffer};
-use super::{opengl_buffer::GlBuffer, opengl_mesh::GlMesh, opengl_program::GlProgram, opengl_shader::GlShader, opengl_texture::GlTexture, opengl_vertex_array::GlVertexArray, utils};
+use crate::{gl_check, lg_core::{entity::LgEntity, renderer::{material::LgMaterial, Renderer}, uuid::UUID}, StdError};
+use super::opengl_object_chache::GlObjectsCache;
+use super::{opengl_mesh::GlMesh, utils};
 
 pub(crate) struct GlSpecs {
     pub(crate) gl_context: glutin::context::PossiblyCurrentContext,
@@ -70,8 +69,8 @@ impl Renderer for GlRenderer {
         entity: &LgEntity
     ) -> Result<(), StdError> 
     {   
-        let mesh = entity.mesh().borrow();
-        let material = entity.material().borrow();
+        let mesh = entity.mesh.borrow();
+        let material = entity.material.borrow();
 
         self.storage.set_vao(mesh.uuid().clone());
         self.storage.set_material(&material)?;
@@ -81,11 +80,8 @@ impl Renderer for GlRenderer {
         let gl_material = self.storage.materials.get(material.uuid()).unwrap();
 
         // Texture
-        let tex_id = if let Some(texture) = &gl_material.texture {
-            texture.borrow().bind();
-            texture.borrow().load();
-
-            Some(material.texture().as_ref().unwrap().borrow().uuid().clone())
+        let tex_id = if gl_material.texture.is_some() {
+           Some(material.texture().as_ref().unwrap().borrow().uuid().clone())
         } else {
             None
         };

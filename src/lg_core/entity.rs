@@ -5,8 +5,8 @@ use super::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgM
 pub struct LgEntity {
     uuid: UUID,
     pub uniforms: Vec<LgUniform>,
-    mesh: Rfc<LgMesh>,
-    material: Rfc<LgMaterial>,
+    pub mesh: Rfc<LgMesh>,
+    pub material: Rfc<LgMaterial>,
 }
 impl LgEntity {
     pub fn new(mesh: Rfc<LgMesh>, material: Rfc<LgMaterial>) -> Result<Self, StdError> {
@@ -19,11 +19,5 @@ impl LgEntity {
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid        
-    }
-    pub fn mesh(&self) -> &Rfc<LgMesh> {
-        &self.mesh
-    }
-    pub fn material(&self) -> &Rfc<LgMaterial> {
-        &self.material
     }
 }

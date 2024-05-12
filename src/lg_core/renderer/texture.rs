@@ -4,6 +4,7 @@ use crate::{lg_core::uuid::UUID, StdError};
 #[derive(Debug, Default)]
 pub struct LgTexture {
     uuid: UUID,
+    name: String, // TODO: Placeholder
     width: u32,
     height: u32,
     bytes: Vec<u8>,
@@ -36,7 +37,7 @@ impl lg_renderer::renderer::lg_texture::Texture for LgTexture {
     }
 }
 impl LgTexture {
-    pub fn new(path: &str) -> Result<Self, StdError> {
+    pub fn new(name: &str, path: &str) -> Result<Self, StdError> {
         let image = image::io::Reader::open(path)?.decode()?;
 
         let width = image.width();
@@ -46,6 +47,7 @@ impl LgTexture {
 
         Ok(Self {
             uuid: UUID::generate(),
+            name: String::from(name),
             width,
             height,
             bytes,
@@ -57,6 +59,9 @@ impl LgTexture {
     // Get
     pub fn uuid(&self) -> &UUID {
         &self.uuid
+    }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 impl Hash for LgTexture {

@@ -1,6 +1,6 @@
 use crate::StdError;
 
-use super::{event::LgEvent, lg_types::reference::Rfc, test_scene::TestScene, uuid::UUID, window::LgWindow};
+use super::{event::LgEvent, lg_types::reference::Rfc, renderer::LgRenderer, test_scene::TestScene, uuid::UUID, window::LgWindow};
 
 const WIDTH: u32 = 1080;
 const HEIGHT: u32 = 720;
@@ -8,7 +8,7 @@ const HEIGHT: u32 = 720;
 pub struct ApplicationCore {
     _window: winit::window::Window,
     pub window: LgWindow,
-    pub renderer: Rfc<lg_renderer::renderer::LgRenderer<UUID>>,
+    pub renderer: LgRenderer,
 }
 pub struct Application {
     core: Rfc<ApplicationCore>,
@@ -28,7 +28,7 @@ impl Application {
         let core = Rfc::new(ApplicationCore {
             _window: window,
             window: LgWindow::new(WIDTH, HEIGHT),
-            renderer: Rfc::new(renderer),
+            renderer: LgRenderer::new(renderer)?,
         });
         let scene = TestScene::new(core.clone());
         
@@ -41,8 +41,9 @@ impl Application {
         self.core.borrow()._window.request_redraw();
     }
     pub fn on_update(&mut self) -> Result<(), StdError>{
+        unsafe { self.core.borrow().renderer.begin(); }
         self.scene.on_update();
-        
+        unsafe { self.core.borrow().renderer.end()?; }
         Ok(())
     }
     pub fn on_event(&mut self, event: LgEvent) {
@@ -51,7 +52,7 @@ impl Application {
     pub fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
         unsafe {
             self.core.borrow_mut().window.set_size(new_size);
-            self.core.borrow().renderer.borrow().resize(new_size)?;
+            self.core.borrow().renderer.resize(new_size)?;
             
             Ok(())
         }

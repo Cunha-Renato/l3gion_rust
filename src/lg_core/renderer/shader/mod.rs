@@ -14,6 +14,7 @@ use crate::{lg_core::uuid::UUID, StdError};
 #[derive(Debug, Clone)]
 pub struct LgShader {
     uuid: UUID,
+    name: String, // TODO: Placeholder
     bytes: Vec<u8>,
     stage: ShaderStage,
     src_code: String,
@@ -22,8 +23,11 @@ impl LgShader {
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
-    pub fn builder() -> LgShaderBuilder {
-        LgShaderBuilder::new()
+    pub fn builder(name: &str) -> LgShaderBuilder {
+        LgShaderBuilder::new(name)
+    }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 impl lg_renderer::renderer::lg_shader::Shader for LgShader {
@@ -47,10 +51,11 @@ pub struct LgShaderBuilder {
     shader: LgShader
 }
 impl LgShaderBuilder {
-    pub fn new() -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
             shader: LgShader {
                 uuid: UUID::generate(),
+                name: String::from(name),
                 bytes: Vec::new(),
                 stage: ShaderStage::VERTEX,
                 src_code: String::default()

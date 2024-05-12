@@ -7,17 +7,20 @@ use super::vertex::Vertex;
 #[derive(Debug, Clone)]
 pub struct LgMesh {
     uuid: UUID,
+    name: String, // TODO: Placeholder
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
 }
 impl LgMesh {
     pub fn new(
+        name: &str,
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
     ) -> Self
     {
         Self {
             uuid: UUID::generate(),
+            name: String::from(name),
             vertices,
             indices,
         }
@@ -30,6 +33,9 @@ impl LgMesh {
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid
+    }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 impl Hash for LgMesh {

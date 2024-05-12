@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::lg_core::uuid::UUID;
 
 use super::vertex::Vertex;
@@ -28,5 +30,10 @@ impl LgMesh {
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid
+    }
+}
+impl Hash for LgMesh {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uuid.hash(state);
     }
 }

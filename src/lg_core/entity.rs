@@ -1,6 +1,8 @@
+use lg_renderer::renderer::lg_uniform::LgUniform;
+
 use crate::StdError;
 
-use super::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgMesh, uniform::LgUniform}, uuid::UUID};
+use super::{lg_types::reference::Rfc, renderer::{material::LgMaterial, mesh::LgMesh}, uuid::UUID};
 
 pub struct LgEntity {
     uuid: UUID,

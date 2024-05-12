@@ -4,10 +4,10 @@ use crate::{lg_core::input::LgInput, StdError};
 
 use super::{
     application::ApplicationCore, entity::LgEntity, event::{LgEvent, MouseEvent}, lg_types::reference::Rfc, renderer::{
-        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::{GlUniform, LgUniform}, vertex::Vertex
+        material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, vertex::Vertex
     }
 };
-use crate::lg_core::renderer::Renderer;
+use lg_renderer::renderer::lg_uniform::{GlUniform, LgUniform};
 use nalgebra_glm as glm;
 
 struct TexStorage {
@@ -35,32 +35,32 @@ impl ShaderStorage {
     fn new() -> Self {
         Self {
             std_v: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::VERTEX)
                 .src_code(std::path::Path::new("resources/shaders/src/std_v.vert")).unwrap()
                 .build()
             ),
             std_f: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::FRAGMENT)
                 .src_code(std::path::Path::new("resources/shaders/src/std_f.frag")).unwrap()
                 .build()
             ),
             uniform_v: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::VERTEX)
                 .src_code(std::path::Path::new("resources/shaders/src/uniform_v.vert")).unwrap()
                 .build()
             ),
             uniform_f: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::FRAGMENT)
                 .src_code(std::path::Path::new("resources/shaders/src/uniform_f.frag")).unwrap()
                 .build()
             ),
             obj_picker_v: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::VERTEX)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::VERTEX)
                 .src_code(std::path::Path::new("resources/shaders/src/obj_picker_v.vert")).unwrap()
                 .build()
             ),
             obj_picker_f: Rfc::new(LgShader::builder()
-                .stage(super::renderer::shader::ShaderStage::FRAGMENT)
+                .stage(lg_renderer::renderer::lg_shader::ShaderStage::FRAGMENT)
                 .src_code(std::path::Path::new("resources/shaders/src/obj_picker_f.frag")).unwrap()
                 .build()
             )
@@ -244,7 +244,7 @@ impl TestScene {
         };
         smol.uniforms.push(LgUniform::new(
             "data", 
-            super::renderer::uniform::LgUniformType::STRUCT, 
+            lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
             0, 
             0, 
             data.clone()
@@ -259,7 +259,7 @@ impl TestScene {
             .borrow_mut()
             .uniforms = vec![LgUniform::new(
                 "ssbo", 
-                super::renderer::uniform::LgUniformType::STORAGE_BUFFER, 
+                lg_renderer::renderer::lg_uniform::LgUniformType::STORAGE_BUFFER, 
                 2, 
                 0, 
                 ssbo
@@ -287,7 +287,7 @@ impl TestScene {
         data.mouse_position.y = self.app_core.borrow().window.borrow().size().1 as f32 - data.mouse_position.y;
         self.smol.uniforms[0] = LgUniform::new(
             "data", 
-            super::renderer::uniform::LgUniformType::STRUCT, 
+            lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
             0, 
             0, 
             data.clone()
@@ -296,15 +296,6 @@ impl TestScene {
     }
     pub fn on_update(&mut self) {
         self.update_entity();
-        
-        unsafe {
-            self.app_core.borrow().renderer.borrow_mut().draw(
-                &self.big
-            ).unwrap();
-            self.app_core.borrow().renderer.borrow_mut().draw(
-                &self.smol
-            ).unwrap()
-        }
     }
     pub fn on_event(&mut self, event: &LgEvent) {
         match event {
@@ -318,7 +309,7 @@ impl TestScene {
                             .unwrap()
                         };
                         
-                        println!("{:?}", ssbo.data) */;
+                        println!("{:?}", ssbo.data); */
                     }
                 },
         }

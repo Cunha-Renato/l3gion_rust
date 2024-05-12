@@ -1,30 +1,8 @@
 pub(crate) mod utils;
 
-use std::io::Read;
+use std::{hash::Hash, io::Read};
+use lg_renderer::renderer::lg_shader::ShaderStage;
 use crate::{lg_core::uuid::UUID, StdError};
-
-#[derive(Debug, Clone, Copy)]
-pub enum ShaderStage {
-    VERTEX,
-    FRAGMENT,
-    COMPUTE,
-}
-impl ShaderStage {
-    pub fn to_shaderc_stage(&self) -> Result<shaderc::ShaderKind, StdError> {
-        match self {
-            ShaderStage::VERTEX => Ok(shaderc::ShaderKind::Vertex),
-            ShaderStage::FRAGMENT => Ok(shaderc::ShaderKind::Fragment),
-            ShaderStage::COMPUTE => Err("Invalid ShaderStage! (Shader)".into()),
-        }
-    }
-    pub fn to_opengl_stage(&self) -> Result<u32, StdError> {
-        match self {
-            ShaderStage::VERTEX => Ok(gl::VERTEX_SHADER),
-            ShaderStage::FRAGMENT => Ok(gl::FRAGMENT_SHADER),
-            ShaderStage::COMPUTE => Err("Invalid ShaderStage! (Shader)".into()),
-        }
-    }
-}
 
 /// src_code can be empty if you are using SPIR-V, bytes can be empty if you are using raw glsl.
 ///
@@ -41,22 +19,30 @@ pub struct LgShader {
     src_code: String,
 }
 impl LgShader {
-    pub fn builder() -> LgShaderBuilder {
-        LgShaderBuilder::new()
-    }
-    pub fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-    pub fn stage(&self) -> ShaderStage {
-        self.stage
-    }
-    pub fn src_code(&self) -> &str {
-        &self.src_code
-    }
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
+    pub fn builder() -> LgShaderBuilder {
+        LgShaderBuilder::new()
+    }
 }
+impl lg_renderer::renderer::lg_shader::Shader for LgShader {
+    fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    fn stage(&self) -> ShaderStage {
+        self.stage
+    }
+    fn src_code(&self) -> &str {
+        &self.src_code
+    }
+}
+impl Hash for LgShader {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uuid.hash(state);
+    }
+}
+
 pub struct LgShaderBuilder {
     shader: LgShader
 }

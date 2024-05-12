@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{hash::Hash, mem::size_of};
 use crate::{lg_core::uuid::UUID, StdError};
 
 #[derive(Debug, Default)]
@@ -9,6 +9,31 @@ pub struct LgTexture {
     bytes: Vec<u8>,
     size: u64,
     mip_level: u32,
+}
+impl lg_renderer::renderer::lg_texture::Texture for LgTexture {
+    fn width(&self) -> u32 {
+        self.width
+    }
+    fn height(&self) -> u32 {
+        self.height
+    }
+    fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    fn size(&self) -> u64 {
+        self.size
+    }
+    fn mip_level(&self) -> u32 {
+        self.mip_level
+    }
+    
+    fn texture_type(&self) -> lg_renderer::renderer::lg_texture::TextureType {
+        lg_renderer::renderer::lg_texture::TextureType::UNSIGNED_BYTE
+    }
+    
+    fn texture_format(&self) -> lg_renderer::renderer::lg_texture::TextureFormat {
+        lg_renderer::renderer::lg_texture::TextureFormat::RGBA
+    }
 }
 impl LgTexture {
     pub fn new(path: &str) -> Result<Self, StdError> {
@@ -33,19 +58,9 @@ impl LgTexture {
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-    pub fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-    pub fn size(&self) -> u64 {
-        self.size
-    }
-    pub fn mip_level(&self) -> u32 {
-        self.mip_level
+}
+impl Hash for LgTexture {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uuid.hash(state);
     }
 }

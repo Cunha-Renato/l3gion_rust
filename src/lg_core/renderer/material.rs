@@ -1,6 +1,9 @@
-use crate::lg_core::{lg_types::reference::Rfc, uuid::UUID};
+use std::hash::Hash;
 
-use super::{shader::LgShader, texture::LgTexture, uniform::LgUniform};
+use lg_renderer::renderer::lg_uniform::LgUniform;
+
+use crate::lg_core::{lg_types::reference::Rfc, uuid::UUID};
+use super::{shader::LgShader, texture::LgTexture};
 
 #[derive(Clone)]
 pub struct LgMaterial {
@@ -26,5 +29,10 @@ impl LgMaterial {
     }
     pub fn texture(&self) -> &Option<Rfc<LgTexture>> {
         &self.texture
+    }
+}
+impl Hash for LgMaterial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.uuid.hash(state);
     }
 }

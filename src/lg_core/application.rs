@@ -1,6 +1,6 @@
 use crate::StdError;
 
-use super::{event::LgEvent, lg_types::reference::Rfc, renderer::LgRenderer, test_scene::TestScene, uuid::UUID, window::LgWindow};
+use super::{event::LgEvent, lg_types::reference::Rfc, renderer::LgRenderer, test_scene::TestScene, window::LgWindow};
 
 const WIDTH: u32 = 1080;
 const HEIGHT: u32 = 720;

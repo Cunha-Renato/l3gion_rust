@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 
-use std::{collections::HashSet, mem::size_of, path::Path};
+use std::path::Path;
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{GlUniform, LgUniform, LgUniformType}};
 use crate::StdError;
-use self::{material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::SSBO, vertex::Vertex};
+use self::{material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::{SSBO, UBO}, vertex::Vertex};
 use super::{entity::LgEntity, uuid::UUID};
 use nalgebra_glm as glm;
 
@@ -27,10 +27,10 @@ impl ObjectStorage {
             LgMesh::new(
                 "big_quad", 
                 vec![
-                    Vertex { position: glm::vec2(-0.5, -0.5), tex_coord: glm::vec2(0.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.5, -0.5), tex_coord: glm::vec2(1.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.5,  0.5), tex_coord: glm::vec2(1.0, 0.0) },
-                    Vertex { position: glm::vec2(-0.5,  0.5), tex_coord: glm::vec2(0.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.5, -0.5, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.5, -0.5, 0.0), tex_coord: glm::vec2(1.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.5,  0.5, 0.0), tex_coord: glm::vec2(1.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.5,  0.5, 0.0), tex_coord: glm::vec2(0.0, 0.0) },
                 ], 
                 vec![
                     0, 1, 2,
@@ -40,10 +40,10 @@ impl ObjectStorage {
             LgMesh::new(
                 "med_quad",
                 vec![
-                    Vertex { position: glm::vec2(-0.3, -0.3), tex_coord: glm::vec2(0.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.3, -0.3), tex_coord: glm::vec2(1.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.3,  0.3), tex_coord: glm::vec2(1.0, 0.0) },
-                    Vertex { position: glm::vec2(-0.3,  0.3), tex_coord: glm::vec2(0.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.3, -0.3, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.3, -0.3, 0.0), tex_coord: glm::vec2(1.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.3,  0.3, 0.0), tex_coord: glm::vec2(1.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.3,  0.3, 0.0), tex_coord: glm::vec2(0.0, 0.0) },
                 ], 
                 vec![
                     0, 1, 2,
@@ -53,10 +53,10 @@ impl ObjectStorage {
             LgMesh::new(
                 "smol_quad",
                 vec![
-                    Vertex { position: glm::vec2(-0.15, -0.15), tex_coord: glm::vec2(0.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.15, -0.15), tex_coord: glm::vec2(1.0, 1.0) },
-                    Vertex { position: glm::vec2( 0.15,  0.15), tex_coord: glm::vec2(1.0, 0.0) },
-                    Vertex { position: glm::vec2(-0.15,  0.15), tex_coord: glm::vec2(0.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.15, -0.15, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.15, -0.15, 0.0), tex_coord: glm::vec2(1.0, 1.0) },
+                    Vertex { position: glm::vec3( 0.15,  0.15, 0.0), tex_coord: glm::vec2(1.0, 0.0) },
+                    Vertex { position: glm::vec3(-0.15,  0.15, 0.0), tex_coord: glm::vec2(0.0, 0.0) },
                 ], 
                 vec![
                     0, 1, 2,
@@ -100,7 +100,7 @@ impl ObjectStorage {
         ];
 
         let ssbo = SSBO {
-            data: glm::vec4(0.0, 0.0, 0.0, 0.0),
+            data: glm::UVec4::new(0, 0, 0, 0),
         };
         let materials = vec![
             LgMaterial::new(
@@ -116,6 +116,12 @@ impl ObjectStorage {
                 vec![]
             ),
             LgMaterial::new(
+                "uniform",
+                vec!["uniform_v".to_string(), "uniform_f".to_string()],
+                None,
+                vec![],
+            ),
+            LgMaterial::new(
                 "obj_picker", 
                 vec!["obj_picker_v".to_string(), "obj_picker_f".to_string()], 
                 None,
@@ -124,6 +130,7 @@ impl ObjectStorage {
                     LgUniformType::STORAGE_BUFFER, 
                     2, 
                     0, 
+                    false,
                     ssbo
                 )]
             ),
@@ -170,7 +177,8 @@ impl LgRenderer {
         for shader in material.shaders() {
             shaders.push(self.obj_storage.shaders
                 .iter()
-                .find(|s| s.name() == shader).unwrap()
+                .find(|s| s.name() == shader)
+                .map(|s| (s.uuid().clone(), s)).unwrap()
             );
         }
         let entity_ubos = &entity.uniforms;
@@ -195,6 +203,28 @@ impl LgRenderer {
         self.renderer.resize(new_size)?;
 
         Ok(())
+    }
+    pub unsafe fn read_material_ubo<T: Clone>(&self, material_name: &str, uniform_name: &str) -> Result<T, StdError> {
+        let material = self.get_material(material_name).unwrap();
+        let (index, _) = material.uniforms
+            .iter()
+            .enumerate()
+            .find(|(_, u)| {
+                u.name() == uniform_name
+            }).unwrap();
+        
+        self.renderer.read_uniform_buffer::<T>(material.uuid().clone(), index)
+    }
+    pub unsafe fn reset_material_ubo(&self, material_name: &str, uniform_name: &str) -> Result<(), StdError> {
+        let material = self.get_material(material_name).unwrap();
+        let (index, uniform) = material.uniforms
+            .iter()
+            .enumerate()
+            .find(|(_, u)| {
+                u.name() == uniform_name
+            }).unwrap();
+
+        self.renderer.set_uniform_buffer(material.uuid().clone(), index, uniform)
     }
 }
 impl LgRenderer {

@@ -1,6 +1,6 @@
 #version 450
 
-in vec2 position;
+in vec3 position;
 in vec2 tex_coord;
 
 layout(binding = 0) uniform UBO {
@@ -13,5 +13,5 @@ out vec4 vert_ubo_data;
 void main() {
     vert_tex_coord = tex_coord;
     vert_ubo_data = ubo.data;
-    gl_Position = vec4(position, 0.0, 1.0);
+    gl_Position = vec4(position, 1.0);
 }

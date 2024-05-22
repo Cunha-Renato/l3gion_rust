@@ -1,9 +1,7 @@
 use std::hash::Hash;
 
-use lg_renderer::renderer::lg_uniform::LgUniform;
-
-use crate::lg_core::{lg_types::reference::Rfc, uuid::UUID};
-use super::{shader::LgShader, texture::LgTexture};
+use crate::lg_core::uuid::UUID;
+use super::uniform::Uniform;
 
 #[derive(Clone)]
 pub struct LgMaterial {
@@ -13,10 +11,10 @@ pub struct LgMaterial {
     texture: Option<Rfc<LgTexture>>, */
     shaders: Vec<String>, // TODO: Replace with UUID
     texture: Option<String>, // TODO: Replace with UUID
-    pub uniforms: Vec<LgUniform>,
+    pub uniforms: Vec<Uniform>,
 }
 impl LgMaterial {
-    pub fn new(name: &str, shaders: Vec<String>, texture: Option<String>, uniforms: Vec<LgUniform>) -> Self {
+    pub fn new(name: &str, shaders: Vec<String>, texture: Option<String>, uniforms: Vec<Uniform>) -> Self {
         Self {
             uuid: UUID::generate(),
             name: String::from(name),

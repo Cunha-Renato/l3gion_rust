@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 
-use std::path::Path;
-use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{GlUniform, LgUniform, LgUniformType}};
+use std::{borrow::Borrow, path::Path};
+use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}};
 use crate::StdError;
-use self::{material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform::{SSBO, UBO}, vertex::Vertex};
+use self::{material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform_struct::{SSBO, UBO}, vertex::Vertex};
 use super::{entity::LgEntity, uuid::UUID};
 use nalgebra_glm as glm;
 
@@ -13,6 +13,8 @@ pub mod material;
 pub mod texture;
 pub mod shader;
 pub mod uniform;
+pub mod buffer;
+pub mod uniform_struct;
 
 struct ObjectStorage {
     meshes: Vec<LgMesh>,
@@ -125,7 +127,7 @@ impl ObjectStorage {
                 "obj_picker", 
                 vec!["obj_picker_v".to_string(), "obj_picker_f".to_string()], 
                 None,
-                vec![LgUniform::new(
+                vec![self::uniform::Uniform::new_with_data(
                     "ssbo", 
                     LgUniformType::STORAGE_BUFFER, 
                     2, 
@@ -166,11 +168,10 @@ impl LgRenderer {
             .find(|m| m.name() == &entity.material).unwrap();
 
         let texture = if let Some(texture) = material.texture() {
-            let tex = self.obj_storage.textures
+            self.obj_storage.textures
                 .iter()
-                .find(|t| t.name() == texture).unwrap();
-            
-            Some((tex.uuid().clone(), tex))
+                .map(|t| (t.uuid().clone(), t))
+                .find(|(_, t)| t.name() == texture)
         } else { None };
 
         let mut shaders = Vec::new();
@@ -181,14 +182,17 @@ impl LgRenderer {
                 .map(|s| (s.uuid().clone(), s)).unwrap()
             );
         }
-        let entity_ubos = &entity.uniforms;
-        let material_ubos = &material.uniforms;
+        let ubos = entity.uniforms
+            .iter()
+            .chain(material.uniforms.iter())
+            .map(|ubo| (ubo.buffer.borrow().uuid().clone(), ubo))
+            .collect::<Vec<_>>();
 
         self.renderer.draw(
             (mesh.uuid().clone(), mesh.vertices(), mesh.indices()), 
             texture, 
             (material.uuid().clone(), &shaders), 
-            vec![(entity.uuid().clone(), entity_ubos), (material.uuid().clone(), material_ubos)]
+            ubos
         )?;
         
         Ok(())
@@ -213,7 +217,7 @@ impl LgRenderer {
                 u.name() == uniform_name
             }).unwrap();
         
-        self.renderer.read_uniform_buffer::<T>(material.uuid().clone(), index)
+        self.renderer.read_uniform_buffer::<T>(material.uniforms[index].buffer.borrow().uuid().clone(), index)
     }
     pub unsafe fn reset_material_ubo(&self, material_name: &str, uniform_name: &str) -> Result<(), StdError> {
         let material = self.get_material(material_name).unwrap();
@@ -224,7 +228,8 @@ impl LgRenderer {
                 u.name() == uniform_name
             }).unwrap();
 
-        self.renderer.set_uniform_buffer(material.uuid().clone(), index, uniform)
+        // self.renderer.set_uniform_buffer(uniform.buffer.uuid().clone(), index, uniform)
+        Ok(())
     }
 }
 impl LgRenderer {

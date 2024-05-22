@@ -1,37 +1,86 @@
-use std::mem::size_of;
-use lg_renderer::renderer::lg_uniform::GlUniform;
-use nalgebra_glm as glm;
+use std::ops::Deref;
 
-macro_rules! impl_gluniform {
-    ($struct_name:ident) => {
-        impl GlUniform for $struct_name {
-            fn size(&self) -> usize {
-                std::mem::size_of::<Self>()
-            }
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
+use lg_renderer::renderer::lg_buffer::*;
+use crate::lg_core::lg_types::reference::Rfc;
+use super::buffer::Buffer;
+
+#[derive(Clone)]
+pub struct Uniform {
+    name: String,
+    u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+    binding: usize,
+    set: usize,
+    update_data: bool,
+    pub buffer: Rfc<Buffer>,
+}
+impl Uniform {
+    pub fn new(
+        name: &str,
+        u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+        binding: usize,
+        set: usize,
+        update_data: bool,
+        buffer: Rfc<Buffer>
+    ) -> Self 
+    {
+        Self {
+            name: name.to_string(),
+            u_type,
+            binding,
+            set,
+            update_data,
+            buffer
         }
-    };
+    }
+    pub fn new_with_data(
+        name: &str,
+        u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+        binding: usize,
+        set: usize,
+        update_data: bool,
+        data: impl LgBufferData
+    ) -> Self 
+    {
+        Self {
+            name: name.to_string(),
+            u_type,
+            binding,
+            set, 
+            update_data,
+            buffer: Rfc::new(Buffer::new(data))
+        }
+    }
 }
+impl lg_renderer::renderer::lg_uniform::LgUniform for Uniform {
+    fn name(&self) -> &str {
+        &self.name
+    }
 
-#[repr(C)]
-pub struct UBO {
-    pub transform: glm::Mat4,
-}
-impl_gluniform!(UBO);
+    fn u_type(&self) -> lg_renderer::renderer::lg_uniform::LgUniformType {
+        self.u_type
+    }
 
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct SSBO {
-    pub data: glm::UVec4,
-}
-impl_gluniform!(SSBO);
+    fn binding(&self) -> usize {
+        self.binding
+    }
 
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct Data {
-    pub mouse_position: glm::Vec2,    
-    pub uuid: u32,
+    fn set(&self) -> usize {
+        self.set
+    }
+
+    fn update_data(&self) -> bool {
+        self.update_data
+    }
+    
+    fn data_size(&self) -> usize {
+        self.buffer.borrow().data_size()
+    }
+    
+    fn get_raw_data(&self) -> *const std::ffi::c_void {
+        self.buffer.borrow().get_raw_data()
+    }
+    
+    fn set_data(&mut self, data: impl LgBufferData) {
+        self.buffer.borrow_mut().set_data(data)
+    }
 }
-impl_gluniform!(Data);

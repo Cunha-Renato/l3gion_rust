@@ -1,10 +1,8 @@
-use lg_renderer::renderer::lg_uniform::LgUniform;
-
-use super::uuid::UUID;
+use super::{renderer::uniform::Uniform, uuid::UUID};
 
 pub struct LgEntity {
     uuid: UUID,
-    pub uniforms: Vec<LgUniform>,
+    pub uniforms: Vec<Uniform>,
     pub mesh: String,
     pub material: String,
 }

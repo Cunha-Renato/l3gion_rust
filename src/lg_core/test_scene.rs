@@ -1,8 +1,9 @@
-use crate::lg_core::{input::LgInput, renderer::uniform::SSBO};
+use crate::lg_core::{input::LgInput, renderer::uniform_struct::SSBO};
 
 use super::{
-    application::ApplicationCore, entity::LgEntity, event::{LgEvent, MouseEvent}, lg_types::reference::Rfc, renderer::uniform::Data
+    application::ApplicationCore, entity::LgEntity, event::{LgEvent, MouseEvent}, lg_types::reference::Rfc, renderer::uniform_struct::Data
 };
+use super::renderer::uniform::Uniform;
 use lg_renderer::renderer::lg_uniform::{LgUniform, LgUniformType};
 use nalgebra_glm as glm;
 
@@ -23,7 +24,7 @@ impl TestScene {
             mouse_position: glm::vec2(0.0, 0.0),
             uuid: 0
         };
-        smol.uniforms.push(LgUniform::new(
+        smol.uniforms.push(Uniform::new_with_data(
             "data", 
             LgUniformType::STRUCT, 
             0, 
@@ -31,7 +32,7 @@ impl TestScene {
             true,
             data.clone()
         ));
-        big.uniforms.push(LgUniform::new(
+        big.uniforms.push(Uniform::new_with_data(
             "data", 
             LgUniformType::STRUCT, 
             0, 
@@ -89,12 +90,12 @@ impl TestScene {
     pub fn on_event(&mut self, event: &LgEvent) {
         match event {
             LgEvent::WindowEvent(_) => (),
-                LgEvent::KeyEvent(_) => (),
-                LgEvent::MouseEvent(event) => {
-                    if let MouseEvent::ButtonEvent(e) = event {
-                        self.pick_object = e.pressed;
-                    }
-                },
+            LgEvent::KeyEvent(_) => (),
+            LgEvent::MouseEvent(event) => {
+                if let MouseEvent::ButtonEvent(e) = event {
+                    self.pick_object = e.pressed;
+                }
+            },
         }
     }
     pub fn destroy(&mut self) {

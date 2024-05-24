@@ -1,10 +1,10 @@
 #![allow(non_camel_case_types)]
 
-use std::{borrow::Borrow, path::Path};
+use std::path::Path;
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}};
 use crate::StdError;
-use self::{material::LgMaterial, mesh::LgMesh, shader::LgShader, texture::LgTexture, uniform_struct::{SSBO, UBO}, vertex::Vertex};
-use super::{entity::LgEntity, uuid::UUID};
+use self::{material::LgMaterial, mesh::Mesh, shader::Shader, texture::Texture, uniform_struct::SSBO, vertex::Vertex};
+use super::{entity::LgEntity, resoruce_manager::ResourceManager, uuid::UUID};
 use nalgebra_glm as glm;
 
 pub mod vertex;
@@ -17,16 +17,16 @@ pub mod buffer;
 pub mod uniform_struct;
 
 struct ObjectStorage {
-    meshes: Vec<LgMesh>,
-    shaders: Vec<LgShader>,
-    textures: Vec<LgTexture>,
+    meshes: Vec<Mesh>,
+    shaders: Vec<Shader>,
+    textures: Vec<Texture>,
     materials: Vec<LgMaterial>
 }
 impl ObjectStorage {
     fn new() -> Result<Self, StdError> {
         // Meshes
         let meshes = vec![
-            LgMesh::new(
+            Mesh::new(
                 "big_quad", 
                 vec![
                     Vertex { position: glm::vec3(-0.5, -0.5, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
@@ -39,7 +39,7 @@ impl ObjectStorage {
                     2, 3, 0
                 ]
             ),
-            LgMesh::new(
+            Mesh::new(
                 "med_quad",
                 vec![
                     Vertex { position: glm::vec3(-0.3, -0.3, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
@@ -52,7 +52,7 @@ impl ObjectStorage {
                     2, 3, 0
                 ]
             ),
-            LgMesh::new(
+            Mesh::new(
                 "smol_quad",
                 vec![
                     Vertex { position: glm::vec3(-0.15, -0.15, 0.0), tex_coord: glm::vec2(0.0, 1.0) },
@@ -69,27 +69,27 @@ impl ObjectStorage {
         
         // Shaders
         let shaders = vec![
-            LgShader::builder("std_v")
+            Shader::builder("std_v")
                 .stage(ShaderStage::VERTEX)
                 .src_code(Path::new("resources/shaders/src/std_v.vert")).unwrap()
                 .build(),
-            LgShader::builder("std_f")
+            Shader::builder("std_f")
                 .stage(ShaderStage::FRAGMENT)
                 .src_code(Path::new("resources/shaders/src/std_f.frag")).unwrap()
                 .build(),
-            LgShader::builder("uniform_v")
+            Shader::builder("uniform_v")
                 .stage(ShaderStage::VERTEX)
                 .src_code(Path::new("resources/shaders/src/uniform_v.vert")).unwrap()
                 .build(),
-            LgShader::builder("uniform_f")
+            Shader::builder("uniform_f")
                 .stage(ShaderStage::FRAGMENT)
                 .src_code(Path::new("resources/shaders/src/uniform_f.frag")).unwrap()
                 .build(),
-            LgShader::builder("obj_picker_v")
+            Shader::builder("obj_picker_v")
                 .stage(ShaderStage::VERTEX)
                 .src_code(Path::new("resources/shaders/src/obj_picker_v.vert")).unwrap()
                 .build(),
-            LgShader::builder("obj_picker_f")
+            Shader::builder("obj_picker_f")
                 .stage(ShaderStage::FRAGMENT)
                 .src_code(Path::new("resources/shaders/src/obj_picker_f.frag")).unwrap()
                 .build(),
@@ -97,8 +97,18 @@ impl ObjectStorage {
 
         // Textures
         let textures = vec![
-            LgTexture::new("grid", "resources/textures/grid.png")?,
-            LgTexture::new("viking", "resources/textures/viking.png")?,
+            Texture::new(
+                "grid", 
+                "resources/textures/grid.png", 
+                lg_renderer::renderer::lg_texture::TextureFormat::RGBA, 
+                lg_renderer::renderer::lg_texture::TextureType::UNSIGNED_BYTE
+            )?,
+            Texture::new(
+                "viking", 
+                "resources/textures/viking.png", 
+                lg_renderer::renderer::lg_texture::TextureFormat::RGBA,
+                lg_renderer::renderer::lg_texture::TextureType::UNSIGNED_BYTE,
+            )?,
         ];
 
         let ssbo = SSBO {
@@ -233,32 +243,32 @@ impl LgRenderer {
     }
 }
 impl LgRenderer {
-    pub fn get_mesh(&self, name: &str) -> Option<&LgMesh> {
+    pub fn get_mesh(&self, name: &str) -> Option<&Mesh> {
         self.obj_storage.meshes
             .iter()
             .find(|m| m.name() == name)
     }
-    pub fn get_mut_mesh(&mut self, name: &str) -> Option<&mut LgMesh> {
+    pub fn get_mut_mesh(&mut self, name: &str) -> Option<&mut Mesh> {
         self.obj_storage.meshes
             .iter_mut()
             .find(|m| m.name() == name)
     }
-    pub fn get_shader(&self, name: &str) -> Option<&LgShader> {
+    pub fn get_shader(&self, name: &str) -> Option<&Shader> {
         self.obj_storage.shaders
             .iter()
             .find(|s| s.name() == name)
     }
-    pub fn get_mut_shader(&mut self, name: &str) -> Option<&mut LgShader> {
+    pub fn get_mut_shader(&mut self, name: &str) -> Option<&mut Shader> {
         self.obj_storage.shaders
             .iter_mut()
             .find(|s| s.name() == name)
     }
-    pub fn get_texture(&self, name: &str) -> Option<&LgTexture> {
+    pub fn get_texture(&self, name: &str) -> Option<&Texture> {
         self.obj_storage.textures
             .iter()
             .find(|t| t.name() == name)
     }
-    pub fn get_mut_texture(&mut self, name: &str) -> Option<&mut LgTexture> {
+    pub fn get_mut_texture(&mut self, name: &str) -> Option<&mut Texture> {
         self.obj_storage.textures
             .iter_mut()
             .find(|t| t.name() == name)

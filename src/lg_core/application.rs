@@ -1,6 +1,5 @@
-use crate::StdError;
-
-use super::{event::LgEvent, lg_types::reference::Rfc, renderer::LgRenderer, test_scene::TestScene, window::LgWindow};
+use crate::{as_dyn, StdError};
+use super::{event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, resoruce_manager::ResourceManager, uuid::UUID, window::LgWindow};
 
 const WIDTH: u32 = 1080;
 const HEIGHT: u32 = 720;
@@ -12,7 +11,7 @@ pub struct ApplicationCore {
 }
 pub struct Application {
     core: Rfc<ApplicationCore>,
-    scene: TestScene,
+    layers: Vec<Rfc<dyn Layer>>
 }
 impl Application {
     pub fn new_vulkan() -> Self {
@@ -30,24 +29,51 @@ impl Application {
             window: LgWindow::new(WIDTH, HEIGHT),
             renderer: LgRenderer::new(renderer)?,
         });
-        let scene = TestScene::new(core.clone());
         
         Ok(Self {
             core,
-            scene,
+            layers: Vec::new(),
         })
     } 
+    pub fn init(&mut self) -> Result<(), StdError> {
+        LgInput::init()?;
+
+        let mut rm = ResourceManager::default();
+        let tex = rm.get_texture(&UUID::from_u128(8292350790782937751497383117043278454))?;
+
+        for layer in &self.layers {
+            layer.borrow_mut().init(self.core.clone())?;
+        }
+        
+        Ok(())
+    }
+    pub fn shutdown(&mut self) -> Result<(), StdError> {
+        for layer in &self.layers {
+            layer.borrow_mut().shutdown()?;
+        }
+        
+        Ok(())
+    }
+    pub fn add_layer(&mut self, layer: impl Layer + 'static) {
+        self.layers.push(as_dyn!(layer, dyn Layer));
+    }
     pub fn request_redraw(&self) {
         self.core.borrow()._window.request_redraw();
     }
     pub fn on_update(&mut self) -> Result<(), StdError>{
         unsafe { self.core.borrow().renderer.begin(); }
-        self.scene.on_update();
+        self.layers
+            .iter()
+            .for_each(|l| l.borrow_mut().on_update());
         unsafe { self.core.borrow().renderer.end()?; }
         Ok(())
     }
     pub fn on_event(&mut self, event: LgEvent) {
-        self.scene.on_event(&event);
+        for layer in &self.layers {
+            if layer.borrow_mut().on_event(event) {
+                break;
+            }
+        }
     }
     pub fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
         unsafe {
@@ -56,8 +82,5 @@ impl Application {
             
             Ok(())
         }
-    }
-    pub fn destroy(&mut self) {
-        self.scene.destroy();
     }
 }

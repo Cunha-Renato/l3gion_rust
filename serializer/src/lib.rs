@@ -19,6 +19,9 @@ impl YamlNode {
     pub fn deserialize(path: &str, name: &str) -> Result<Self, StdError> {
         deserialize(path, name)
     }
+    pub fn deserialize_full_path(path: &str) -> Result<Self, StdError> {
+        deserialize_full_path(path)
+    }
 }
 
 pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), StdError> {
@@ -32,4 +35,8 @@ pub fn deserialize<T: DeserializeOwned>(path: &str, name: &str) -> Result<T, Std
     let result: T = serde_yaml::from_str(&content)?;
 
     Ok(result)
+}
+pub fn deserialize_full_path<T: DeserializeOwned>(path: &str) -> Result<T, StdError> {
+    let content = std::fs::read_to_string(path)?;
+    Ok(serde_yaml::from_str(&content)?)
 }

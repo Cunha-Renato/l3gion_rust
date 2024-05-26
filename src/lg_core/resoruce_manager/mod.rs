@@ -11,7 +11,6 @@ const TEXTURE_FORMATS: [&str; 1] = ["png"];
 const SHADER_FORMATS: [&str; 2] = ["vert", "frag"];
 
 const UUID_YAML:        &str = "uuid";
-const NAME_YAML:        &str = "name";
 const WIDTH_YAML:       &str = "width";
 const HEIGHT_YAML:      &str = "height";
 const BYTES_YAML:       &str = "bytes";
@@ -151,7 +150,7 @@ impl ResourceManager {
         let texture_name = file_path.file_stem().unwrap()
             .to_string_lossy()
             .to_string();
-        let texture_uuid = UUID::generate();
+        let texture_uuid = UUID::from_string(file_path.to_str().unwrap())?;
 
         // Serializing
         let mut texture_node = serializer::YamlNode {
@@ -227,7 +226,7 @@ impl ResourceManager {
             node_type: "SHADER".to_string(),
             ..Default::default()
         };
-        let shader_uuid = UUID::generate();
+        let shader_uuid = UUID::from_string(file_path.to_str().unwrap())?;
         shader_node.push(serializer::YamlNode { 
             name: UUID_YAML.to_string(), 
             value: shader_uuid.get_value().to_string(), 

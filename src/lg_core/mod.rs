@@ -9,5 +9,7 @@ pub mod camera;
 pub mod entity;
 pub mod window;
 pub mod layer;
+pub mod scene;
 
 pub mod test_scene;
+pub mod test_layer;

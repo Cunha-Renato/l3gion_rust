@@ -1,7 +1,3 @@
-use std::ops::Deref;
-
-use lg_renderer::renderer::lg_buffer::*;
-use crate::lg_core::lg_types::reference::Rfc;
 use super::buffer::Buffer;
 
 #[derive(Clone)]
@@ -11,7 +7,7 @@ pub struct Uniform {
     binding: usize,
     set: usize,
     update_data: bool,
-    pub buffer: Rfc<Buffer>,
+    pub buffer: Buffer,
 }
 impl Uniform {
     pub fn new(
@@ -20,7 +16,6 @@ impl Uniform {
         binding: usize,
         set: usize,
         update_data: bool,
-        buffer: Rfc<Buffer>
     ) -> Self 
     {
         Self {
@@ -29,16 +24,16 @@ impl Uniform {
             binding,
             set,
             update_data,
-            buffer
+            buffer: Buffer::default()
         }
     }
-    pub fn new_with_data(
+    pub unsafe fn new_with_data<D>(
         name: &str,
         u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
         binding: usize,
         set: usize,
         update_data: bool,
-        data: impl LgBufferData
+        data: D
     ) -> Self 
     {
         Self {
@@ -47,7 +42,7 @@ impl Uniform {
             binding,
             set, 
             update_data,
-            buffer: Rfc::new(Buffer::new(data))
+            buffer: Buffer::new(&data)
         }
     }
 }
@@ -73,14 +68,16 @@ impl lg_renderer::renderer::lg_uniform::LgUniform for Uniform {
     }
     
     fn data_size(&self) -> usize {
-        self.buffer.borrow().data_size()
+        self.buffer.data_size()
     }
     
     fn get_raw_data(&self) -> *const std::ffi::c_void {
-        self.buffer.borrow().get_raw_data()
+        self.buffer.get_raw_data()
     }
     
-    fn set_data(&mut self, data: impl LgBufferData) {
-        self.buffer.borrow_mut().set_data(data)
+    fn set_data<D>(&mut self, data: D) {
+        unsafe { self.buffer.set_data(&data) };
     }
+    
+    
 }

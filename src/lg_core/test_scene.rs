@@ -24,22 +24,24 @@ impl TestScene {
             mouse_position: glm::vec2(0.0, 0.0),
             uuid: 0
         };
-        smol.uniforms.push(Uniform::new_with_data(
-            "data", 
-            LgUniformType::STRUCT, 
-            0, 
-            0, 
-            true,
-            data.clone()
-        ));
-        big.uniforms.push(Uniform::new_with_data(
-            "data", 
-            LgUniformType::STRUCT, 
-            0, 
-            0, 
-            true,
-            data
-        ));
+        unsafe {
+            smol.uniforms.push(Uniform::new_with_data(
+                "data", 
+                LgUniformType::STRUCT, 
+                0, 
+                0, 
+                true,
+                data.clone()
+            ));
+            big.uniforms.push(Uniform::new_with_data(
+                "data", 
+                LgUniformType::STRUCT, 
+                0, 
+                0, 
+                true,
+                data
+            ));
+        }
 
         Self {
             app_core,

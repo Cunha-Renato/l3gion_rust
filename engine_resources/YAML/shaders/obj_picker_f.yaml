@@ -1,0 +1,21 @@
+---
+name: obj_picker_f
+node_type: SHADER
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "126780434876470553281377732322499007573"
+    children: []
+  - name: stage
+    node_type: ""
+    value: "1"
+    children: []
+  - name: bytes
+    node_type: ""
+    value: ""
+    children: []
+  - name: src_code
+    node_type: ""
+    value: "#version 450\r\n\r\nlayout(std430, binding = 2) buffer SSBO {\r\n    uvec4 data;\r\n} ssbo;\r\nlayout(binding = 0) uniform Data {\r\n    vec2 mouse_position;\r\n    uint uuid;\r\n} data;\r\n\r\nout vec4 color;\r\n\r\nvoid main() {\r\n    float distance = distance(gl_FragCoord.xy, data.mouse_position);\r\n    float id_color = float(data.uuid) / 255.0;\r\n\r\n    color = vec4(id_color, 0.0, 0.2, 1.0);\r\n    if (distance < 10) \r\n    {\r\n        color = vec4(id_color, id_color, id_color, 1.0);\r\n        ssbo.data = uvec4(data.uuid, 0, 0, 0);\r\n    }\r\n} "
+    children: []

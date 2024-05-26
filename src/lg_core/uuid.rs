@@ -1,6 +1,9 @@
 use rand::Rng;
+use sha2::Digest;
 
-#[derive(Default, Clone, Debug, Hash, Eq, PartialEq)]
+use crate::StdError;
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct UUID(u128);
 impl UUID {
     pub fn generate() -> Self {
@@ -33,5 +36,17 @@ impl UUID {
     }
     pub const fn from_u128(val: u128) -> Self {
         Self(val)
+    }
+    pub fn from_string(str: &str) -> Result<Self, StdError> {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(str);
+        let bytes = hasher.finalize()[0..16].try_into()?;
+        
+        Ok(Self::from_u128(u128::from_be_bytes(bytes)))
+    }
+}
+impl Default for UUID {
+    fn default() -> Self {
+        Self::generate()
     }
 }

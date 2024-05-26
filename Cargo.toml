@@ -15,6 +15,7 @@ shaderc = "0.8.3"
 tobj = { version = "3", features = ["log"] }
 nalgebra-glm = "0.18.0"
 syn = "2.0.60"
+sha2 = "0.10.8"
 
 serializer = { path = "serializer" }
 sllog = { path = "../../sllog" }

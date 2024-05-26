@@ -1,32 +1,41 @@
-use lg_renderer::renderer::lg_buffer::LgBufferData;
+use std::os::raw::c_void;
 
 use crate::lg_core::uuid::UUID;
 
+#[derive(Default, Clone)]
 pub struct Buffer {
     uuid: UUID,
-    data: Box<dyn LgBufferData>
+    data: Vec<u8>
 }
 impl Buffer {
-    pub fn new(data: impl LgBufferData) -> Self {
+    pub unsafe fn new<D>(data: &D) -> Self {
+        let size = std::mem::size_of::<D>();
+        let data = data as *const D;
+        
+        let bytes = core::slice::from_raw_parts(data as *const u8, size).to_vec();
+        
+        Self::from_bytes(bytes)
+    }
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
             uuid: UUID::generate(),
-            data: Box::new(data) as Box<dyn LgBufferData>,
+            data: bytes
         }
+    }
+    pub fn get_raw_data(&self) -> *const std::ffi::c_void {
+        self.data.as_ptr() as *const c_void
+    }
+    pub unsafe fn set_data<D>(&mut self, data: &D) {
+        let size = std::mem::size_of::<D>();
+        let data = data as *const D;
+        
+        self.data = core::slice::from_raw_parts(data as *const u8, size).to_vec();
+        
+    }
+    pub fn data_size(&self) -> usize {
+        self.data.len() * std::mem::size_of::<u8>()
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid
-    }
-}
-impl lg_renderer::renderer::lg_buffer::LgBuffer for Buffer {
-    fn data_size(&self) -> usize {
-        self.data.size()
-    }
-
-    fn get_raw_data(&self) -> *const std::ffi::c_void {
-        self.data.as_c_void()
-    }
-
-    fn set_data(&mut self, data: impl LgBufferData) {
-        self.data = Box::new(data) as Box<dyn LgBufferData>;
     }
 }

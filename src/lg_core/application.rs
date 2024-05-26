@@ -39,7 +39,7 @@ impl Application {
         LgInput::init()?;
 
         let mut rm = ResourceManager::default();
-        let tex = rm.get_texture(&UUID::from_u128(8292350790782937751497383117043278454))?;
+        rm.process_folder(std::path::Path::new("resources"))?;
 
         for layer in &self.layers {
             layer.borrow_mut().init(self.core.clone())?;

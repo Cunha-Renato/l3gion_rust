@@ -23,7 +23,7 @@ struct ObjectStorage {
     materials: Vec<LgMaterial>
 }
 impl ObjectStorage {
-    fn new() -> Result<Self, StdError> {
+    unsafe fn new() -> Result<Self, StdError> {
         // Meshes
         let meshes = vec![
             Mesh::new(
@@ -163,10 +163,10 @@ pub struct LgRenderer {
 }
 impl LgRenderer {
     pub fn new(renderer: lg_renderer::renderer::LgRenderer<UUID>) -> Result<Self, StdError> {
-        Ok(Self {
+        unsafe { Ok(Self {
             renderer,
             obj_storage: ObjectStorage::new()?
-        })
+        })}
     }
 
     pub unsafe fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
@@ -195,7 +195,7 @@ impl LgRenderer {
         let ubos = entity.uniforms
             .iter()
             .chain(material.uniforms.iter())
-            .map(|ubo| (ubo.buffer.borrow().uuid().clone(), ubo))
+            .map(|ubo| (ubo.buffer.uuid().clone(), ubo))
             .collect::<Vec<_>>();
 
         self.renderer.draw(
@@ -227,7 +227,7 @@ impl LgRenderer {
                 u.name() == uniform_name
             }).unwrap();
         
-        self.renderer.read_uniform_buffer::<T>(material.uniforms[index].buffer.borrow().uuid().clone(), index)
+        self.renderer.read_uniform_buffer::<T>(material.uniforms[index].buffer.uuid().clone(), index)
     }
     pub unsafe fn reset_material_ubo(&self, material_name: &str, uniform_name: &str) -> Result<(), StdError> {
         let material = self.get_material(material_name).unwrap();

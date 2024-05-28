@@ -3,16 +3,16 @@ use super::{renderer::uniform::Uniform, uuid::UUID};
 pub struct LgEntity {
     uuid: UUID,
     pub uniforms: Vec<Uniform>,
-    pub mesh: String,
-    pub material: String,
+    pub mesh: UUID,
+    pub material: UUID,
 }
 impl LgEntity {
-    pub fn new(mesh: &str, material: &str) -> Self {
+    pub fn new(mesh: UUID, material: UUID) -> Self {
         Self {
             uuid: UUID::generate(),
             uniforms: Vec::new(),
-            mesh: String::from(mesh),
-            material: String::from(material),
+            mesh,
+            material,
         }
     }
     pub fn uuid(&self) -> &UUID {

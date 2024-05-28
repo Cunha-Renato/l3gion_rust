@@ -20,6 +20,24 @@ pub struct Shader {
     src_code: String,
 }
 impl Shader {
+    pub fn new(
+        uuid: UUID,
+        name: String,
+        bytes: Vec<u8>,
+        stage: ShaderStage,
+        src_code: String,
+    ) -> Self 
+    {
+        Self {
+            uuid,
+            name,
+            bytes,
+            stage,
+            src_code,
+        }
+    }
+}
+impl Shader {
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }

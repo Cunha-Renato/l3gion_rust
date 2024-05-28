@@ -11,13 +11,14 @@ pub struct Mesh {
 }
 impl Mesh {
     pub fn new(
+        uuid: UUID,
         name: &str,
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
     ) -> Self
     {
         Self {
-            uuid: UUID::generate(),
+            uuid,
             name: String::from(name),
             vertices,
             indices,

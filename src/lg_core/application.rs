@@ -29,7 +29,7 @@ impl Application {
             window: LgWindow::new(WIDTH, HEIGHT),
             renderer: LgRenderer::new(renderer)?,
         });
-        
+      
         Ok(Self {
             core,
             layers: Vec::new(),
@@ -37,9 +37,7 @@ impl Application {
     } 
     pub fn init(&mut self) -> Result<(), StdError> {
         LgInput::init()?;
-
-        let mut rm = ResourceManager::default();
-        rm.process_folder(std::path::Path::new("resources"))?;
+        self.core.borrow_mut().renderer.init()?;
 
         for layer in &self.layers {
             layer.borrow_mut().init(self.core.clone())?;

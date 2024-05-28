@@ -1,7 +1,8 @@
 use std::{collections::HashMap, mem::size_of};
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
-use crate::StdError;
+use crate::{lg_core::renderer::vertex::Vertex, StdError};
 use super::{renderer::{mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
+use nalgebra_glm as glm;
 
 const RESOURCE_PATH_YAML: &str = "engine_resources/YAML";
 const RESOURCE_PATH_BINARY: &str = "engine_resources/bin";
@@ -9,54 +10,90 @@ const YAML_FILE_EXTENSION: &str = "yaml";
 
 const TEXTURE_FORMATS: [&str; 1] = ["png"];
 const SHADER_FORMATS: [&str; 2] = ["vert", "frag"];
+const MESH_FORMAT: &str = "obj";
 
-const UUID_YAML:        &str = "uuid";
-const WIDTH_YAML:       &str = "width";
-const HEIGHT_YAML:      &str = "height";
-const BYTES_YAML:       &str = "bytes";
-const MIP_LEVEL_YAML:   &str = "mip_level";
-const FORMAT_YAML:      &str = "format";
-const TYPE_YAML:        &str = "type";
-const SIZE_YAML:        &str = "size";
+const TEXTURE_YAML: &str = "TEXTURE";
+const SHADER_YAML:  &str = "SHADER";
+const MESH_YAML:    &str = "MESH";
+
+const UUID_YAML:            &str = "uuid";
+const SHADER_STAGE_YAML:    &str = "stage";
+const SHADER_SRC_CODE_YAML: &str = "src_code";
+const WIDTH_YAML:           &str = "width";
+const HEIGHT_YAML:          &str = "height";
+const BYTES_YAML:           &str = "bytes";
+const MIP_LEVEL_YAML:       &str = "mip_level";
+const FORMAT_YAML:          &str = "format";
+const TYPE_YAML:            &str = "type";
+const SIZE_YAML:            &str = "size";
+const POSITIONS_YAML:       &str = "positions";
+const INDICES_YAML:         &str = "indices";
+const NORMALS_YAML:         &str = "normals";
+const TEX_COORDS_YAML:      &str = "tex_coords";
 
 
 // UUID / file path
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ResourcePaths {
     textures: HashMap<UUID, String>,
     meshes: HashMap<UUID, String>,
     shaders: HashMap<UUID, String>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct LoadedResources {
     textures: HashMap<UUID, Texture>,
     meshes: HashMap<UUID, Mesh>,
     shaders: HashMap<UUID, Shader>
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct ResourceManager {
     resource_folders: Vec<String>,
     resource_paths: ResourcePaths,
     loaded: LoadedResources,
 }
 impl ResourceManager {
+    pub(crate) fn init(&mut self) -> Result<(), StdError> {
+        self.initialize_resource_paths(std::path::Path::new(RESOURCE_PATH_YAML))
+    }
     /// Add a folder of pre-processed resource files
     pub(crate) fn add_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
         
 
         Ok(())
     }
-    pub(crate) fn get_texture(&mut self, texture_uuid: &UUID) -> Result<&Texture, StdError> {
-        if self.loaded.textures.contains_key(&texture_uuid) {
-           Ok(self.loaded.textures.get(&texture_uuid).unwrap())
+    pub(crate) fn prepare_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
+        if !self.loaded.textures.contains_key(texture_uuid) {
+            self.load_texture(texture_uuid)?;
         }
-        else {
-            self.load_texture(&texture_uuid)?;
-            Ok(self.loaded.textures.get(&texture_uuid).unwrap())
-        }
+        
+        Ok(())
     }
+    pub(crate) fn prepare_shader(&mut self, shader_uuid: &UUID) -> Result<(), StdError> {
+        if !self.loaded.shaders.contains_key(shader_uuid) {
+            self.load_shader(shader_uuid)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn prepare_mesh(&mut self, mesh_uuid: &UUID) -> Result<(), StdError> {
+        if !self.loaded.meshes.contains_key(mesh_uuid) {
+            self.load_mesh(mesh_uuid)?;
+        }
+        
+        Ok(())
+    }
+
+    pub(crate) fn get_texture(&self, texture_uuid: &UUID) -> Option<&Texture> {
+        self.loaded.textures.get(texture_uuid)
+    }
+    pub(crate) fn get_shader(&self, shader_uuid: &UUID) -> Option<&Shader> {
+        self.loaded.shaders.get(shader_uuid)
+    }
+    pub(crate) fn get_mesh(&self, mesh_uuid: &UUID) -> Option<&Mesh> {
+        self.loaded.meshes.get(mesh_uuid)
+    }
+
     pub(crate) fn process_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
         let entries = std::fs::read_dir(folder_path)?;
         
@@ -76,6 +113,9 @@ impl ResourceManager {
                 else if SHADER_FORMATS.contains(&extension) {
                     self.process_shader(path)?;
                 }
+                else if MESH_FORMAT == extension {
+                    self.process_mesh(path)?;
+                }
             }
             else { self.process_folder(&path)?; }
         }
@@ -84,8 +124,38 @@ impl ResourceManager {
     }
 }
 impl ResourceManager {
-    fn load_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError>{
-        let texture_path = match self.resource_paths.textures.get(&texture_uuid) {
+    fn initialize_resource_paths(&mut self, path: &std::path::Path) -> Result<(), StdError> {
+        // TODO: Only reading the YAML files
+        let entries = std::fs::read_dir(path)?;
+        
+        for entry in entries {
+            let path = entry?.path();
+
+            if path.is_file() && path.extension().unwrap().to_str().unwrap() == YAML_FILE_EXTENSION {
+                let node = serializer::YamlNode::deserialize_full_path(path.to_str().unwrap())?;
+
+                for child in node.children {
+                    match child.name.as_str() {
+                        UUID_YAML => {
+                            let uuid = UUID::from_u128(child.value.parse::<u128>()?);
+                            match node.node_type.as_str() {
+                                TEXTURE_YAML => { let _ = self.resource_paths.textures.insert(uuid, path.to_string_lossy().to_string()); },
+                                SHADER_YAML => { let _ = self.resource_paths.shaders.insert(uuid, path.to_string_lossy().to_string()); },
+                                MESH_YAML => { let _ = self.resource_paths.meshes.insert(uuid, path.to_string_lossy().to_string()); },
+                                _ => (),
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            } else { self.initialize_resource_paths(&path)?; }
+        }
+        
+        Ok(())
+    }
+
+    fn load_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
+        let texture_path = match self.resource_paths.textures.get(texture_uuid) {
             Some(path) => path,
             None => return Err("Failed to load texture! (ResourceManager)".into()),
         };
@@ -127,6 +197,97 @@ impl ResourceManager {
         
         Ok(())
     }
+    
+    // TODO: Rename vertices in the mesh.yaml to position
+    fn load_mesh(&mut self, mesh_uuid: &UUID) -> Result<(), StdError> {
+        let mesh_path = match self.resource_paths.meshes.get(mesh_uuid) {
+            Some(path) => path,
+            None => return Err("Failed to load Mesh! (ResourceManager)".into()),
+        };
+        
+        let mesh_node = serializer::YamlNode::deserialize_full_path(&mesh_path)?;
+        
+        let name = mesh_node.name;
+        let mut uuid = 0;
+        let mut positions = Vec::new();
+        let mut tex_coords = Vec::new();
+        let mut indices = Vec::new();
+        
+        for child_node in mesh_node.children {
+            let value = child_node.value;
+            match child_node.name.as_str() {
+                UUID_YAML => uuid = value.parse::<u128>()?,
+                POSITIONS_YAML => positions = value.split(",").map(|s| s.trim().parse::<f32>().unwrap()).collect::<Vec<_>>(),
+                INDICES_YAML => indices = value.split(",").map(|s| s.trim().parse::<u32>().unwrap()).collect::<Vec<_>>(),
+                TEX_COORDS_YAML => tex_coords = value.split(",").map(|s| s.trim().parse::<f32>().unwrap()).collect::<Vec<_>>(), 
+                NORMALS_YAML => (),
+
+                _ => return Err("Mesh configuration file has wrong format! (ResourceManager)".into())
+            }
+        }
+
+        assert!(uuid == mesh_uuid.get_value() && mesh_uuid.is_valid());
+        let chunk_pos = positions.chunks(3);
+        let chunk_tex_coords = tex_coords.chunks(2);
+
+        let vertices = chunk_pos.zip(chunk_tex_coords)
+            .map(|(p, tc)| Vertex {
+                position: glm::vec3(p[0], p[1], p[2]),
+                tex_coord: glm::vec2(tc[0], tc[1])
+        }).collect::<Vec<_>>();
+
+        let mesh = Mesh::new(
+            UUID::from_u128(uuid),
+            &name, 
+            vertices, 
+            indices
+        );
+        self.loaded.meshes.insert(UUID::from_u128(uuid), mesh);
+        
+        Ok(())
+    }
+
+    fn load_shader(&mut self, shader_uuid: &UUID) -> Result<(), StdError> {
+        let shader_path = match self.resource_paths.shaders.get(shader_uuid) {
+            Some(path) => path,
+            None => return Err("Failed to load shader! (ResourceManager)".into()),
+        };
+
+        let shader_node = serializer::YamlNode::deserialize_full_path(&shader_path)?;
+        
+        let name = shader_node.name;
+        let mut uuid = 0;
+        let mut shader_stage = ShaderStage::VERTEX;
+        let mut src_code = String::new();
+        let mut bytes = Vec::new();
+        
+        for child_node in shader_node.children {
+            let value = child_node.value;
+            
+            match child_node.name.as_str() {
+                UUID_YAML => uuid = value.parse::<u128>()?,
+                SHADER_STAGE_YAML => shader_stage = ShaderStage::from_u32(value.parse::<u32>()?)?,
+                SHADER_SRC_CODE_YAML => src_code = value,
+                BYTES_YAML => if !value.is_empty() { bytes = value.split(",").map(|s| s.trim().parse::<u8>().unwrap()).collect::<Vec<_>>() },
+
+                _ => return Err("Shader configuration file has wrong format! (ResourceManager)".into())
+            }
+        }
+
+        assert!(uuid == shader_uuid.get_value() && shader_uuid.is_valid());
+
+        let shader = Shader::new(
+            UUID::from_u128(uuid),
+            name,
+            bytes,
+            shader_stage,
+            src_code
+        );
+
+        self.loaded.shaders.insert(UUID::from_u128(uuid), shader);
+
+        Ok(())
+    }
 }
 impl ResourceManager {
     /// Only use files with .png, .jpg, .jpeg, etc
@@ -155,7 +316,7 @@ impl ResourceManager {
         // Serializing
         let mut texture_node = serializer::YamlNode {
             name: texture_name.clone(),
-            node_type: "TEXTURE".to_string(),
+            node_type: TEXTURE_YAML.to_string(),
             ..Default::default()
         };
         texture_node.push(serializer::YamlNode { 
@@ -223,7 +384,7 @@ impl ResourceManager {
         
         let mut shader_node = serializer::YamlNode {
             name: shader_name.clone(),
-            node_type: "SHADER".to_string(),
+            node_type: SHADER_YAML.to_string(),
             ..Default::default()
         };
         let shader_uuid = UUID::from_string(file_path.to_str().unwrap())?;
@@ -233,7 +394,7 @@ impl ResourceManager {
             ..Default::default()
         });
         shader_node.push(serializer::YamlNode { 
-            name: "stage".to_string(), 
+            name: SHADER_STAGE_YAML.to_string(), 
             value: (shader_stage as u32).to_string(),
             ..Default::default()
         });
@@ -243,7 +404,7 @@ impl ResourceManager {
         });
         let src_code = crate::utils::tools::file_to_string(file_path.to_str().unwrap())?;
         shader_node.push(serializer::YamlNode { 
-            name: "src_code".to_string(), 
+            name: SHADER_SRC_CODE_YAML.to_string(), 
             value: src_code,
             ..Default::default()
         });
@@ -255,57 +416,65 @@ impl ResourceManager {
     }
 
     /// Placeholder
-    fn process_mesh(&mut self, mesh: &Mesh) -> Result<(), StdError> {
+    fn process_mesh(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
+        let mesh_name = file_path.file_stem().unwrap().to_string_lossy().to_string();
+        
         let mut mesh_node = serializer::YamlNode {
-            name: mesh.name().to_string(),
-            node_type: "MESH".to_string(),
+            name: mesh_name.clone(),
+            node_type: MESH_YAML.to_string(),
             ..Default::default()
         };
+
+        let mesh_uuid = UUID::from_string(file_path.to_str().unwrap())?;
         mesh_node.push(serializer::YamlNode { 
             name: UUID_YAML.to_string(), 
-            value: mesh.uuid().get_value().to_string(), 
+            value: mesh_uuid.clone().get_value().to_string(), 
             ..Default::default()
         });
-
-        let mut vertex_node = serializer::YamlNode { 
-            name: "vertices".to_string(), 
-            ..Default::default()
-        };
-
-        let mut positions = Vec::new();
-        let mut tex_coords = Vec::new();
-        for vertex in mesh.vertices() {
-            let position = vertex.position;
-            let tex_coord = vertex.tex_coord;
-            
-            let position = position.iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
-            let position = std::format!("[{}]", position);
-            let tex_coord = tex_coord.iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
-            let tex_coord = std::format!("[{}]", tex_coord);
-            
-            positions.push(position);
-            tex_coords.push(tex_coord);
-        }
-        vertex_node.push(serializer::YamlNode { 
-            name: "positions".to_string(), 
-            value: positions.join(","), 
-            ..Default::default()
-        });
-        vertex_node.push(serializer::YamlNode { 
-            name: "tex_coords".to_string(), 
-            value: tex_coords.join(","), 
-            ..Default::default()
-        });
-        mesh_node.push(vertex_node);
         
-        let path = std::format!("{}/meshes", RESOURCE_PATH_YAML);
-        mesh_node.serialize(&path, mesh.name())?;
+        let mesh = &tobj::load_obj(file_path, &tobj::GPU_LOAD_OPTIONS)?.0[0].mesh;
+
+        let positions = mesh.positions.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let indices = mesh.indices.iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let tex_coords = mesh.texcoords.iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let normals = mesh.normals.iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        mesh_node.push(serializer::YamlNode { 
+            name: POSITIONS_YAML.to_string(), 
+            value: positions,
+            ..Default::default()
+        });
+
+        mesh_node.push(serializer::YamlNode { 
+            name: INDICES_YAML.to_string(), 
+            value: indices,
+            ..Default::default()
+        });
+        mesh_node.push(serializer::YamlNode { 
+            name: TEX_COORDS_YAML.to_string(), 
+            value: tex_coords,
+            ..Default::default()
+        });
+        mesh_node.push(serializer::YamlNode { 
+            name: NORMALS_YAML.to_string(), 
+            value: normals,
+            ..Default::default()
+        });
+
+        let mesh_resources_path = std::format!("{}/meshes", RESOURCE_PATH_YAML);
+        mesh_node.serialize(&mesh_resources_path, &mesh_name)?;
 
         Ok(())
     }

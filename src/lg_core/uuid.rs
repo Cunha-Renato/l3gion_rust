@@ -17,7 +17,7 @@ impl UUID {
         self.0
     }
     pub const fn is_valid(&self) -> bool {
-        !self.0 == 0u128
+        self.0 != 0u128
     }
     pub const fn to_u32_4(&self) -> [u32; 4] {
         [

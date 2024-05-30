@@ -1,0 +1,21 @@
+---
+name: ui
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "1"
+    children: []
+  - name: textures
+    node_type: ""
+    value: ""
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "82293175879035161674616113812738524612"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "96145043222459121309713537621720887984"
+    children: []

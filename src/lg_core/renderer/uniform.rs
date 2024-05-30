@@ -1,6 +1,6 @@
 use super::buffer::Buffer;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Uniform {
     name: String,
     u_type: lg_renderer::renderer::lg_uniform::LgUniformType,

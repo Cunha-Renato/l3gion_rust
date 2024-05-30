@@ -2,7 +2,7 @@ use std::os::raw::c_void;
 
 use crate::lg_core::uuid::UUID;
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Buffer {
     uuid: UUID,
     data: Vec<u8>

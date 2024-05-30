@@ -63,7 +63,7 @@ impl Application {
         self.layers
             .iter()
             .for_each(|l| l.borrow_mut().on_update());
-        unsafe { self.core.borrow().renderer.end()?; }
+        unsafe { self.core.borrow_mut().renderer.end()?; }
         Ok(())
     }
     pub fn on_event(&mut self, event: LgEvent) {

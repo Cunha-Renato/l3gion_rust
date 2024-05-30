@@ -1,7 +1,7 @@
 use std::{collections::HashMap, mem::size_of};
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
 use crate::{lg_core::renderer::vertex::Vertex, StdError};
-use super::{renderer::{mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
+use super::{renderer::{material::Material, mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
 use nalgebra_glm as glm;
 
 const RESOURCE_PATH_YAML: &str = "engine_resources/YAML";
@@ -12,9 +12,10 @@ const TEXTURE_FORMATS: [&str; 1] = ["png"];
 const SHADER_FORMATS: [&str; 2] = ["vert", "frag"];
 const MESH_FORMAT: &str = "obj";
 
-const TEXTURE_YAML: &str = "TEXTURE";
-const SHADER_YAML:  &str = "SHADER";
-const MESH_YAML:    &str = "MESH";
+const TEXTURE_YAML:     &str = "TEXTURE";
+const SHADER_YAML:      &str = "SHADER";
+const MESH_YAML:        &str = "MESH";
+const MATERIAL_YAML:    &str = "MATERIAL";
 
 const UUID_YAML:            &str = "uuid";
 const SHADER_STAGE_YAML:    &str = "stage";
@@ -30,6 +31,9 @@ const POSITIONS_YAML:       &str = "positions";
 const INDICES_YAML:         &str = "indices";
 const NORMALS_YAML:         &str = "normals";
 const TEX_COORDS_YAML:      &str = "tex_coords";
+const TEXTURES_YAML:        &str = "textures";
+const VERTEX_SHADER_YAML:   &str = "vertex_shader";
+const FRAGMENT_SHADER_YAML: &str = "fragment_shader";
 
 
 // UUID / file path
@@ -38,13 +42,15 @@ struct ResourcePaths {
     textures: HashMap<UUID, String>,
     meshes: HashMap<UUID, String>,
     shaders: HashMap<UUID, String>,
+    materials: HashMap<UUID, String>,
 }
 
 #[derive(Default, Debug)]
 struct LoadedResources {
     textures: HashMap<UUID, Texture>,
     meshes: HashMap<UUID, Mesh>,
-    shaders: HashMap<UUID, Shader>
+    shaders: HashMap<UUID, Shader>,
+    materials: HashMap<UUID, Material>,
 }
 
 #[derive(Default, Debug)]
@@ -55,7 +61,38 @@ pub(crate) struct ResourceManager {
 }
 impl ResourceManager {
     pub(crate) fn init(&mut self) -> Result<(), StdError> {
-        self.initialize_resource_paths(std::path::Path::new(RESOURCE_PATH_YAML))
+        self.read_resource_paths(std::path::Path::new(RESOURCE_PATH_YAML))
+    }
+
+    pub(crate) fn read_resource_paths(&mut self, path: &std::path::Path) -> Result<(), StdError> {
+        // TODO: Only reading the YAML files
+        let entries = std::fs::read_dir(path)?;
+        
+        for entry in entries {
+            let path = entry?.path();
+
+            if path.is_file() && path.extension().unwrap().to_str().unwrap() == YAML_FILE_EXTENSION {
+                let node = serializer::YamlNode::deserialize_full_path(path.to_str().unwrap())?;
+
+                for child in node.children {
+                    match child.name.as_str() {
+                        UUID_YAML => {
+                            let uuid = UUID::from_u128(child.value.parse::<u128>()?);
+                            match node.node_type.as_str() {
+                                TEXTURE_YAML => { let _ = self.resource_paths.textures.insert(uuid, path.to_string_lossy().to_string()); },
+                                SHADER_YAML => { let _ = self.resource_paths.shaders.insert(uuid, path.to_string_lossy().to_string()); },
+                                MESH_YAML => { let _ = self.resource_paths.meshes.insert(uuid, path.to_string_lossy().to_string()); },
+                                MATERIAL_YAML => { let _ = self.resource_paths.materials.insert(uuid, path.to_string_lossy().to_string()); },
+                                _ => (),
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            } else { self.read_resource_paths(&path)?; }
+        }
+        
+        Ok(())
     }
     /// Add a folder of pre-processed resource files
     pub(crate) fn add_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
@@ -83,6 +120,13 @@ impl ResourceManager {
         
         Ok(())
     }
+    pub(crate) fn prepare_material(&mut self, material_uuid: &UUID) -> Result<(), StdError> {
+        if !self.loaded.materials.contains_key(material_uuid) {
+            self.load_material(material_uuid)?;
+        }
+        
+        Ok(())
+    }
 
     pub(crate) fn get_texture(&self, texture_uuid: &UUID) -> Option<&Texture> {
         self.loaded.textures.get(texture_uuid)
@@ -92,6 +136,9 @@ impl ResourceManager {
     }
     pub(crate) fn get_mesh(&self, mesh_uuid: &UUID) -> Option<&Mesh> {
         self.loaded.meshes.get(mesh_uuid)
+    }
+    pub(crate) fn get_material(&self, material_uuid: &UUID) -> Option<&Material> {
+        self.loaded.materials.get(material_uuid)
     }
 
     pub(crate) fn process_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
@@ -124,36 +171,6 @@ impl ResourceManager {
     }
 }
 impl ResourceManager {
-    fn initialize_resource_paths(&mut self, path: &std::path::Path) -> Result<(), StdError> {
-        // TODO: Only reading the YAML files
-        let entries = std::fs::read_dir(path)?;
-        
-        for entry in entries {
-            let path = entry?.path();
-
-            if path.is_file() && path.extension().unwrap().to_str().unwrap() == YAML_FILE_EXTENSION {
-                let node = serializer::YamlNode::deserialize_full_path(path.to_str().unwrap())?;
-
-                for child in node.children {
-                    match child.name.as_str() {
-                        UUID_YAML => {
-                            let uuid = UUID::from_u128(child.value.parse::<u128>()?);
-                            match node.node_type.as_str() {
-                                TEXTURE_YAML => { let _ = self.resource_paths.textures.insert(uuid, path.to_string_lossy().to_string()); },
-                                SHADER_YAML => { let _ = self.resource_paths.shaders.insert(uuid, path.to_string_lossy().to_string()); },
-                                MESH_YAML => { let _ = self.resource_paths.meshes.insert(uuid, path.to_string_lossy().to_string()); },
-                                _ => (),
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-            } else { self.initialize_resource_paths(&path)?; }
-        }
-        
-        Ok(())
-    }
-
     fn load_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
         let texture_path = match self.resource_paths.textures.get(texture_uuid) {
             Some(path) => path,
@@ -285,6 +302,57 @@ impl ResourceManager {
         );
 
         self.loaded.shaders.insert(UUID::from_u128(uuid), shader);
+
+        Ok(())
+    }
+    
+    fn load_material(&mut self, material_uuid: &UUID) -> Result<(), StdError> {
+        let material_path = match self.resource_paths.materials.get(material_uuid) {
+            Some(path) => path,
+            None => return Err("Failed to load material! (ResourceManager)".into()),
+        };
+
+        let material_node = serializer::YamlNode::deserialize_full_path(&material_path)?;
+        
+        let name = material_node.name;
+        let mut uuid = 0;
+        let mut textures = Vec::new();
+        let mut shaders = Vec::new();
+
+        for child_node in material_node.children {
+            let value = child_node.value;
+            
+            match child_node.name.as_str() {
+                UUID_YAML => uuid = value.parse::<u128>()?,
+                TEXTURES_YAML => if !value.is_empty() { 
+                    textures = value.split(",")
+                    . map(|s| UUID::from_u128(s.trim().parse::<u128>().unwrap()))
+                    .collect::<Vec<_>>()
+                },
+                VERTEX_SHADER_YAML | FRAGMENT_SHADER_YAML => shaders.push(UUID::from_u128(value.parse::<u128>().unwrap())),
+
+                _ => return Err("Material configuration file has wrong format! (ResourceManager)".into())
+            }
+        }
+
+        assert!(uuid == material_uuid.get_value() && material_uuid.is_valid());
+
+        for tex_uuid in &textures {
+            self.prepare_texture(tex_uuid)?;
+        }
+        for shader_uuid in &shaders {
+            self.prepare_shader(shader_uuid)?;
+        }
+
+        let material = Material::new(
+            UUID::from_u128(uuid), 
+            &name,
+            shaders,
+            textures, 
+            vec![]
+        );
+
+        self.loaded.materials.insert(UUID::from_u128(uuid), material);
 
         Ok(())
     }
@@ -477,5 +545,9 @@ impl ResourceManager {
         mesh_node.serialize(&mesh_resources_path, &mesh_name)?;
 
         Ok(())
+    }
+
+    fn process_material(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
+        todo!()
     }
 }

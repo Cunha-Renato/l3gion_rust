@@ -3,23 +3,21 @@ use std::hash::Hash;
 use crate::lg_core::uuid::UUID;
 use super::uniform::Uniform;
 
-#[derive(Clone)]
-pub struct LgMaterial {
+#[derive(Debug, Clone)]
+pub struct Material {
     uuid: UUID,
-    name: String, // TODO: Placeholder
-    /* shaders: Vec<Rfc<LgShader>>,
-    texture: Option<Rfc<LgTexture>>, */
-    shaders: Vec<String>, // TODO: Replace with UUID
-    texture: Option<String>, // TODO: Replace with UUID
+    name: String,
+    shaders: Vec<UUID>,
+    textures: Vec<UUID>,
     pub uniforms: Vec<Uniform>,
 }
-impl LgMaterial {
-    pub fn new(name: &str, shaders: Vec<String>, texture: Option<String>, uniforms: Vec<Uniform>) -> Self {
+impl Material {
+    pub fn new(uuid: UUID, name: &str, shaders: Vec<UUID>, textures: Vec<UUID>, uniforms: Vec<Uniform>) -> Self {
         Self {
-            uuid: UUID::generate(),
+            uuid,
             name: String::from(name),
             shaders,
-            texture,
+            textures,
             uniforms,
         }
     }
@@ -32,17 +30,17 @@ impl LgMaterial {
     pub fn texture(&self) -> &Option<Rfc<LgTexture>> {
         &self.texture
     } */
-    pub fn texture(&self) -> &Option<String> {
-        &self.texture
+    pub fn texture(&self) -> &[UUID] {
+        &self.textures
     }
-    pub fn shaders(&self) -> &[String] {
+    pub fn shaders(&self) -> &[UUID] {
         &self.shaders
     }
     pub fn name(&self) -> &str {
         &self.name
     }
 }
-impl Hash for LgMaterial {
+impl Hash for Material {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.uuid.hash(state);
     }

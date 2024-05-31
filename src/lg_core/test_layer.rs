@@ -40,12 +40,6 @@ impl Layer for TestLayer {
             UUID::from_u128(1),
             glm::vec3(-0.5, 0.0, 0.0)
         ));
-        
-        Ok(())
-    }
-
-    fn on_update(&mut self) {
-        self.camera.on_update();
 
         struct ViewProj {
             view: glm::Mat4,
@@ -56,6 +50,7 @@ impl Layer for TestLayer {
             view: self.camera.get_view_matrix().clone(),
             proj: self.camera.get_projection_matrix()
         };
+
         unsafe {
             self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new_with_data(
                 "ViewMatrix", 
@@ -66,9 +61,15 @@ impl Layer for TestLayer {
                 view_proj
             ));
         }
+        
+        Ok(())
+    }
+
+    fn on_update(&mut self) {
+        self.camera.on_update();
 
         unsafe {
-            self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.batch_entity(e).unwrap());
+            self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.draw_entity(e).unwrap());
         }
     }
 

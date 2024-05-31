@@ -2,6 +2,7 @@
 
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, path::Path};
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}};
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::{material::Material, mesh::Mesh, shader::Shader, texture::Texture, uniform_struct::SSBO, vertex::Vertex};
@@ -85,7 +86,6 @@ impl LgRenderer {
         
         self.renderer.read_uniform_buffer::<T>(material.uniforms[index].buffer.uuid().clone(), index) */
         todo!();
-        Err("Not available".into())
     }
     pub unsafe fn reset_material_ubo(&self, material_name: &str, uniform_name: &str) -> Result<(), StdError> {
         /* let material = self.get_material(material_name).unwrap();
@@ -98,7 +98,6 @@ impl LgRenderer {
 
         // self.renderer.set_uniform_buffer(uniform.buffer.uuid().clone(), index, uniform)
         todo!();
-        Err("Not available".into())
     }
 }
 impl LgRenderer {
@@ -187,13 +186,15 @@ impl LgRenderer {
         let transform = translation * rotation * scale;
         {
             profile_scope!("transform_loop");
-            for v in &mut vertices {
-                let og_position = v.position;
-                let v_position = glm::vec4(og_position.x, og_position.y, og_position.z, 1.0);
-                let transformed = transform * v_position;
-                
-                v.position = glm::vec3(transformed.x, transformed.y, transformed.z);
-            }
+            vertices
+                .par_iter_mut()
+                .for_each(|v| {
+                    let og_position = v.position;
+                    let v_position = glm::vec4(og_position.x, og_position.y, og_position.z, 1.0);
+                    let transformed = transform * v_position;
+                    
+                    v.position = glm::vec3(transformed.x, transformed.y, transformed.z);
+                });
         }
         
         let draw_data = self.batch_draw_data.entry(entity.material.clone()).or_default();

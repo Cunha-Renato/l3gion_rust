@@ -1,4 +1,4 @@
-use crate::{as_dyn, StdError};
+use crate::{as_dyn, profile_function, profile_scope, profiler_begin, profiler_end, StdError};
 use super::{event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, resoruce_manager::ResourceManager, uuid::UUID, window::LgWindow};
 
 const WIDTH: u32 = 1080;
@@ -37,6 +37,7 @@ impl Application {
     } 
     pub fn init(&mut self) -> Result<(), StdError> {
         LgInput::init()?;
+
         self.core.borrow_mut().renderer.init()?;
 
         for layer in &self.layers {
@@ -58,8 +59,12 @@ impl Application {
     pub fn request_redraw(&self) {
         self.core.borrow()._window.request_redraw();
     }
-    pub fn on_update(&mut self) -> Result<(), StdError>{
-        unsafe { self.core.borrow().renderer.begin(); }
+    pub fn on_update(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
+        unsafe { 
+            self.core.borrow().renderer.begin(); 
+        }
         self.layers
             .iter()
             .for_each(|l| l.borrow_mut().on_update());
@@ -68,7 +73,7 @@ impl Application {
     }
     pub fn on_event(&mut self, event: LgEvent) {
         for layer in &self.layers {
-            if layer.borrow_mut().on_event(event) {
+            if layer.borrow_mut().on_event(&event) {
                 break;
             }
         }

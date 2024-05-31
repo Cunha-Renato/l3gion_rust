@@ -3,7 +3,7 @@
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, path::Path};
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}};
 use uniform::Uniform;
-use crate::StdError;
+use crate::{profile_function, profile_scope, StdError};
 use self::{material::Material, mesh::Mesh, shader::Shader, texture::Texture, uniform_struct::SSBO, vertex::Vertex};
 use super::{entity::LgEntity, resoruce_manager::ResourceManager, uuid::{self, UUID}};
 use nalgebra_glm as glm;
@@ -51,15 +51,21 @@ impl LgRenderer {
     }
 
     pub unsafe fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+        profile_function!();
+
         self.resource_manager.prepare_mesh(&entity.mesh)?;
         self.resource_manager.prepare_material(&entity.material)?;
 
         self.draw(&entity.mesh, &entity.material, &entity.uniforms)
     }
     pub unsafe fn begin(&self) {
+        profile_function!();
+
         self.renderer.begin()
     }
     pub unsafe fn end(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         self.flush_batch()?;
         self.renderer.end()
     }
@@ -157,6 +163,8 @@ impl LgRenderer {
         self.global_uniform = Some(uniform);
     }
     pub unsafe fn batch_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+        profile_function!();
+
         self.resource_manager.prepare_mesh(&entity.mesh)?;
         self.resource_manager.prepare_material(&entity.material)?;
 
@@ -177,26 +185,47 @@ impl LgRenderer {
         let scale = glm::scale(&identity, &entity.scale);
 
         let transform = translation * rotation * scale;
-        for v in &mut vertices {
-            let og_position = v.position;
-            let v_position = glm::vec4(og_position.x, og_position.y, og_position.z, 1.0);
-            let transformed = transform * v_position;
-            
-            v.position = glm::vec3(transformed.x, transformed.y, transformed.z);
+        {
+            profile_scope!("transform_loop");
+            for v in &mut vertices {
+                let og_position = v.position;
+                let v_position = glm::vec4(og_position.x, og_position.y, og_position.z, 1.0);
+                let transformed = transform * v_position;
+                
+                v.position = glm::vec3(transformed.x, transformed.y, transformed.z);
+            }
         }
         
         let draw_data = self.batch_draw_data.entry(entity.material.clone()).or_default();
-        for i in &mut indices {
-            *i += draw_data.vertices.len() as u32;
+        { 
+            profile_scope!("updating_indices");
+
+            for i in &mut indices {
+                *i += draw_data.vertices.len() as u32;
+            }
         }
 
-        self.in_use_batch_data.meshes += 1;
-        draw_data.vertices.extend(vertices);
-        draw_data.indices.extend(indices);
+        {
+            profile_scope!("extending_draw_data");
+
+            self.in_use_batch_data.meshes += 1;
+            let mut new_vertices = Vec::with_capacity(draw_data.vertices.len() + vertices.len());
+            new_vertices.extend_from_slice(&draw_data.vertices);
+            new_vertices.extend_from_slice(&vertices);
+
+            let mut new_indices = Vec::with_capacity(draw_data.indices.len() + indices.len());
+            new_indices.extend_from_slice(&draw_data.indices);
+            new_indices.extend_from_slice(&indices);
+
+            draw_data.vertices = new_vertices;
+            draw_data.indices = new_indices;
+        }
 
         Ok(())
     }
     pub unsafe fn flush_batch(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         for (mat_uuid, dd) in &self.batch_draw_data {
             let material = self.resource_manager.get_material(mat_uuid).unwrap();
             let texture: Option<(UUID, &Texture)> = None;

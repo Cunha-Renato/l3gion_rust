@@ -9,12 +9,10 @@ pub struct Buffer {
 }
 impl Buffer {
     pub unsafe fn new<D>(data: &D) -> Self {
-        let size = std::mem::size_of::<D>();
-        let data = data as *const D;
-        
-        let bytes = core::slice::from_raw_parts(data as *const u8, size).to_vec();
-        
-        Self::from_bytes(bytes)
+        let mut result = Self::default();
+        result.set_data(data);
+
+        result
     }
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
@@ -29,11 +27,19 @@ impl Buffer {
         let size = std::mem::size_of::<D>();
         let data = data as *const D;
         
-        self.data = core::slice::from_raw_parts(data as *const u8, size).to_vec();
+        self.data = Vec::from(core::slice::from_raw_parts(data as *const u8, size));
         
     }
+    pub unsafe fn set_data_vec<D>(&mut self, data: Vec<D>) {
+        let (_, bytes, _) = data.align_to::<u8>();
+        self.data = Vec::from(bytes);
+    }
+
     pub fn data_size(&self) -> usize {
         self.data.len() * std::mem::size_of::<u8>()
+    }
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
     pub fn uuid(&self) -> &UUID {
         &self.uuid

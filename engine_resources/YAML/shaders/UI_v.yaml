@@ -17,5 +17,5 @@ children:
     children: []
   - name: src_code
     node_type: ""
-    value: "#version 450\r\n\r\nin vec3 position;\r\nin vec2 tex_coord;\r\n\r\nlayout(binding = 0) uniform ViewModel {\r\n    mat4 view;\r\n    mat4 proj;\r\n} view_model;\r\n\r\nout vec2 vert_tex_coord;\r\n\r\nvoid main() {\r\n    vert_tex_coord = tex_coord;\r\n    gl_Position = view_model.proj * view_model.view * vec4(position, 1.0);\r\n}"
+    value: "#version 450\r\n\r\nlayout(location = 0) in vec3 position;\r\nlayout(location = 1) in vec2 tex_coord;\r\n\r\nlayout(binding = 0) uniform ViewModel {\r\n    mat4 view;\r\n    mat4 proj;\r\n} view_model;\r\n\r\nout vec2 vert_tex_coord;\r\n\r\nvoid main() {\r\n    vert_tex_coord = tex_coord;\r\n    gl_Position = view_model.proj * view_model.view * vec4(position, 1.0);\r\n}"
     children: []

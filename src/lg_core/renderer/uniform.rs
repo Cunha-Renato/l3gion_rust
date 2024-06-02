@@ -75,8 +75,8 @@ impl lg_renderer::renderer::lg_uniform::LgUniform for Uniform {
         self.buffer.get_raw_data()
     }
     
-    fn set_data<D>(&mut self, data: D) {
-        unsafe { self.buffer.set_data(&data) };
+    fn set_data<D>(&mut self, data: &D) {
+        unsafe { self.buffer.set_data(data) };
     }
     
     

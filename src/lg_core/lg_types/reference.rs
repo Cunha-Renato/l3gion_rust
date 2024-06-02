@@ -18,21 +18,21 @@ impl<T> Rfc<T> {
 }
 impl<T: ?Sized> Rfc<T> {
     pub fn borrow(&self) -> std::cell::Ref<'_, T> {
-        self.data.borrow()
+        std::cell::RefCell::borrow(&self.data)
     }
 
     pub fn borrow_mut(&self) -> std::cell::RefMut<'_, T> {
-        self.data.borrow_mut()
+        std::cell::RefCell::borrow_mut(&self.data)
     }
     pub fn from_rc_refcell(val: &Rc<RefCell<T>>) -> Self {
         Self {
-            data: val.clone()
+            data: Rc::clone(val)
         }
     }
 }
 impl<T: ?Sized> Clone for Rfc<T> {
     fn clone(&self) -> Self {
-        Self { data: self.data.clone() }
+        Self { data: Rc::clone(&self.data) }
     }
 }
 impl<T: PartialEq> PartialEq for Rfc<T> {

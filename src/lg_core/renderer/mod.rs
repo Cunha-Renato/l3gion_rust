@@ -45,7 +45,7 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        self.resource_manager.process_folder(std::path::Path::new("resources"))?;
+        // self.resource_manager.process_folder(std::path::Path::new("resources"))?;
         self.resource_manager.init()?;
         
         Ok(())
@@ -124,6 +124,7 @@ impl LgRenderer {
 
         // TODO: I need a shader Program, so different materials can use the same program, and not require to recreate it
         self.renderer.draw(
+            false,
             (mesh.uuid().clone(), mesh.vertices(), mesh.indices()), 
             texture, 
             (UUID::from_u128(86545322955764439664055660664792965181), &shaders), // Shader Program, I need a UUID placeholder
@@ -160,6 +161,14 @@ static BATCH_CONSTRAINTS: BatchConstraints = BatchConstraints {
 impl LgRenderer {
     pub fn set_uniform(&mut self, uniform: Uniform) {
         self.global_uniform = Some(uniform);
+    }
+    pub fn update_uniform<D>(&mut self, name: &str, data: &D) {
+        match &mut self.global_uniform {
+            Some(u) => if u.name() == name {
+                u.set_data(data);
+            },
+            None => (),
+        };
     }
     pub unsafe fn batch_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
@@ -244,6 +253,7 @@ impl LgRenderer {
             }
 
             self.renderer.borrow_mut().draw(
+                false,
                 (BATCH_CONSTRAINTS.uuid.clone(), &dd.vertices, &dd.indices), 
                 texture, 
                 (UUID::from_u128(86545322955764439664055660664792965181), &shaders), 

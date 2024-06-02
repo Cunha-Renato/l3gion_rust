@@ -35,12 +35,22 @@ impl Layer for TestLayer {
             UUID::from_u128(1),
             glm::vec3(0.5, 0.0, 0.0)
         ));
-        self.entities.push(LgEntity::new(
-            UUID::from_u128(94175893682642414160568079829868456088),
-            UUID::from_u128(1),
-            glm::vec3(-0.5, 0.0, 0.0)
-        ));
 
+        self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new(
+            "ViewMatrix", 
+            lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
+            0, 
+            0, 
+            true, 
+        ));
+        
+        Ok(())
+    }
+
+    fn on_update(&mut self) {
+        self.camera.on_update();
+
+        // Update uniform
         struct ViewProj {
             view: glm::Mat4,
             proj: glm::Mat4,
@@ -50,23 +60,7 @@ impl Layer for TestLayer {
             view: self.camera.get_view_matrix().clone(),
             proj: self.camera.get_projection_matrix()
         };
-
-        unsafe {
-            self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new_with_data(
-                "ViewMatrix", 
-                lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
-                0, 
-                0, 
-                true, 
-                view_proj
-            ));
-        }
-        
-        Ok(())
-    }
-
-    fn on_update(&mut self) {
-        self.camera.on_update();
+        self.core.as_mut().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
 
         unsafe {
             self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.draw_entity(e).unwrap());
@@ -76,9 +70,11 @@ impl Layer for TestLayer {
     fn on_event(&mut self, event: &LgEvent) -> bool {
         self.camera.on_event(&event);
 
+        static mut added: f32 = 0.1;
+
         match event {
-            LgEvent::KeyEvent(e) => {
-                if e.key == LgKeyCode::F12 && e.pressed {
+            LgEvent::KeyEvent(e) => if e.pressed {
+                if e.key == LgKeyCode::F12  {
                     match self.profile {
                         true => {
                             self.profile = false;
@@ -88,6 +84,16 @@ impl Layer for TestLayer {
                             self.profile = true;
                             profiler_begin!();
                         },
+                    }
+                }
+                if e.key == LgKeyCode::K {
+                    unsafe {
+                        self.entities.push(LgEntity::new(
+                            UUID::from_u128(279637899307357088197043655395897281162),
+                            UUID::from_u128(1),
+                            glm::vec3(-added, 0.0, 0.0)
+                        ));
+                        added += 0.1;
                     }
                 }
             },

@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, path::Path};
-use lg_renderer::renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}};
+use lg_renderer::{lg_vertex, renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}}};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
@@ -23,20 +23,24 @@ pub struct LgRenderer {
     resource_manager: ResourceManager,
     
     // (Material UUID, Data)
-    batch_draw_data: HashMap<UUID, BatchDrawData>,
-    in_use_batch_data: BatchData,
+    instance_draw_data: HashMap<UUID, InstanceDrawData>,
+    in_use_instance_data: InstanceData,
     
     // TODO: Just for testing
     global_uniform: Option<Uniform>,
+    
+    // TODO: Testing
+    pub draw_calls: usize,
 }
 impl LgRenderer {
     pub fn new(renderer: lg_renderer::renderer::LgRenderer<UUID>) -> Result<Self, StdError> {
         Ok(Self {
             renderer,
             resource_manager: ResourceManager::default(),
-            batch_draw_data: HashMap::default(),
-            in_use_batch_data: BatchData::default(),
+            instance_draw_data: HashMap::default(),
+            in_use_instance_data: InstanceData::default(),
             global_uniform: None,
+            draw_calls: 0,
         })
     }
 
@@ -45,7 +49,7 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        // self.resource_manager.process_folder(std::path::Path::new("resources"))?;
+        self.resource_manager.process_folder(std::path::Path::new("resources"))?;
         self.resource_manager.init()?;
         
         Ok(())
@@ -67,7 +71,8 @@ impl LgRenderer {
     pub unsafe fn end(&mut self) -> Result<(), StdError> {
         profile_function!();
 
-        self.flush_batch()?;
+        self.flush()?;
+        self.draw_calls = 0;
         self.renderer.end()
     }
     pub unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
@@ -122,38 +127,42 @@ impl LgRenderer {
             ubos.push((uniform.buffer.uuid().clone(), uniform));
         }
 
+        self.draw_calls += 1;
         // TODO: I need a shader Program, so different materials can use the same program, and not require to recreate it
         self.renderer.draw(
-            false,
             (mesh.uuid().clone(), mesh.vertices(), mesh.indices()), 
             texture, 
             (UUID::from_u128(86545322955764439664055660664792965181), &shaders), // Shader Program, I need a UUID placeholder
-            ubos
+            ubos,
         )
     }
 }
 
-struct BatchConstraints {
-    uuid: UUID,
-    max_meshes: u32,
+struct InstanceVertex {
+    row_0: glm::Vec4,
+    row_1: glm::Vec4,
+    row_2: glm::Vec4,
+}
+lg_vertex!(InstanceVertex, row_0, row_1, row_2);
+
+struct InstancingConstraints {
+    max_instances: u32,
     max_textures: u32,
 }
 
 #[derive(Default, Debug)]
-struct BatchData {
-    meshes: u32,
+struct InstanceData {
+    instances: u32,
     textures: HashSet<UUID>,
 }
 
 #[derive(Default)]
-struct BatchDrawData {
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
+struct InstanceDrawData {
+    instance_data: HashMap<UUID, Vec<InstanceVertex>>
 }
 
-static BATCH_CONSTRAINTS: BatchConstraints = BatchConstraints {
-    uuid: UUID::from_u128(3127841985126510201947169420),
-    max_meshes: 1000,
+static INSTANCING_CONSTRAINTS: InstancingConstraints = InstancingConstraints {
+    max_instances: 1000,
     max_textures: 20,
 };
 
@@ -170,73 +179,64 @@ impl LgRenderer {
             None => (),
         };
     }
-    pub unsafe fn batch_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+    pub unsafe fn instance_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
 
-        self.resource_manager.prepare_mesh(&entity.mesh)?;
-        self.resource_manager.prepare_material(&entity.material)?;
-
-        if self.in_use_batch_data.meshes + 1 > BATCH_CONSTRAINTS.max_meshes {
-            self.flush_batch()?;
+        {
+            profile_scope!("preparing resources");
+            self.resource_manager.prepare_mesh(&entity.mesh)?;
+            self.resource_manager.prepare_material(&entity.material)?;
         }
-        
-        let (mut vertices, mut indices) = {
-            let mesh = self.resource_manager.get_mesh(&entity.mesh).unwrap();
-            
-            (mesh.vertices().to_vec(), mesh.indices().to_vec())
-        };
         
         // Transform
-        let identity = glm::Mat4::identity();
-        let translation = glm::translate(&identity, &entity.position);
-        let rotation = glm::rotate(&identity, entity.rotation_angle, &entity.rotation_axis);
-        let scale = glm::scale(&identity, &entity.scale);
+        let data = {
+            profile_scope!("transform");
 
-        let transform = translation * rotation * scale;
+            let identity = glm::Mat4::identity();
+            let translation = glm::translate(&identity, &entity.position);
+            let rotation = glm::rotate(&identity, entity.rotation_angle, &entity.rotation_axis);
+            let scale = glm::scale(&identity, &entity.scale);
+            let model = translation * rotation * scale;
+
+            let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
+            let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
+            let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
+            InstanceVertex {
+                row_0,
+                row_1,
+                row_2,
+            }
+        };
+
         {
-            profile_scope!("transform_loop");
-            vertices
-                .par_iter_mut()
-                .for_each(|v| {
-                    let og_position = v.position;
-                    let v_position = glm::vec4(og_position.x, og_position.y, og_position.z, 1.0);
-                    let transformed = transform * v_position;
-                    
-                    v.position = glm::vec3(transformed.x, transformed.y, transformed.z);
-                });
-        }
-        
-        let draw_data = self.batch_draw_data.entry(entity.material.clone()).or_default();
-        { 
-            profile_scope!("updating_indices");
+            profile_scope!("match statement");
+            match self.instance_draw_data.entry(entity.material.clone()) {
+                std::collections::hash_map::Entry::Occupied(val) => {
+                    let dd = val.into_mut();
 
-            for i in &mut indices {
-                *i += draw_data.vertices.len() as u32;
+                    match dd.instance_data.entry(entity.mesh.clone()) {
+                        std::collections::hash_map::Entry::Occupied(val) => val.into_mut().push(data),
+                        std::collections::hash_map::Entry::Vacant(entry) => { entry.insert(vec![data]); },
+                    }
+                },
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    let instances = entry.insert(InstanceDrawData::default());                
+                    instances.instance_data.insert(entity.mesh.clone(), vec![data]);
+                },
             }
         }
 
-        {
-            profile_scope!("extending_draw_data");
-
-            self.in_use_batch_data.meshes += 1;
-            let mut new_vertices = Vec::with_capacity(draw_data.vertices.len() + vertices.len());
-            new_vertices.extend_from_slice(&draw_data.vertices);
-            new_vertices.extend_from_slice(&vertices);
-
-            let mut new_indices = Vec::with_capacity(draw_data.indices.len() + indices.len());
-            new_indices.extend_from_slice(&draw_data.indices);
-            new_indices.extend_from_slice(&indices);
-
-            draw_data.vertices = new_vertices;
-            draw_data.indices = new_indices;
+        self.in_use_instance_data.instances += 1;
+        if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances {
+            self.flush()?;
         }
 
         Ok(())
     }
-    pub unsafe fn flush_batch(&mut self) -> Result<(), StdError> {
+    pub unsafe fn flush(&mut self) -> Result<(), StdError> {
         profile_function!();
 
-        for (mat_uuid, dd) in &self.batch_draw_data {
+        for (mat_uuid, dd) in &self.instance_draw_data {
             let material = self.resource_manager.get_material(mat_uuid).unwrap();
             let texture: Option<(UUID, &Texture)> = None;
             let shaders = material.shaders().iter()
@@ -252,19 +252,27 @@ impl LgRenderer {
                 ubos.push((uniform.buffer.uuid().clone(), uniform));
             }
 
-            self.renderer.borrow_mut().draw(
-                false,
-                (BATCH_CONSTRAINTS.uuid.clone(), &dd.vertices, &dd.indices), 
-                texture, 
-                (UUID::from_u128(86545322955764439664055660664792965181), &shaders), 
-                ubos
-            )?;
+            for dd in &dd.instance_data {
+                let mesh = self.resource_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
+                
+                let vertices = mesh.vertices();
+                let indices = mesh.indices();
+                
+                self.draw_calls += 1;
+                self.renderer.borrow_mut().draw_instanced(
+                    (mesh.uuid().clone(), vertices, indices), 
+                    texture.clone(), 
+                    (UUID::from_u128(86545322955764439664055660664792965181), &shaders), 
+                    ubos.clone(),
+                    dd.1
+                )?;
+            }
         }
 
 
-        self.in_use_batch_data.meshes = 0;
-        self.in_use_batch_data.textures.clear();
-        self.batch_draw_data.clear();
+        self.in_use_instance_data.instances = 0;
+        self.in_use_instance_data.textures.clear();
+        self.instance_draw_data.clear();
         
         Ok(())
     }

@@ -1,6 +1,7 @@
 use crate::{profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use nalgebra_glm as glm;
+use sllog::info;
 
 pub struct TestLayer {
     core: Option<Rfc<ApplicationCore>>,
@@ -31,7 +32,7 @@ impl Layer for TestLayer {
             1000.0
         );
         self.entities.push(LgEntity::new(
-            UUID::from_u128(279637899307357088197043655395897281162),
+            UUID::from_u128(94175893682642414160568079829868456088),
             UUID::from_u128(1),
             glm::vec3(0.5, 0.0, 0.0)
         ));
@@ -63,14 +64,14 @@ impl Layer for TestLayer {
         self.core.as_mut().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
 
         unsafe {
-            self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.draw_entity(e).unwrap());
+            self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.instance_entity(e).unwrap());
         }
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {
         self.camera.on_event(&event);
 
-        static mut added: f32 = 0.1;
+        static mut ADDED: f32 = 0.1;
 
         match event {
             LgEvent::KeyEvent(e) => if e.pressed {
@@ -88,13 +89,21 @@ impl Layer for TestLayer {
                 }
                 if e.key == LgKeyCode::K {
                     unsafe {
-                        self.entities.push(LgEntity::new(
-                            UUID::from_u128(279637899307357088197043655395897281162),
-                            UUID::from_u128(1),
-                            glm::vec3(-added, 0.0, 0.0)
-                        ));
-                        added += 0.1;
+                        self.entities.extend((0..20_000)
+                            .map(|_| {
+                                ADDED += 0.1;
+                                LgEntity::new(
+                                    UUID::from_u128(94175893682642414160568079829868456088),
+                                    UUID::from_u128(1),
+                                    glm::vec3(-ADDED, 0.0, 0.0)
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                        );
                     }
+                }
+                if e.key == LgKeyCode::I {
+                    println!("Num entities: {}", self.entities.len());
                 }
             },
             _ => (),

@@ -1,7 +1,6 @@
 use crate::{profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use nalgebra_glm as glm;
-use sllog::info;
 
 pub struct TestLayer {
     core: Option<Rfc<ApplicationCore>>,
@@ -34,7 +33,7 @@ impl Layer for TestLayer {
         self.entities.push(LgEntity::new(
             UUID::from_u128(94175893682642414160568079829868456088),
             UUID::from_u128(1),
-            glm::vec3(0.5, 0.0, 0.0)
+            glm::vec3(0.0, 0.0, 0.0)
         ));
 
         self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new(
@@ -89,13 +88,28 @@ impl Layer for TestLayer {
                 }
                 if e.key == LgKeyCode::K {
                     unsafe {
-                        self.entities.extend((0..20_000)
+                        self.entities.extend((0..2_000)
                             .map(|_| {
                                 ADDED += 0.1;
                                 LgEntity::new(
                                     UUID::from_u128(94175893682642414160568079829868456088),
                                     UUID::from_u128(1),
                                     glm::vec3(-ADDED, 0.0, 0.0)
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                        );
+                    }
+                }
+                if e.key == LgKeyCode::J {
+                    unsafe {
+                        self.entities.extend((0..2)
+                            .map(|_| {
+                                ADDED += 0.1;
+                                LgEntity::new(
+                                    UUID::from_u128(279637899307357088197043655395897281162),
+                                    UUID::from_u128(3),
+                                    glm::vec3(ADDED * 5.0, 0.0, 0.0)
                                 )
                             })
                             .collect::<Vec<_>>()

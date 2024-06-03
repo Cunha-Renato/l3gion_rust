@@ -1,12 +1,11 @@
 #![allow(non_camel_case_types)]
 
-use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, path::Path};
-use lg_renderer::{lg_vertex, renderer::{lg_shader::ShaderStage, lg_uniform::{LgUniform, LgUniformType}}};
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use std::{borrow::BorrowMut, collections::{HashMap, HashSet}};
+use lg_renderer::{lg_vertex, renderer::lg_uniform::LgUniform};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
-use self::{material::Material, mesh::Mesh, shader::Shader, texture::Texture, uniform_struct::SSBO, vertex::Vertex};
-use super::{entity::LgEntity, resoruce_manager::ResourceManager, uuid::{self, UUID}};
+use self::texture::Texture;
+use super::{entity::LgEntity, resoruce_manager::ResourceManager, uuid::UUID};
 use nalgebra_glm as glm;
 
 pub mod vertex;
@@ -23,7 +22,7 @@ pub struct LgRenderer {
     resource_manager: ResourceManager,
     
     // (Material UUID, Data)
-    instance_draw_data: HashMap<UUID, InstanceDrawData>,
+    instance_draw_data: HashMap<UUID, HashMap<UUID, Vec<InstanceVertex>>>,
     in_use_instance_data: InstanceData,
     
     // TODO: Just for testing
@@ -49,7 +48,7 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        self.resource_manager.process_folder(std::path::Path::new("resources"))?;
+        // self.resource_manager.process_folder(std::path::Path::new("resources"))?;
         self.resource_manager.init()?;
         
         Ok(())
@@ -60,55 +59,9 @@ impl LgRenderer {
 
         self.resource_manager.prepare_mesh(&entity.mesh)?;
         self.resource_manager.prepare_material(&entity.material)?;
-
-        self.draw(&entity.mesh, &entity.material, &entity.uniforms)
-    }
-    pub unsafe fn begin(&self) {
-        profile_function!();
-
-        self.renderer.begin()
-    }
-    pub unsafe fn end(&mut self) -> Result<(), StdError> {
-        profile_function!();
-
-        self.flush()?;
-        self.draw_calls = 0;
-        self.renderer.end()
-    }
-    pub unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
-        self.renderer.resize(new_size)?;
-
-        Ok(())
-    }
-    pub unsafe fn read_material_ubo<T: Clone>(&self, material_name: &str, uniform_name: &str) -> Result<T, StdError> {
-        /* let material = self.get_material(material_name).unwrap();
-        let (index, _) = material.uniforms
-            .iter()
-            .enumerate()
-            .find(|(_, u)| {
-                u.name() == uniform_name
-            }).unwrap();
         
-        self.renderer.read_uniform_buffer::<T>(material.uniforms[index].buffer.uuid().clone(), index) */
-        todo!();
-    }
-    pub unsafe fn reset_material_ubo(&self, material_name: &str, uniform_name: &str) -> Result<(), StdError> {
-        /* let material = self.get_material(material_name).unwrap();
-        let (index, uniform) = material.uniforms
-            .iter()
-            .enumerate()
-            .find(|(_, u)| {
-                u.name() == uniform_name
-            }).unwrap(); */
-
-        // self.renderer.set_uniform_buffer(uniform.buffer.uuid().clone(), index, uniform)
-        todo!();
-    }
-}
-impl LgRenderer {
-    unsafe fn draw(&mut self, mesh: &UUID, material: &UUID, uniforms: &[Uniform]) -> Result<(), StdError> {
-        let mesh = self.resource_manager.get_mesh(mesh).unwrap();
-        let material = self.resource_manager.get_material(material).unwrap();
+        let mesh = self.resource_manager.get_mesh(&entity.mesh).unwrap();
+        let material = self.resource_manager.get_material(&entity.material).unwrap();
 
         let texture: Option<(UUID, &Texture)> = None;
 
@@ -116,7 +69,7 @@ impl LgRenderer {
             .map(|s| (s.clone(), self.resource_manager.get_shader(s).unwrap()))
             .collect::<Vec<_>>();
 
-        let mut ubos = uniforms
+        let mut ubos = entity.uniforms
             .iter()
             .chain(material.uniforms.iter())
             .map(|ubo| (ubo.buffer.uuid().clone(), ubo))
@@ -132,9 +85,37 @@ impl LgRenderer {
         self.renderer.draw(
             (mesh.uuid().clone(), mesh.vertices(), mesh.indices()), 
             texture, 
-            (UUID::from_u128(86545322955764439664055660664792965181), &shaders), // Shader Program, I need a UUID placeholder
+            (material.uuid().clone(), &shaders), // Shader Program, I need a UUID placeholder
             ubos,
         )
+    }
+    pub unsafe fn begin(&self) {
+        profile_function!();
+
+        self.renderer.begin()
+    }
+    pub unsafe fn end(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
+        self.flush()?;
+        self.draw_calls = 0;
+        self.renderer.end()
+    }
+    pub fn set_uniform(&mut self, uniform: Uniform) {
+        self.global_uniform = Some(uniform);
+    }
+    pub fn update_uniform<D>(&mut self, name: &str, data: &D) {
+        match &mut self.global_uniform {
+            Some(u) => if u.name() == name {
+                u.set_data(data);
+            },
+            None => (),
+        };
+    }
+    pub unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
+        self.renderer.resize(new_size)?;
+
+        Ok(())
     }
 }
 
@@ -156,29 +137,12 @@ struct InstanceData {
     textures: HashSet<UUID>,
 }
 
-#[derive(Default)]
-struct InstanceDrawData {
-    instance_data: HashMap<UUID, Vec<InstanceVertex>>
-}
-
 static INSTANCING_CONSTRAINTS: InstancingConstraints = InstancingConstraints {
-    max_instances: 1000,
+    max_instances: 100_000,
     max_textures: 20,
 };
 
-// Batch
 impl LgRenderer {
-    pub fn set_uniform(&mut self, uniform: Uniform) {
-        self.global_uniform = Some(uniform);
-    }
-    pub fn update_uniform<D>(&mut self, name: &str, data: &D) {
-        match &mut self.global_uniform {
-            Some(u) => if u.name() == name {
-                u.set_data(data);
-            },
-            None => (),
-        };
-    }
     pub unsafe fn instance_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
 
@@ -214,14 +178,14 @@ impl LgRenderer {
                 std::collections::hash_map::Entry::Occupied(val) => {
                     let dd = val.into_mut();
 
-                    match dd.instance_data.entry(entity.mesh.clone()) {
+                    match dd.entry(entity.mesh.clone()) {
                         std::collections::hash_map::Entry::Occupied(val) => val.into_mut().push(data),
                         std::collections::hash_map::Entry::Vacant(entry) => { entry.insert(vec![data]); },
                     }
                 },
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    let instances = entry.insert(InstanceDrawData::default());                
-                    instances.instance_data.insert(entity.mesh.clone(), vec![data]);
+                    let instances = entry.insert(HashMap::default());                
+                    instances.insert(entity.mesh.clone(), vec![data]);
                 },
             }
         }
@@ -252,7 +216,7 @@ impl LgRenderer {
                 ubos.push((uniform.buffer.uuid().clone(), uniform));
             }
 
-            for dd in &dd.instance_data {
+            for dd in dd {
                 let mesh = self.resource_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
                 
                 let vertices = mesh.vertices();
@@ -262,7 +226,7 @@ impl LgRenderer {
                 self.renderer.borrow_mut().draw_instanced(
                     (mesh.uuid().clone(), vertices, indices), 
                     texture.clone(), 
-                    (UUID::from_u128(86545322955764439664055660664792965181), &shaders), 
+                    (mat_uuid.clone(), &shaders), 
                     ubos.clone(),
                     dd.1
                 )?;

@@ -36,9 +36,6 @@ impl Layer for TestLayer {
             UUID::from_u128(1),
             glm::vec3(0.0, 0.0, 0.0)
         ));
-        self.entities[0].rotation_angle = 0.5;
-        self.entities[0].rotation_axis = glm::vec3(0.0, 0.0, 1.0);
-        self.entities[0].scale = glm::vec3(5.0, 1.0, 2.0);
 
         self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new(
             "ViewMatrix", 

@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, process::Termination, sync::{mpsc, Arc, Mutex}};
+use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
 use lg_renderer::{lg_vertex, renderer::lg_uniform::LgUniform};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use uniform::Uniform;
@@ -24,7 +24,6 @@ pub struct LgRenderer {
     
     // (Material UUID, Data)
     instance_draw_data: HashMap<UUID, HashMap<UUID, Vec<InstanceVertex>>>,
-    instance_pre_flush_data: Vec<PreFlushData>,
     in_use_instance_data: InstanceData,
     
     // TODO: Just for testing
@@ -40,7 +39,6 @@ impl LgRenderer {
             renderer,
             resource_manager: ResourceManager::default(),
             instance_draw_data: HashMap::default(),
-            instance_pre_flush_data: Vec::new(),
             in_use_instance_data: InstanceData::default(),
             global_uniform: None,
             draw_calls: 0,
@@ -97,10 +95,7 @@ impl LgRenderer {
         self.renderer.begin()
     }
     pub unsafe fn end(&mut self) -> Result<(), StdError> {
-        {
-            profile_scope!("render_flush");
-            self.flush()?;
-        }
+        self.flush()?;
         self.draw_calls = 0;
         {
             profile_scope!("gl_swap_buffers");
@@ -133,16 +128,6 @@ struct InstanceVertex {
 }
 lg_vertex!(InstanceVertex, row_0, row_1, row_2);
 
-#[derive(Default)]
-struct PreFlushData {
-    material: UUID,
-    mesh: UUID,
-    position: glm::Vec3,
-    scale: glm::Vec3,
-    rotation_axis: glm::Vec3,
-    rotation_angle: f32,
-}
-
 struct InstancingConstraints {
     max_instances: u32,
     max_textures: u32,
@@ -168,16 +153,26 @@ impl LgRenderer {
             self.resource_manager.prepare_mesh(&entity.mesh)?;
             self.resource_manager.prepare_material(&entity.material)?;
         }
-        let _ = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
 
-        self.instance_pre_flush_data.push(PreFlushData {
-            material: entity.material.clone(),
-            mesh: entity.mesh.clone(),
-            position: entity.position.clone(),
-            scale: entity.scale.clone(),
-            rotation_axis: entity.rotation_axis.clone(),
-            rotation_angle: entity.rotation_angle,
-        });
+        let model = entity.model();
+        let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
+        let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
+        let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
+        let data = InstanceVertex {
+            row_0,
+            row_1,
+            row_2,
+        };
+
+        let mesh_map = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
+        match mesh_map.entry(entity.mesh.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().push(data);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![data]);
+            }
+        }
 
         self.in_use_instance_data.instances += 1;
         if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances {
@@ -186,58 +181,10 @@ impl LgRenderer {
 
         Ok(())
     }
-    fn pre_flush(&mut self) {
-        profile_function!();
-        let draw_data = Arc::new(Mutex::new(self.instance_draw_data.clone()));
-
-        {
-            profile_scope!("loop");
-            self.instance_pre_flush_data.par_iter()
-                .for_each(|val| {
-                    let data = {
-                        profile_scope!("transform");
-            
-                        let identity = glm::Mat4::identity();
-                        let translation = glm::translate(&identity, &val.position);
-                        let rotation = glm::rotate(&identity, val.rotation_angle, &val.rotation_axis);
-                        let scale = glm::scale(&identity, &val.scale);
-                        let model = translation * rotation * scale;
-            
-                        let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
-                        let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
-                        let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
-                        InstanceVertex {
-                            row_0,
-                            row_1,
-                            row_2,
-                        }
-                    };
-
-                    let draw_data = Arc::clone(&draw_data);
-                    let mut draw_data = draw_data.lock().unwrap();
-                    let mesh_map = draw_data.get_mut(&val.material).unwrap();
-                    
-                    match mesh_map.entry(val.mesh.clone()) {
-                        std::collections::hash_map::Entry::Occupied(mut entry) => {
-                            entry.get_mut().push(data);
-                        }
-                        std::collections::hash_map::Entry::Vacant(entry) => {
-                            entry.insert(vec![data]);
-                        }
-                    }
-                });
-
-            self.instance_pre_flush_data.clear();
-        }
-
-        // Update the original instance_draw_data after processing is complete
-        self.instance_draw_data = Arc::try_unwrap(draw_data).unwrap().into_inner().unwrap();
-    }
     unsafe fn flush(&mut self) -> Result<(), StdError> {
         profile_function!();
-        self.pre_flush();
         for (mat_uuid, dd) in &self.instance_draw_data {
-            let material = self.resource_manager.get_material(mat_uuid).unwrap();
+            let material = self.resource_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
             let texture: Option<(UUID, &Texture)> = None;
             let shaders = material.shaders().iter()
                 .map(|s| (s.clone(), self.resource_manager.get_shader(s).unwrap()))

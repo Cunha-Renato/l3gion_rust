@@ -1,6 +1,6 @@
 use nalgebra_glm as glm;
 
-use crate::lg_core::{event::{LgEvent, MouseButton, MouseEvent, LgKeyCode}, input::LgInput};
+use crate::{lg_core::{event::{LgEvent, LgKeyCode, MouseButton, MouseEvent}, input::LgInput}, profile_function};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Camera {
@@ -104,14 +104,14 @@ impl Camera {
     }
     
     pub fn on_update(&mut self) {
-        optick::event!();
+        profile_function!();
         let input = LgInput::get().unwrap();
+        let mouse = input.get_mouse_position();
+        let delta = (mouse - self.initial_mouse_position) * 0.003;
+        self.initial_mouse_position = mouse;
+
         if input.is_key_pressed(LgKeyCode::LAlt)
         {
-            let mouse = input.get_mouse_position();
-            let delta = (mouse - self.initial_mouse_position) * 0.003;
-            self.initial_mouse_position = mouse;  
-
             if input.is_mouse_button_pressed(MouseButton::Right) {
                 self.mouse_pan(&delta);
             }
@@ -149,8 +149,8 @@ impl Camera {
     fn mouse_pan(&mut self, delta: &glm::Vec2) {
         let (x_speed, y_speed) = self.pan_speed();
         
-        self.focal_point -= -self.get_right_direction() * delta.x * x_speed * self.distance;
-        self.focal_point -= self.get_up_direction() * delta.y * y_speed * self.distance;
+        self.focal_point += self.get_right_direction() * delta.x * x_speed * self.distance;
+        self.focal_point += self.get_up_direction() * delta.y * y_speed * self.distance;
     }
     fn mouse_rotate(&mut self, delta: &glm::Vec2) {
         let yaw_sign = if self.get_up_direction().y < 0.0 {
@@ -158,7 +158,7 @@ impl Camera {
         } else { 1.0 };
         
         self.yaw -= yaw_sign * delta.x * self.rotation_speed();
-        self.pitch -= delta.y * self.rotation_speed();
+        self.pitch += delta.y * self.rotation_speed();
     }
     fn mouse_zoom(&mut self, delta: f32) {
         self.distance -= delta * self.zoom_speed();
@@ -170,12 +170,19 @@ impl Camera {
     }
     
     pub fn on_event(&mut self, event: &LgEvent) {
-        match event {
-            LgEvent::MouseEvent(MouseEvent::ScrollEvent(scroll_event)) => {
-                let delta = scroll_event.delta.1 * 0.1;
-                self.mouse_zoom(delta);
-            },
-            _ => ()
+        profile_function!();
+        let input = LgInput::get().unwrap();
+        if input.is_key_pressed(LgKeyCode::LAlt) {
+            match event {
+                LgEvent::MouseEvent(e) => match e {
+                    MouseEvent::ScrollEvent(scroll_event) => {
+                        let delta = scroll_event.delta.1 * 0.1;
+                        self.mouse_zoom(delta);
+                    },
+                    _ => (),
+                },
+                _ => ()
+            }
         }
     }
     
@@ -185,15 +192,15 @@ impl Camera {
     
     fn pan_speed(&self) -> (f32, f32) {
         let x = (self.viewport_width / 1000.0).min(2.4);
-        let x_factor = 0.0366 * (x * x) - 0.1778 * x + 0.3021;
+        let x_factor = 0.0366 * (x * x) - 0.18 * x + 0.35;
         
         let y = (self.viewport_height / 1000.0).min(2.4);
-        let y_factor = 0.0366 * (y * y) - 0.1778 * y + 0.3021;
+        let y_factor = 0.0366 * (y * y) - 0.18 * y + 0.35;
             
         (x_factor, y_factor) 
     }
     const fn rotation_speed(&self) -> f32 {
-        0.8
+        0.85
     }
     fn zoom_speed(&self) -> f32 {
         let distance = (self.distance * 0.2).max(0.0);

@@ -36,6 +36,9 @@ impl Layer for TestLayer {
             UUID::from_u128(1),
             glm::vec3(0.0, 0.0, 0.0)
         ));
+        self.entities[0].set_rotation_angle(0.5);
+        self.entities[0].set_rotation_axis(glm::vec3(1.0, 0.0, 1.0));
+        self.entities[0].set_scale(glm::vec3(2.0, 0.5, 3.0));
 
         self.core.as_mut().unwrap().borrow_mut().renderer.set_uniform(Uniform::new(
             "ViewMatrix", 
@@ -93,7 +96,7 @@ impl Layer for TestLayer {
                             .map(|_| {
                                 ADDED += 1.0;
                                 LgEntity::new(
-                                    UUID::from_u128(94175893682642414160568079829868456088),
+                                    UUID::from_u128(279637899307357088197043655395897281162),
                                     UUID::from_u128(1),
                                     glm::vec3(-ADDED, 0.0, 0.0)
                                 )
@@ -104,11 +107,11 @@ impl Layer for TestLayer {
                 }
                 if e.key == LgKeyCode::J {
                     unsafe {
-                        self.entities.extend((0..2)
+                        self.entities.extend((0..2_000)
                             .map(|_| {
                                 ADDED += 0.1;
                                 LgEntity::new(
-                                    UUID::from_u128(279637899307357088197043655395897281162),
+                                    UUID::from_u128(94175893682642414160568079829868456088),
                                     UUID::from_u128(3),
                                     glm::vec3(ADDED * 5.0, 0.0, 0.0)
                                 )

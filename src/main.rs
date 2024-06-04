@@ -1,4 +1,4 @@
-use l3gion_rust::{lg_core::test_layer::TestLayer, profile_scope, profiler_begin, profiler_end, L3gion};
+use l3gion_rust::{lg_core::test_layer::TestLayer, L3gion};
 
 fn main() {
     std::env::set_var("LOG", "4");

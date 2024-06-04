@@ -1,4 +1,4 @@
-use crate::{profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{profile_function, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use nalgebra_glm as glm;
 
@@ -20,6 +20,7 @@ impl TestLayer {
 }
 impl Layer for TestLayer {
     fn init(&mut self, app_core: Rfc<ApplicationCore>) -> Result<(), StdError> {
+        profile_function!();
         self.core = Some(app_core);
         
         let window = self.core.as_ref().unwrap().borrow().window.size();
@@ -48,14 +49,12 @@ impl Layer for TestLayer {
     }
 
     fn on_update(&mut self) {
-        self.camera.on_update();
-
+        profile_function!();
         // Update uniform
         struct ViewProj {
             view: glm::Mat4,
             proj: glm::Mat4,
         }
-
         let view_proj = ViewProj {
             view: self.camera.get_view_matrix().clone(),
             proj: self.camera.get_projection_matrix()
@@ -65,9 +64,11 @@ impl Layer for TestLayer {
         unsafe {
             self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.instance_entity(e).unwrap());
         }
+        self.camera.on_update();
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {
+        profile_function!();
         self.camera.on_event(&event);
 
         static mut ADDED: f32 = 0.1;
@@ -90,7 +91,7 @@ impl Layer for TestLayer {
                     unsafe {
                         self.entities.extend((0..2_000)
                             .map(|_| {
-                                ADDED += 0.1;
+                                ADDED += 1.0;
                                 LgEntity::new(
                                     UUID::from_u128(94175893682642414160568079829868456088),
                                     UUID::from_u128(1),
@@ -127,6 +128,7 @@ impl Layer for TestLayer {
     }
 
     fn shutdown(&mut self) -> Result<(), StdError> {
+        profile_function!();
         if self.profile {
             profiler_end!("profiles/test_layer");
         }

@@ -38,17 +38,16 @@ impl Application {
     pub fn init(&mut self) -> Result<(), StdError> {
         profile_function!();
         LgInput::init()?;
+        
+        for layer in &self.layers {
+            layer.borrow_mut().init(self.core.clone())?;
+        }
 
         {
             profile_scope!("renderer_init");
             self.core.borrow_mut().renderer.init()?;
         }
 
-
-        for layer in &self.layers {
-            layer.borrow_mut().init(self.core.clone())?;
-        }
-        
         Ok(())
     }
     pub fn shutdown(&mut self) -> Result<(), StdError> {
@@ -64,18 +63,29 @@ impl Application {
         self.layers.push(as_dyn!(layer, dyn Layer));
     }
     pub fn request_redraw(&self) {
+        profile_function!();
         self.core.borrow()._window.request_redraw();
     }
     pub fn on_update(&mut self) -> Result<(), StdError> {
+        optick::next_frame();
         profile_function!();
 
         unsafe { 
+            profile_scope!("render_begin");
             self.core.borrow().renderer.begin(); 
         }
-        self.layers
-            .iter()
-            .for_each(|l| l.borrow_mut().on_update());
-        unsafe { self.core.borrow_mut().renderer.end()?; }
+        {
+            profile_scope!("layers_on_update");
+            self.layers
+                .iter()
+                .for_each(|l| l.borrow_mut().on_update());
+        }
+
+        unsafe { 
+            profile_scope!("render_end");
+            self.core.borrow_mut().renderer.end()?; 
+        }
+
         Ok(())
     }
     pub fn on_event(&mut self, event: LgEvent) {
@@ -87,6 +97,7 @@ impl Application {
         }
     }
     pub fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
+        profile_function!();
         unsafe {
             self.core.borrow_mut().window.set_size(new_size);
             self.core.borrow().renderer.resize(new_size)?;

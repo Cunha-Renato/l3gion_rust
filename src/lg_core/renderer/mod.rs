@@ -24,7 +24,6 @@ pub struct LgRenderer {
     
     // (Material UUID, Data)
     instance_draw_data: HashMap<UUID, HashMap<UUID, Vec<InstanceVertex>>>,
-    instance_pre_flush_data: Vec<PreFlushData>,
     in_use_instance_data: InstanceData,
     
     // TODO: Just for testing
@@ -40,7 +39,6 @@ impl LgRenderer {
             renderer,
             resource_manager: ResourceManager::default(),
             instance_draw_data: HashMap::default(),
-            instance_pre_flush_data: Vec::new(),
             in_use_instance_data: InstanceData::default(),
             global_uniform: None,
             draw_calls: 0,
@@ -52,7 +50,7 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        // self.resource_manager.process_folder(std::path::Path::new("resources"))?;
+        self.resource_manager.process_folder(std::path::Path::new("resources"))?;
         self.resource_manager.init()?;
         
         Ok(())
@@ -127,21 +125,12 @@ impl LgRenderer {
 
 #[derive(Clone, Debug)]
 struct InstanceVertex {
-    row_0: glm::Vec4,
-    row_1: glm::Vec4,
-    row_2: glm::Vec4,
+    instance_position: glm::Vec3,
+    instance_scale: glm::Vec3,
+    instance_rotation_axis: glm::Vec3,
+    instance_rotation_angle: f32,
 }
-lg_vertex!(InstanceVertex, row_0, row_1, row_2);
-
-#[derive(Default)]
-struct PreFlushData {
-    material: UUID,
-    mesh: UUID,
-    position: glm::Vec3,
-    scale: glm::Vec3,
-    rotation_axis: glm::Vec3,
-    rotation_angle: f32,
-}
+lg_vertex!(InstanceVertex, instance_position, instance_scale, instance_rotation_axis, instance_rotation_angle);
 
 struct InstancingConstraints {
     max_instances: u32,
@@ -168,16 +157,22 @@ impl LgRenderer {
             self.resource_manager.prepare_mesh(&entity.mesh)?;
             self.resource_manager.prepare_material(&entity.material)?;
         }
-        let _ = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
+        let data = InstanceVertex {
+            instance_position: entity.position.clone(),
+            instance_scale: entity.scale.clone(),
+            instance_rotation_axis: entity.rotation_axis.clone(),
+            instance_rotation_angle: entity.rotation_angle,
+        };
 
-        self.instance_pre_flush_data.push(PreFlushData {
-            material: entity.material.clone(),
-            mesh: entity.mesh.clone(),
-            position: entity.position.clone(),
-            scale: entity.scale.clone(),
-            rotation_axis: entity.rotation_axis.clone(),
-            rotation_angle: entity.rotation_angle,
-        });
+        let mesh_map = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
+        match mesh_map.entry(entity.mesh.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().push(data);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![data]);
+            }
+        }
 
         self.in_use_instance_data.instances += 1;
         if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances {
@@ -186,57 +181,11 @@ impl LgRenderer {
 
         Ok(())
     }
-    fn pre_flush(&mut self) {
-        profile_function!();
-        let draw_data = Arc::new(Mutex::new(self.instance_draw_data.clone()));
-
-        {
-            profile_scope!("loop");
-            self.instance_pre_flush_data.par_iter()
-                .for_each(|val| {
-                    let data = {
-                        profile_scope!("transform");
-            
-                        let identity = glm::Mat4::identity();
-                        let translation = glm::translate(&identity, &val.position);
-                        let rotation = glm::rotate(&identity, val.rotation_angle, &val.rotation_axis);
-                        let scale = glm::scale(&identity, &val.scale);
-                        let model = translation * rotation * scale;
-            
-                        let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
-                        let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
-                        let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
-                        InstanceVertex {
-                            row_0,
-                            row_1,
-                            row_2,
-                        }
-                    };
-
-                    let draw_data = Arc::clone(&draw_data);
-                    let mut draw_data = draw_data.lock().unwrap();
-                    let mesh_map = draw_data.get_mut(&val.material).unwrap();
-                    
-                    match mesh_map.entry(val.mesh.clone()) {
-                        std::collections::hash_map::Entry::Occupied(mut entry) => {
-                            entry.get_mut().push(data);
-                        }
-                        std::collections::hash_map::Entry::Vacant(entry) => {
-                            entry.insert(vec![data]);
-                        }
-                    }
-                });
-
-            self.instance_pre_flush_data.clear();
-        }
-
-        // Update the original instance_draw_data after processing is complete
-        self.instance_draw_data = Arc::try_unwrap(draw_data).unwrap().into_inner().unwrap();
-    }
     unsafe fn flush(&mut self) -> Result<(), StdError> {
         profile_function!();
-        self.pre_flush();
         for (mat_uuid, dd) in &self.instance_draw_data {
+            profile_scope!("material_loop");
+
             let material = self.resource_manager.get_material(mat_uuid).unwrap();
             let texture: Option<(UUID, &Texture)> = None;
             let shaders = material.shaders().iter()
@@ -253,6 +202,7 @@ impl LgRenderer {
             }
 
             for dd in dd {
+                profile_scope!("mesh_loop");
                 let mesh = self.resource_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
                 
                 let vertices = mesh.vertices();
@@ -268,7 +218,6 @@ impl LgRenderer {
                 )?;
             }
         }
-
 
         self.in_use_instance_data.instances = 0;
         self.in_use_instance_data.textures.clear();

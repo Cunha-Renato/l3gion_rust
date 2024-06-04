@@ -19,7 +19,7 @@ impl TestLayer {
     }
 }
 impl Layer for TestLayer {
-    fn init(&mut self, app_core: Rfc<ApplicationCore>) -> Result<(), StdError> {
+    fn on_attach(&mut self, app_core: Rfc<ApplicationCore>) -> Result<(), StdError> {
         profile_function!();
         self.core = Some(app_core);
         
@@ -50,8 +50,17 @@ impl Layer for TestLayer {
         
         Ok(())
     }
+    
+    fn on_detach(&mut self) -> Result<(), StdError> {
+        profile_function!();
+        if self.profile {
+            profiler_end!("profiles/test_layer");
+        }
 
-    fn on_update(&mut self) {
+        Ok(())
+    }
+
+    fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         // Update uniform
         struct ViewProj {
@@ -68,6 +77,8 @@ impl Layer for TestLayer {
             self.entities.iter().for_each(|e| self.core.as_mut().unwrap().borrow_mut().renderer.instance_entity(e).unwrap());
         }
         self.camera.on_update();
+        
+        Ok(())
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {
@@ -128,14 +139,5 @@ impl Layer for TestLayer {
         }
 
         false
-    }
-
-    fn shutdown(&mut self) -> Result<(), StdError> {
-        profile_function!();
-        if self.profile {
-            profiler_end!("profiles/test_layer");
-        }
-
-        Ok(())
     }
 }

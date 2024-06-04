@@ -40,11 +40,8 @@ impl L3gion {
             event_loop
         })
     }
-    pub fn add_layer(&mut self, layer: impl Layer + 'static) {
-        self.application.add_layer(layer);
-    }
-    pub fn init(&mut self) -> Result<(), StdError>{
-        self.application.init()
+    pub fn push_layer(&mut self, layer: impl Layer + 'static) -> Result<(), StdError> {
+        self.application.push_layer(layer)
     }
     pub fn run(mut self) {
         let _ = self.event_loop.run(move |event, window_target| {

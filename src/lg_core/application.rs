@@ -29,38 +29,39 @@ impl Application {
             window: LgWindow::new(WIDTH, HEIGHT),
             renderer: LgRenderer::new(renderer)?,
         });
-      
-        Ok(Self {
+
+        let result = Self {
             core,
             layers: Vec::new(),
-        })
-    } 
-    pub fn init(&mut self) -> Result<(), StdError> {
-        profile_function!();
+        };
+
         LgInput::init()?;
-        
-        for layer in &self.layers {
-            layer.borrow_mut().init(self.core.clone())?;
-        }
-
-        {
-            profile_scope!("renderer_init");
-            self.core.borrow_mut().renderer.init()?;
-        }
-
-        Ok(())
-    }
+        result.core.borrow_mut().renderer.init()?;
+      
+        Ok(result)
+    } 
     pub fn shutdown(&mut self) -> Result<(), StdError> {
         profile_function!();
 
-        for layer in &self.layers {
-            layer.borrow_mut().shutdown()?;
+        while let Some(layer) = self.layers.pop() {
+            layer.borrow_mut().on_detach()?;
         }
         
         Ok(())
     }
-    pub fn add_layer(&mut self, layer: impl Layer + 'static) {
+    pub fn push_layer(&mut self, mut layer: impl Layer + 'static) -> Result<(), StdError> {
+        layer.on_attach(self.core.clone())?;
         self.layers.push(as_dyn!(layer, dyn Layer));
+
+        Ok(())
+    }
+    pub fn pop_layer(&mut self) -> Result<(), StdError> {
+        match self.layers.pop() {
+            Some(layer) => layer.borrow_mut().on_detach()?,
+            None => (),
+        };
+
+        Ok(())
     }
     pub fn request_redraw(&self) {
         profile_function!();
@@ -76,9 +77,9 @@ impl Application {
         }
         {
             profile_scope!("layers_on_update");
-            self.layers
-                .iter()
-                .for_each(|l| l.borrow_mut().on_update());
+            for layer in &self.layers {
+                layer.borrow_mut().on_update()?;
+            }
         }
 
         unsafe { 

@@ -6,7 +6,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::texture::Texture;
-use super::{entity::LgEntity, asset_manager::AssetManager, uuid::UUID};
+use super::{entity::LgEntity, resoruce_manager::ResourceManager, uuid::UUID};
 use nalgebra_glm as glm;
 
 pub mod vertex;
@@ -20,7 +20,7 @@ pub mod uniform_struct;
 
 pub struct LgRenderer {
     renderer: lg_renderer::renderer::LgRenderer<UUID>,
-    asset_manager: AssetManager,
+    resource_manager: ResourceManager,
     
     // (Material UUID, Data)
     instance_draw_data: HashMap<UUID, HashMap<UUID, Vec<InstanceVertex>>>,
@@ -37,7 +37,7 @@ impl LgRenderer {
 
         Ok(Self {
             renderer,
-            asset_manager: AssetManager::default(),
+            resource_manager: ResourceManager::default(),
             instance_draw_data: HashMap::default(),
             in_use_instance_data: InstanceData::default(),
             global_uniform: None,
@@ -46,12 +46,12 @@ impl LgRenderer {
     }
 
     pub fn set_resource_folder(&mut self, path: &std::path::Path) -> Result<(), StdError> {
-        self.asset_manager.read_asset_paths(path)
+        self.resource_manager.read_resource_paths(path)
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        // self.asset_manager.process_folder(std::path::Path::new("assets"))?;
-        self.asset_manager.init()?;
+        // self.resource_manager.process_folder(std::path::Path::new("resources"))?;
+        self.resource_manager.init()?;
         
         Ok(())
     }
@@ -59,16 +59,16 @@ impl LgRenderer {
     pub unsafe fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
 
-        self.asset_manager.prepare_mesh(&entity.mesh)?;
-        self.asset_manager.prepare_material(&entity.material)?;
+        self.resource_manager.prepare_mesh(&entity.mesh)?;
+        self.resource_manager.prepare_material(&entity.material)?;
         
-        let mesh = self.asset_manager.get_mesh(&entity.mesh).unwrap();
-        let material = self.asset_manager.get_material(&entity.material).unwrap();
+        let mesh = self.resource_manager.get_mesh(&entity.mesh).unwrap();
+        let material = self.resource_manager.get_material(&entity.material).unwrap();
 
         let texture: Option<(UUID, &Texture)> = None;
 
         let shaders = material.shaders().iter()
-            .map(|s| (s.clone(), self.asset_manager.get_shader(s).unwrap()))
+            .map(|s| (s.clone(), self.resource_manager.get_shader(s).unwrap()))
             .collect::<Vec<_>>();
 
         let mut ubos = entity.uniforms
@@ -150,8 +150,8 @@ impl LgRenderer {
 
         {
             profile_scope!("preparing resources");
-            self.asset_manager.prepare_mesh(&entity.mesh)?;
-            self.asset_manager.prepare_material(&entity.material)?;
+            self.resource_manager.prepare_mesh(&entity.mesh)?;
+            self.resource_manager.prepare_material(&entity.material)?;
         }
 
         let model = entity.model();
@@ -184,10 +184,10 @@ impl LgRenderer {
     unsafe fn flush(&mut self) -> Result<(), StdError> {
         profile_function!();
         for (mat_uuid, dd) in &self.instance_draw_data {
-            let material = self.asset_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
+            let material = self.resource_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
             let texture: Option<(UUID, &Texture)> = None;
             let shaders = material.shaders().iter()
-                .map(|s| (s.clone(), self.asset_manager.get_shader(s).unwrap()))
+                .map(|s| (s.clone(), self.resource_manager.get_shader(s).unwrap()))
                 .collect::<Vec<_>>();
 
             let mut ubos = material.uniforms.iter()
@@ -200,7 +200,7 @@ impl LgRenderer {
             }
 
             for dd in dd {
-                let mesh = self.asset_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
+                let mesh = self.resource_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
                 
                 let vertices = mesh.vertices();
                 let indices = mesh.indices();

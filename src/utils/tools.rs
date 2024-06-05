@@ -1,7 +1,9 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::os::raw::c_char;
+
+use crate::StdError;
 
 /// Helper function to convert [c_char; SIZE] to string
 pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
@@ -66,4 +68,22 @@ pub fn shader_spirv(path: &str) -> Result<Vec<u32>, io::Error> {
     }
 
     Ok(spv_data)
+}
+
+pub fn file_to_string(src: &str) -> Result<String, StdError> {
+    let mut file = std::fs::File::open(src)?;
+    
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    Ok(contents)
+}
+
+pub fn to_radians(value: f64) -> f64
+{
+    value * 0.01745329251994329576923690768489
+}
+pub fn to_degrees(value: f64) -> f64
+{
+    value * 57.295779513082320876798154814105
 }

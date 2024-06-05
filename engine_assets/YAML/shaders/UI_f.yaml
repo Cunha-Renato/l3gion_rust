@@ -1,0 +1,21 @@
+---
+name: UI_f
+node_type: SHADER
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "96145043222459121309713537621720887984"
+    children: []
+  - name: stage
+    node_type: ""
+    value: "1"
+    children: []
+  - name: bytes
+    node_type: ""
+    value: ""
+    children: []
+  - name: src_code
+    node_type: ""
+    value: "#version 450\r\n\r\nin vec2 vert_tex_coord;\r\n\r\nout vec4 frag_color;\r\n\r\nvoid main() {\r\n    frag_color = vec4(vert_tex_coord, 0.0, 1.0);\r\n    // frag_color = texture2D(texture0, vert_tex_coord);\r\n}"
+    children: []

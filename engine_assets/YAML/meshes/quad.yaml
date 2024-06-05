@@ -1,0 +1,25 @@
+---
+name: quad
+node_type: MESH
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "178470743637318004666185515501906046795"
+    children: []
+  - name: positions
+    node_type: ""
+    value: "0.5,0.5,0,-0.5,0.5,0,-0.5,-0.5,0,0.5,-0.5,0"
+    children: []
+  - name: indices
+    node_type: ""
+    value: "0,1,2,0,2,3"
+    children: []
+  - name: tex_coords
+    node_type: ""
+    value: "0,0,1,0,1,1,0,1"
+    children: []
+  - name: normals
+    node_type: ""
+    value: "1,-0,-0,1,-0,-0,1,-0,-0,1,-0,-0"
+    children: []

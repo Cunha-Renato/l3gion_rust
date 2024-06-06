@@ -25,12 +25,12 @@ impl YamlNode {
 }
 
 pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), StdError> {
-    let path = format!("{}/{}.yaml", path, name);
+    let path = format!("{}{}.yaml", path, name);
     std::fs::write(path, serde_yaml::to_string(value)?)?;
     Ok(())
 }
 pub fn deserialize<T: DeserializeOwned>(path: &str, name: &str) -> Result<T, StdError> {
-    let path = format!("{}/{}.yaml", path, name);
+    let path = format!("{}{}.yaml", path, name);
     let content = std::fs::read_to_string(path)?;
     let result: T = serde_yaml::from_str(&content)?;
 

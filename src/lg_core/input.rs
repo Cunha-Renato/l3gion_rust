@@ -1,4 +1,4 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::{collections::HashMap, sync::OnceLock};
 
 use nalgebra_glm as glm;
@@ -10,7 +10,7 @@ use super::event::{
     MouseButton,
 };
 
-static INPUT: OnceLock<Mutex<LgInput>> = OnceLock::new();
+static INPUT: OnceLock<Arc<Mutex<LgInput>>> = OnceLock::new();
 
 #[derive(Default, Debug, Clone)]
 pub struct LgInput {
@@ -21,18 +21,21 @@ pub struct LgInput {
 impl LgInput {
     pub(crate) fn init() -> Result<(), StdError> {
         profile_function!();
-        match INPUT.set(Mutex::new(LgInput::default())) {
+        match INPUT.set(Arc::new(Mutex::new(LgInput::default()))) {
             Err(_) => return Err("Failed to create Input! (LgInput)".into()),
             _ => Ok(())
         }
     }
     
-    pub fn get() -> Result<MutexGuard<'static, LgInput>, StdError> {
+    pub fn get() -> Result<Arc<Mutex<LgInput>>, StdError> {
         profile_function!();
-        Ok(INPUT.get().unwrap().lock()?)
+        Ok(Arc::clone(INPUT.get().ok_or("Failed to get Input! (LgInput)")?))
+    }
+    pub fn get_locked() -> Result<MutexGuard<'static, LgInput>, StdError> {
+        INPUT.get().unwrap().lock().or(Err("Failed to get Input! (LgInput)".into()))
     }
 
-    pub fn set_mouse_state(&mut self, button: MouseButton, state: bool) {
+    pub(crate) fn set_mouse_state(&mut self, button: MouseButton, state: bool) {
         profile_function!();
         self.mouse_states.insert(button, state);
     }
@@ -41,7 +44,7 @@ impl LgInput {
         *self.mouse_states.get(&button)
             .unwrap_or_else(|| &false)
     }
-    pub fn set_mouse_position(&mut self, x: f32, y: f32) {
+    pub(crate) fn set_mouse_position(&mut self, x: f32, y: f32) {
         profile_function!();
         self.mouse_position.x = x;
         self.mouse_position.y = y;
@@ -51,7 +54,7 @@ impl LgInput {
         self.mouse_position
     }
 
-    pub fn set_key_state(&mut self, key_code: LgKeyCode, state: bool) {
+    pub(crate) fn set_key_state(&mut self, key_code: LgKeyCode, state: bool) {
         profile_function!();
         self.key_states.insert(key_code, state);
     }

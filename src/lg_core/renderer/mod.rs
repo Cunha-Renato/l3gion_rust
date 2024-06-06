@@ -1,8 +1,7 @@
 #![allow(non_camel_case_types)]
 
-use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
+use std::{borrow::BorrowMut, collections::{HashMap, HashSet}};
 use lg_renderer::{lg_vertex, renderer::lg_uniform::LgUniform};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::texture::Texture;
@@ -50,10 +49,14 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        // self.asset_manager.process_folder(std::path::Path::new("resources"))?;
+        self.asset_manager.process_folder(std::path::Path::new("assets"))?;
         self.asset_manager.init()?;
         
-        Ok(())
+        unsafe { self.renderer.init() }
+    }
+    
+    pub fn shutdown(&mut self) -> Result<(), StdError> {
+        unsafe { self.renderer.shutdown() }
     }
 
     pub unsafe fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
@@ -91,8 +94,9 @@ impl LgRenderer {
             ubos,
         )
     }
-    pub unsafe fn begin(&self) {
-        self.renderer.begin()
+    pub unsafe fn begin(&self) -> Result<(), StdError>{
+        self.renderer.begin();
+        Ok(())
     }
     pub unsafe fn end(&mut self) -> Result<(), StdError> {
         self.flush()?;
@@ -120,13 +124,18 @@ impl LgRenderer {
     }
 }
 
+// ****************************************************************************************************
+// -------------------------------------------- INSTANCING --------------------------------------------
+// ****************************************************************************************************
+
 #[derive(Clone, Debug)]
 struct InstanceVertex {
     row_0: glm::Vec4,
     row_1: glm::Vec4,
     row_2: glm::Vec4,
+    tex_index: i32,
 }
-lg_vertex!(InstanceVertex, row_0, row_1, row_2);
+lg_vertex!(InstanceVertex, row_0, row_1, row_2, tex_index);
 
 struct InstancingConstraints {
     max_instances: u32,
@@ -141,7 +150,7 @@ struct InstanceData {
 
 static INSTANCING_CONSTRAINTS: InstancingConstraints = InstancingConstraints {
     max_instances: 100_000,
-    max_textures: 20,
+    max_textures: 32,
 };
 
 impl LgRenderer {
@@ -162,6 +171,7 @@ impl LgRenderer {
             row_0,
             row_1,
             row_2,
+            tex_index: 1, // TODO: For now is only one texture
         };
 
         let mesh_map = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
@@ -173,9 +183,17 @@ impl LgRenderer {
                 entry.insert(vec![data]);
             }
         }
+        
+        let material = self.asset_manager.get_material(&entity.material).ok_or("Failed to get Material in flush! (Renderer)")?;
+        
+        assert!(material.texture().len() <= INSTANCING_CONSTRAINTS.max_textures as usize);
+        
+        for tex_id in material.texture() {
+            self.in_use_instance_data.textures.insert(tex_id.clone());
+        }
 
         self.in_use_instance_data.instances += 1;
-        if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances {
+        if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances || self.in_use_instance_data.textures.len() >= INSTANCING_CONSTRAINTS.max_textures as usize {
             self.flush()?;
         }
 
@@ -185,7 +203,17 @@ impl LgRenderer {
         profile_function!();
         for (mat_uuid, dd) in &self.instance_draw_data {
             let material = self.asset_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
-            let texture: Option<(UUID, &Texture)> = None;
+
+            let mut textures: Vec<(UUID, &Texture, u32)> = Vec::new();
+            for (location, tex_id) in material.texture().iter().enumerate() {
+                textures.push(
+                (
+                    tex_id.clone(),
+                    self.asset_manager.get_texture(tex_id).unwrap(),
+                    location as u32 + 1,
+                ));
+            }
+
             let shaders = material.shaders().iter()
                 .map(|s| (s.clone(), self.asset_manager.get_shader(s).unwrap()))
                 .collect::<Vec<_>>();
@@ -208,7 +236,7 @@ impl LgRenderer {
                 self.draw_calls += 1;
                 self.renderer.borrow_mut().draw_instanced(
                     (mesh.uuid().clone(), vertices, indices), 
-                    texture.clone(), 
+                    &textures,
                     (mat_uuid.clone(), &shaders), 
                     ubos.clone(),
                     dd.1

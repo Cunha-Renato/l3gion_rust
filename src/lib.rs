@@ -62,7 +62,7 @@ impl L3gion {
                     winit::event::WindowEvent::KeyboardInput { event, .. } => {
                         match event.physical_key {
                             winit::keyboard::PhysicalKey::Code(key_code) => {
-                                LgInput::get().unwrap().set_key_state(
+                                LgInput::get().unwrap().lock().unwrap().set_key_state(
                                     key_code.into(), 
                                     event.state.is_pressed()
                                 );
@@ -84,7 +84,7 @@ impl L3gion {
                                 winit::event::MouseButton::Other(val) => MouseButton::Other(val),
                                 _ => MouseButton::Other(0)
                         };
-                        LgInput::get().unwrap().set_mouse_state(button, state.is_pressed());
+                        LgInput::get().unwrap().lock().unwrap().set_mouse_state(button, state.is_pressed());
     
                         self.application.on_event(lg_core::event::LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
                             button,
@@ -92,7 +92,7 @@ impl L3gion {
                         })));
                     },
                     winit::event::WindowEvent::CursorMoved { position, .. } => {
-                        LgInput::get().unwrap().set_mouse_position(position.x as f32, position.y as f32);
+                        LgInput::get().unwrap().lock().unwrap().set_mouse_position(position.x as f32, position.y as f32);
     
                         self.application.on_event(lg_core::event::LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
                             position: (position.x, position.y),

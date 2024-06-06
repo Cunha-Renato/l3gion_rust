@@ -1,4 +1,4 @@
-use crate::{as_dyn, profile_function, profile_scope, StdError};
+use crate::{as_dyn, lg_core::frame_time::FrameTime, profile_function, profile_scope, StdError};
 use super::{event::LgEvent, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
 
 const WIDTH: u32 = 1080;
@@ -18,6 +18,7 @@ impl Application {
         todo!()
     }
     pub fn new_opengl(event_loop: &winit::event_loop::EventLoop<()>) -> Result<Self, StdError> {
+        FrameTime::init()?;
         let window_builder = winit::window::WindowBuilder::new()
             .with_inner_size(winit::dpi::PhysicalSize{ width: WIDTH, height: HEIGHT })
             .with_title("L3gion");
@@ -30,15 +31,13 @@ impl Application {
             renderer: LgRenderer::new(renderer)?,
         });
 
-        let result = Self {
+        LgInput::init()?;
+        core.borrow_mut().renderer.init()?;
+
+        Ok(Self {
             core,
             layers: Vec::new(),
-        };
-
-        LgInput::init()?;
-        result.core.borrow_mut().renderer.init()?;
-      
-        Ok(result)
+        })
     } 
     pub fn shutdown(&mut self) -> Result<(), StdError> {
         profile_function!();
@@ -46,8 +45,8 @@ impl Application {
         while let Some(layer) = self.layers.pop() {
             layer.borrow_mut().on_detach()?;
         }
-        
-        Ok(())
+
+        self.core.borrow_mut().renderer.shutdown()
     }
     pub fn push_layer(&mut self, mut layer: impl Layer + 'static) -> Result<(), StdError> {
         layer.on_attach(self.core.clone())?;
@@ -70,10 +69,12 @@ impl Application {
     pub fn on_update(&mut self) -> Result<(), StdError> {
         optick::next_frame();
         profile_function!();
+        
+        FrameTime::start()?;
 
         unsafe { 
             profile_scope!("render_begin");
-            self.core.borrow().renderer.begin(); 
+            self.core.borrow().renderer.begin()?;
         }
         {
             profile_scope!("layers_on_update");
@@ -86,6 +87,8 @@ impl Application {
             profile_scope!("render_end");
             self.core.borrow_mut().renderer.end()?; 
         }
+        
+        FrameTime::end()?;
 
         Ok(())
     }

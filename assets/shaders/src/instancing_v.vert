@@ -5,15 +5,18 @@ layout(location = 1) in vec2 tex_coord;
 layout(location = 2) in vec4 row_0;
 layout(location = 3) in vec4 row_1;
 layout(location = 4) in vec4 row_2;
+layout(location = 5) in int tex_index;
 
 layout(binding = 0) uniform ViewModel {
     mat4 view;
     mat4 proj;
 } view_model;
 
+out int vert_tex_index;
 out vec2 vert_tex_coord;
 
 void main() {
+    vert_tex_index = tex_index;
     vert_tex_coord = tex_coord;
 
     mat4 model = mat4(

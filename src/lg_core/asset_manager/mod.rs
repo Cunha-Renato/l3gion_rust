@@ -5,19 +5,24 @@ use super::{renderer::{material::Material, mesh::Mesh, shader::Shader, texture::
 use nalgebra_glm as glm;
 
 // TODO: Make so that this path below is always present and with the necessary assets loaded.
-const CORE_ASSET_PATH: &str = "engine_assets/core";
-const ASSET_PATH_YAML: &str = "engine_assets/YAML";
-const ASSET_PATH_BINARY: &str = "engine_assets/bin";
-const YAML_FILE_EXTENSION: &str = "yaml";
+const CORE_ASSET_FOLDER:      &str = "engine_assets/core/";
+const ASSET_FOLDER:           &str = "engine_assets/";
+const ASSET_FOLDER_BINARY:    &str = "bin/";
+const ASSET_FOLDER_YAML:      &str = "YAML/";
+const ASSET_FOLDER_MESHES:    &str = "meshes/";
+const ASSET_FOLDER_TEXTURES:  &str = "textures/";
+const ASSET_FOLDER_SHADERS:   &str = "shaders/";
+const ASSET_FOLDER_MATERIALS: &str = "materials/";
 
-const TEXTURE_FORMATS: [&str; 1] = ["png"];
-const SHADER_FORMATS: [&str; 2] = ["vert", "frag"];
-const MESH_FORMAT: &str = "obj";
+const TEXTURE_FORMATS:      [&str; 1] = ["png"];
+const SHADER_FORMATS:       [&str; 2] = ["vert", "frag"];
+const MESH_FORMAT:          &str = "obj";
+const YAML_FILE_EXTENSION:  &str = "yaml";
 
-const TEXTURE_YAML:     &str = "TEXTURE";
-const SHADER_YAML:      &str = "SHADER";
-const MESH_YAML:        &str = "MESH";
-const MATERIAL_YAML:    &str = "MATERIAL";
+const TEXTURE_YAML:         &str = "TEXTURE";
+const SHADER_YAML:          &str = "SHADER";
+const MESH_YAML:            &str = "MESH";
+const MATERIAL_YAML:        &str = "MATERIAL";
 
 const UUID_YAML:            &str = "uuid";
 const SHADER_STAGE_YAML:    &str = "stage";
@@ -61,9 +66,16 @@ pub(crate) struct AssetManager {
     resource_paths: AssetPaths,
     loaded: LoadedAssets,
 }
+// Public
 impl AssetManager {
     pub(crate) fn init(&mut self) -> Result<(), StdError> {
-        self.read_asset_paths(std::path::Path::new(ASSET_PATH_YAML))
+        self.init_folders()?;
+
+        // YAML
+        let core_path = std::format!("{}{}", CORE_ASSET_FOLDER, ASSET_FOLDER_YAML);
+        let normal_path = std::format!("{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML);
+        // self.read_asset_paths(std::path::Path::new(&core_path))?;
+        self.read_asset_paths(std::path::Path::new(&normal_path))
     }
 
     pub(crate) fn read_asset_paths(&mut self, path: &std::path::Path) -> Result<(), StdError> {
@@ -102,6 +114,7 @@ impl AssetManager {
 
         Ok(())
     }
+
     pub(crate) fn prepare_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
         if !self.loaded.textures.contains_key(texture_uuid) {
             self.load_texture(texture_uuid)?;
@@ -109,12 +122,14 @@ impl AssetManager {
         
         Ok(())
     }
+
     pub(crate) fn prepare_shader(&mut self, shader_uuid: &UUID) -> Result<(), StdError> {
         if !self.loaded.shaders.contains_key(shader_uuid) {
             self.load_shader(shader_uuid)?;
         }
         Ok(())
     }
+
     pub(crate) fn prepare_mesh(&mut self, mesh_uuid: &UUID) -> Result<(), StdError> {
         if !self.loaded.meshes.contains_key(mesh_uuid) {
             self.load_mesh(mesh_uuid)?;
@@ -122,6 +137,7 @@ impl AssetManager {
         
         Ok(())
     }
+
     pub(crate) fn prepare_material(&mut self, material_uuid: &UUID) -> Result<(), StdError> {
         if !self.loaded.materials.contains_key(material_uuid) {
             self.load_material(material_uuid)?;
@@ -133,17 +149,22 @@ impl AssetManager {
     pub(crate) fn get_texture(&self, texture_uuid: &UUID) -> Option<&Texture> {
         self.loaded.textures.get(texture_uuid)
     }
+
     pub(crate) fn get_shader(&self, shader_uuid: &UUID) -> Option<&Shader> {
         self.loaded.shaders.get(shader_uuid)
     }
+
     pub(crate) fn get_mesh(&self, mesh_uuid: &UUID) -> Option<&Mesh> {
         self.loaded.meshes.get(mesh_uuid)
     }
+
     pub(crate) fn get_material(&self, material_uuid: &UUID) -> Option<&Material> {
         self.loaded.materials.get(material_uuid)
     }
 
     pub(crate) fn process_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
+        self.init_folders()?;
+
         let entries = std::fs::read_dir(folder_path)?;
         
         for entry in entries {
@@ -172,6 +193,9 @@ impl AssetManager {
         Ok(())
     }
 }
+
+// Private
+// Loading
 impl AssetManager {
     fn load_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
         let texture_path = match self.resource_paths.textures.get(texture_uuid) {
@@ -359,6 +383,8 @@ impl AssetManager {
         Ok(())
     }
 }
+
+// Processing
 impl AssetManager {
     /// Only use files with .png, .jpg, .jpeg, etc
     fn process_texture(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
@@ -434,7 +460,7 @@ impl AssetManager {
             ..Default::default()
         });
         
-        let tex_resources_path = std::format!("{}/textures", ASSET_PATH_YAML);
+        let tex_resources_path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_TEXTURES);
         texture_node.serialize(&tex_resources_path, &texture_name)?;
 
         Ok(())
@@ -479,7 +505,7 @@ impl AssetManager {
             ..Default::default()
         });
 
-        let path = std::format!("{}/shaders", ASSET_PATH_YAML);
+        let path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_SHADERS);
         shader_node.serialize(&path, &shader_name)?;
 
         Ok(())
@@ -543,7 +569,7 @@ impl AssetManager {
             ..Default::default()
         });
 
-        let mesh_resources_path = std::format!("{}/meshes", ASSET_PATH_YAML);
+        let mesh_resources_path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_MESHES);
         mesh_node.serialize(&mesh_resources_path, &mesh_name)?;
 
         Ok(())
@@ -551,5 +577,36 @@ impl AssetManager {
 
     fn process_material(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
         todo!()
+    }
+}
+
+// Init
+impl AssetManager {
+    fn init_folders(&self) -> Result<(), StdError> {
+        for root in [CORE_ASSET_FOLDER, ASSET_FOLDER] {
+            for format in [ASSET_FOLDER_YAML, ASSET_FOLDER_BINARY] {
+                let meshes_string = std::format!("{}{}{}", root, format, ASSET_FOLDER_MESHES);
+                let shaders_string = std::format!("{}{}{}", root, format, ASSET_FOLDER_SHADERS);
+                let textures_string = std::format!("{}{}{}", root, format, ASSET_FOLDER_TEXTURES);
+                let materials_string = std::format!("{}{}{}", root, format, ASSET_FOLDER_MATERIALS);
+
+                let meshes = std::path::Path::new(&meshes_string);
+                let shaders = std::path::Path::new(&shaders_string);
+                let textures = std::path::Path::new(&textures_string);
+                let materials = std::path::Path::new(&materials_string);
+
+                std::fs::create_dir_all(meshes)?;
+                std::fs::create_dir_all(shaders)?;
+                std::fs::create_dir_all(textures)?;
+                std::fs::create_dir_all(materials)?;
+            }
+        }
+        
+        Ok(())
+    }
+    fn init_core(&mut self) -> Result<(), StdError> {
+        
+        
+        Ok(())
     }
 }

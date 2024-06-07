@@ -10,5 +10,3 @@ pub struct Vertex {
     pub tex_coord: glm::Vec2,
 }
 lg_vertex!(Vertex, position, tex_coord);
-pub trait LgVertex {}
-impl LgVertex for Vertex {}

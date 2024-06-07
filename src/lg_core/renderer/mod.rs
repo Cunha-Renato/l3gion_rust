@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}};
-use lg_renderer::{lg_vertex, renderer::lg_uniform::LgUniform};
+use lg_renderer::{lg_vertex, renderer::{lg_uniform::LgUniform, lg_vertex::LgVertex}};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::texture::Texture;
@@ -125,6 +125,112 @@ impl LgRenderer {
 }
 
 // ****************************************************************************************************
+// -------------------------------------------- TEST_INSTANCING --------------------------------------------
+// ****************************************************************************************************
+
+pub struct TestInstanceData<V: LgVertex> {
+    data: HashMap<UUID, HashMap<UUID, Vec<V>>>,
+}
+
+impl LgRenderer {
+    pub fn begin_instancing<V: LgVertex>(&self) -> TestInstanceData<V> {
+        TestInstanceData {
+            data: HashMap::new(),
+        }
+    }
+    pub unsafe fn queue_instance<V: LgVertex, F>(&mut self, entity: &LgEntity, instance_data: &mut TestInstanceData<V>, f: F) -> Result<(), StdError>
+    where F: FnOnce(&LgEntity) -> V
+    {
+        profile_function!();
+
+        {
+            profile_scope!("preparing resources");
+            self.asset_manager.prepare_mesh(&entity.mesh)?;
+            self.asset_manager.prepare_material(&entity.material)?;
+        }
+
+        let material = self.asset_manager.get_material(&entity.material).ok_or("Failed to get Material in flush! (Renderer)")?;
+
+        let data = f(entity);
+
+        let mesh_map = instance_data.data.entry(entity.material.clone()).or_insert_with(HashMap::new);
+        match mesh_map.entry(entity.mesh.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().push(data);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![data]);
+            }
+        }
+        
+        assert!(material.texture().len() <= INSTANCING_CONSTRAINTS.max_textures as usize);
+        
+        for tex_id in material.texture() {
+            self.in_use_instance_data.textures.insert(tex_id.clone());
+        }
+
+        self.in_use_instance_data.instances += 1;
+        if self.in_use_instance_data.instances >= INSTANCING_CONSTRAINTS.max_instances || self.in_use_instance_data.textures.len() >= INSTANCING_CONSTRAINTS.max_textures as usize {
+            self.end_instancing(instance_data)?;
+        }
+
+        Ok(())
+    }
+    pub unsafe fn end_instancing<V: LgVertex>(&mut self, instance_data: &mut TestInstanceData<V>) -> Result<(), StdError> {
+        profile_function!();
+        for (mat_uuid, dd) in &instance_data.data {
+            let material = self.asset_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
+
+            let mut textures: Vec<(UUID, &Texture, u32)> = Vec::new();
+            for (location, tex_id) in material.texture().iter().enumerate() {
+                textures.push(
+                (
+                    tex_id.clone(),
+                    self.asset_manager.get_texture(tex_id).unwrap(),
+                    location as u32,
+                ));
+            }
+
+            let shaders = material.shaders().iter()
+                .map(|s| (s.clone(), self.asset_manager.get_shader(s).unwrap()))
+                .collect::<Vec<_>>();
+
+            let mut ubos = material.uniforms.iter()
+                .map(|ubo| (ubo.buffer.uuid().clone(), ubo))
+                .collect::<Vec<_>>();
+
+            // TODO: Testing
+            if let Some(uniform) = self.global_uniform.as_ref() {
+                ubos.push((uniform.buffer.uuid().clone(), uniform));
+            }
+
+            for dd in dd {
+                let mesh = self.asset_manager.get_mesh(dd.0).ok_or("Failed to get Mesh in flush! (Renderer)")?;
+                
+                let vertices = mesh.vertices();
+                let indices = mesh.indices();
+                
+                self.draw_calls += 1;
+                self.renderer.borrow_mut().draw_instanced(
+                    (mesh.uuid().clone(), vertices, indices), 
+                    &textures,
+                    (mat_uuid.clone(), &shaders), 
+                    ubos.clone(),
+                    dd.1
+                )?;
+            }
+        }
+
+
+        self.in_use_instance_data.instances = 0;
+        self.in_use_instance_data.textures.clear();
+        self.instance_draw_data.clear();
+        
+        Ok(())
+    }
+}
+
+// ****************************************************************************************************
 // -------------------------------------------- INSTANCING --------------------------------------------
 // ****************************************************************************************************
 
@@ -163,6 +269,8 @@ impl LgRenderer {
             self.asset_manager.prepare_material(&entity.material)?;
         }
 
+        let material = self.asset_manager.get_material(&entity.material).ok_or("Failed to get Material in flush! (Renderer)")?;
+
         let model = entity.model();
         let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
         let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
@@ -171,7 +279,7 @@ impl LgRenderer {
             row_0,
             row_1,
             row_2,
-            tex_index: 1, // TODO: For now is only one texture
+            tex_index: if material.texture().len() > 0 { 0 } else { -1 }, // TODO: For now is only one texture
         };
 
         let mesh_map = self.instance_draw_data.entry(entity.material.clone()).or_insert_with(HashMap::new);
@@ -183,8 +291,6 @@ impl LgRenderer {
                 entry.insert(vec![data]);
             }
         }
-        
-        let material = self.asset_manager.get_material(&entity.material).ok_or("Failed to get Material in flush! (Renderer)")?;
         
         assert!(material.texture().len() <= INSTANCING_CONSTRAINTS.max_textures as usize);
         
@@ -210,7 +316,7 @@ impl LgRenderer {
                 (
                     tex_id.clone(),
                     self.asset_manager.get_texture(tex_id).unwrap(),
-                    location as u32 + 1,
+                    location as u32,
                 ));
             }
 

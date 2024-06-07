@@ -1,5 +1,6 @@
 use crate::{profile_function, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
+use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
 
 pub struct TestLayer {
@@ -37,6 +38,18 @@ impl Layer for TestLayer {
             true,
         ));
 
+        self.entities = vec![
+            LgEntity::new(
+                UUID::from_u128(316691656959075038046595414025328715723), 
+                UUID::from_u128(1), 
+                glm::vec3(0.0, 0.0, 0.0)
+            ),
+            LgEntity::new(
+                UUID::from_u128(316691656959075038046595414025328715723), 
+                UUID::from_u128(1), 
+                glm::vec3(0.5, 0.0, 0.0)
+            )];
+
         self.core = Some(app_core);
         
         Ok(())
@@ -61,16 +74,45 @@ impl Layer for TestLayer {
             proj: glm::Mat4,
         }
         let view_proj = ViewProj {
-            view: self.camera.get_view_matrix().clone(),
-            proj: self.camera.get_projection_matrix()
+            // view: self.camera.get_view_matrix().clone(),
+            // proj: self.camera.get_projection_matrix()
+            view: glm::Mat4::identity(),
+            proj: glm::Mat4::identity(),
         };
         self.core.as_mut().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
+        
+        // TESTING
+        #[derive(Clone, Debug)]
+        struct InstanceVertex {
+            row_0: glm::Vec4,
+            row_1: glm::Vec4,
+            row_2: glm::Vec4,
+            tex_index: i32,
+        }
+        lg_vertex!(InstanceVertex, row_0, row_1, row_2, tex_index);
+
+        let renderer = &mut self.core.as_ref().unwrap().borrow_mut().renderer;
+        let mut instance_data = renderer.begin_instancing::<InstanceVertex>();
 
         unsafe {
             for e in &self.entities {
-                self.core.as_ref().unwrap()
-                    .borrow_mut().renderer.instance_entity(&e)?;
+                /* self.core.as_ref().unwrap()
+                    .borrow_mut().renderer.instance_entity(&e)?; */
+                renderer.queue_instance(e, &mut instance_data, |e| {
+                    let model = e.model();
+                    let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
+                    let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
+                    let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
+                    InstanceVertex {
+                        row_0,
+                        row_1,
+                        row_2,
+                        tex_index: 0// TODO: For now is only one texture
+                    }
+                })?;
             }
+            
+            renderer.end_instancing(&mut instance_data)?;
         }
         
         Ok(())

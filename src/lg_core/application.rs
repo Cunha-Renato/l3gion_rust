@@ -53,11 +53,6 @@ impl L3gion {
                     winit::event::WindowEvent::KeyboardInput { event, .. } => {
                         match event.physical_key {
                             winit::keyboard::PhysicalKey::Code(key_code) => {
-                                LgInput::get().unwrap().lock().unwrap().set_key_state(
-                                    key_code.into(), 
-                                    event.state.is_pressed()
-                                );
-    
                                 self.app.on_event(LgEvent::KeyEvent( KeyEvent {
                                     code: 0,
                                     key: key_code.into(),
@@ -70,12 +65,11 @@ impl L3gion {
                     winit::event::WindowEvent::MouseInput { state, button, .. } => {
                         let button = match button {
                             winit::event::MouseButton::Left => MouseButton::Left,
-                                winit::event::MouseButton::Right => MouseButton::Right,
-                                winit::event::MouseButton::Middle => MouseButton::Middle,
-                                winit::event::MouseButton::Other(val) => MouseButton::Other(val),
-                                _ => MouseButton::Other(0)
+                            winit::event::MouseButton::Right => MouseButton::Right,
+                            winit::event::MouseButton::Middle => MouseButton::Middle,
+                            winit::event::MouseButton::Other(val) => MouseButton::Other(val),
+                            _ => MouseButton::Other(0)
                         };
-                        LgInput::get().unwrap().lock().unwrap().set_mouse_state(button, state.is_pressed());
     
                         self.app.on_event(LgEvent::MouseEvent(MouseEvent::ButtonEvent(MouseButtonEvent {
                             button,
@@ -83,10 +77,8 @@ impl L3gion {
                         })));
                     },
                     winit::event::WindowEvent::CursorMoved { position, .. } => {
-                        LgInput::get().unwrap().lock().unwrap().set_mouse_position(position.x as f32, position.y as f32);
-    
                         self.app.on_event(LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
-                            position: (position.x, position.y),
+                            position: (position.x as u64, position.y as u64),
                         })));
                     },
                     winit::event::WindowEvent::MouseWheel { delta, .. } => {
@@ -175,6 +167,8 @@ impl Application {
     
     fn on_event(&mut self, event: LgEvent) {
         profile_function!();
+        LgInput::get_locked().unwrap().on_event(&event);
+
         for layer in &self.layers {
             if layer.borrow_mut().on_event(&event) {
                 break;

@@ -1,7 +1,5 @@
 use std::{fs::File, io::{Read, Write}};
-
 use crate::StdError;
-
 use super::ShaderStage;
 
 // Compilation

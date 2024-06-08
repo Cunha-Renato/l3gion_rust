@@ -12,6 +12,7 @@ impl<T> Rfc<T> {
             data: Rc::new(RefCell::new(value)),
         }
     }
+
     pub fn downgrade(&self) -> Weak<RefCell<T>> {
         Rc::downgrade(&self.data)
     }
@@ -24,6 +25,7 @@ impl<T: ?Sized> Rfc<T> {
     pub fn borrow_mut(&self) -> std::cell::RefMut<'_, T> {
         std::cell::RefCell::borrow_mut(&self.data)
     }
+
     pub fn from_rc_refcell(val: &Rc<RefCell<T>>) -> Self {
         Self {
             data: Rc::clone(val)
@@ -40,6 +42,7 @@ impl<T: PartialEq> PartialEq for Rfc<T> {
         *self.data.borrow() == *other.data.borrow()
     }
 }
+
 #[macro_export]
 macro_rules! as_dyn {
     ($val:expr, $data_type:ty) => {

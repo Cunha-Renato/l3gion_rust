@@ -107,6 +107,8 @@ impl Camera {
         profile_function!();
         let input = LgInput::get_locked().unwrap();
         let mouse = input.get_mouse_position();
+        let mouse = glm::vec2(mouse.x as f32, mouse.y as f32);
+
         let delta = (mouse - self.initial_mouse_position) * 0.003;
         self.initial_mouse_position = mouse;
 

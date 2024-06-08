@@ -5,7 +5,6 @@ pub enum MouseEvent {
     ScrollEvent(MouseScrollEvent),
 }
 
-
 #[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub struct MouseButtonEvent {
     pub button: MouseButton,
@@ -21,7 +20,7 @@ pub enum MouseButton {
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub struct MouseMoveEvent {
-    pub position: (f64, f64),
+    pub position: (u64, u64),
 }
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]

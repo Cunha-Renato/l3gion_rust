@@ -21,21 +21,19 @@ impl Material {
             uniforms,
         }
     }
+
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
-    /* pub fn shaders(&self) -> &[Rfc<LgShader>] {
-        &self.shaders
-    }
-    pub fn texture(&self) -> &Option<Rfc<LgTexture>> {
-        &self.texture
-    } */
+
     pub fn texture(&self) -> &[UUID] {
         &self.textures
     }
+
     pub fn shaders(&self) -> &[UUID] {
         &self.shaders
     }
+
     pub fn name(&self) -> &str {
         &self.name
     }

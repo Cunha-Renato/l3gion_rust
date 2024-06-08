@@ -24,15 +24,19 @@ impl Mesh {
             indices,
         }
     }
+    
     pub fn vertices(&self) -> &[Vertex] {
         &self.vertices
     }
+    
     pub fn indices(&self) -> &[u32] {
         &self.indices
     }
+    
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
+    
     pub fn name(&self) -> &str {
         &self.name
     }

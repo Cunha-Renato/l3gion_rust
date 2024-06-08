@@ -15,7 +15,6 @@ pub mod texture;
 pub mod shader;
 pub mod uniform;
 pub mod buffer;
-pub mod uniform_struct;
 
 pub struct LgRenderer {
     renderer: lg_renderer::renderer::LgRenderer<UUID>,

@@ -62,30 +62,35 @@ impl LgTime {
             value: self.value
         }
     }
+    
     pub fn mi(&self) -> Self {
         Self {
             unit: TIME_UNIT::MIN,
             value: self.value
         }
     }
+   
     pub fn s(&self) -> Self {
         Self {
             unit: TIME_UNIT::SEC,
             value: self.value,
         }
     }
+    
     pub fn ms(&self) -> Self {
         Self {
             unit: TIME_UNIT::MILIS,
             value: self.value,
         }
     }
+    
     pub fn us(&self) -> Self {
         Self {
             unit: TIME_UNIT::MICRO,
             value: self.value,
         }
     }
+    
     pub fn ns(&self) -> Self {
         Self {
             unit: TIME_UNIT::NANO,

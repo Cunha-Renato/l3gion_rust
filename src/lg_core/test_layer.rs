@@ -74,10 +74,10 @@ impl Layer for TestLayer {
             proj: glm::Mat4,
         }
         let view_proj = ViewProj {
-            // view: self.camera.get_view_matrix().clone(),
-            // proj: self.camera.get_projection_matrix()
-            view: glm::Mat4::identity(),
-            proj: glm::Mat4::identity(),
+            view: self.camera.get_view_matrix().clone(),
+            proj: self.camera.get_projection_matrix()
+            // view: glm::Mat4::identity(),
+            // proj: glm::Mat4::identity(),
         };
         self.core.as_mut().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
         

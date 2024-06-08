@@ -27,6 +27,7 @@ impl Uniform {
             buffer: Buffer::default()
         }
     }
+    
     pub unsafe fn new_with_data<D>(
         name: &str,
         u_type: lg_renderer::renderer::lg_uniform::LgUniformType,

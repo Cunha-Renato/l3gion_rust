@@ -15,31 +15,6 @@ pub struct Texture {
     name: String, // TODO: Placeholder
     bytes: Vec<u8>,
 }
-impl lg_renderer::renderer::lg_texture::LgTexture for Texture {
-    fn width(&self) -> u32 {
-        self.width
-    }
-    fn height(&self) -> u32 {
-        self.height
-    }
-    fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-    fn size(&self) -> u64 {
-        self.size
-    }
-    fn mip_level(&self) -> u32 {
-        self.mip_level
-    }
-    
-    fn texture_type(&self) -> lg_renderer::renderer::lg_texture::TextureType {
-        self.texture_type
-    }
-    
-    fn texture_format(&self) -> lg_renderer::renderer::lg_texture::TextureFormat {
-        self.format
-    }
-}
 impl Texture {
     pub fn new(name: &str, path: &str, format: TextureFormat, texture_type: TextureType) -> Result<Self, StdError> {
         let image = image::io::Reader::open(path)?.decode()?;
@@ -61,6 +36,17 @@ impl Texture {
             format,
         })
     }
+    
+    pub fn uuid(&self) -> &UUID {
+        &self.uuid
+    }
+    
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+// Public(crate)
+impl Texture {
     pub(crate) fn construct(
         uuid: UUID,
         name: &str,
@@ -85,17 +71,39 @@ impl Texture {
             bytes,
         }
     }
-    
-    // Get
-    pub fn uuid(&self) -> &UUID {
-        &self.uuid
-    }
-    pub fn name(&self) -> &str {
-        &self.name
-    }
 }
 impl Hash for Texture {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.uuid.hash(state);
+    }
+}
+
+impl lg_renderer::renderer::lg_texture::LgTexture for Texture {
+    fn width(&self) -> u32 {
+        self.width
+    }
+    
+    fn height(&self) -> u32 {
+        self.height
+    }
+    
+    fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    
+    fn size(&self) -> u64 {
+        self.size
+    }
+    
+    fn mip_level(&self) -> u32 {
+        self.mip_level
+    }
+    
+    fn texture_type(&self) -> lg_renderer::renderer::lg_texture::TextureType {
+        self.texture_type
+    }
+    
+    fn texture_format(&self) -> lg_renderer::renderer::lg_texture::TextureFormat {
+        self.format
     }
 }

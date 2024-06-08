@@ -10,6 +10,7 @@ impl LgWindow {
         (self.window.inner_size().width, self.window.inner_size().height)
     }
 }
+// Public(crate)
 impl LgWindow {
     pub(crate) fn request_redraw(&self) {
         self.window.request_redraw();

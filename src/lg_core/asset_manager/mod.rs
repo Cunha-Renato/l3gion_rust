@@ -74,7 +74,7 @@ impl AssetManager {
         // YAML
         let core_path = std::format!("{}{}", CORE_ASSET_FOLDER, ASSET_FOLDER_YAML);
         let normal_path = std::format!("{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML);
-        // self.read_asset_paths(std::path::Path::new(&core_path))?;
+        self.read_asset_paths(std::path::Path::new(&core_path))?;
         self.read_asset_paths(std::path::Path::new(&normal_path))
     }
 
@@ -193,10 +193,9 @@ impl AssetManager {
         Ok(())
     }
 }
-
 // Private
-// Loading
 impl AssetManager {
+    // ------------------------- Loading ------------------------- 
     fn load_texture(&mut self, texture_uuid: &UUID) -> Result<(), StdError> {
         let texture_path = match self.resource_paths.textures.get(texture_uuid) {
             Some(path) => path,
@@ -382,10 +381,8 @@ impl AssetManager {
 
         Ok(())
     }
-}
-
-// Processing
-impl AssetManager {
+    
+    // ------------------------- Processing ------------------------- 
     /// Only use files with .png, .jpg, .jpeg, etc
     fn process_texture(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
         // Using YAML        
@@ -578,10 +575,8 @@ impl AssetManager {
     fn process_material(&mut self, file_path: &std::path::Path) -> Result<(), StdError> {
         todo!()
     }
-}
-
-// Init
-impl AssetManager {
+    
+    // ------------------------- Init ------------------------- 
     fn init_folders(&self) -> Result<(), StdError> {
         for root in [CORE_ASSET_FOLDER, ASSET_FOLDER] {
             for format in [ASSET_FOLDER_YAML, ASSET_FOLDER_BINARY] {
@@ -601,11 +596,6 @@ impl AssetManager {
                 std::fs::create_dir_all(materials)?;
             }
         }
-        
-        Ok(())
-    }
-    fn init_core(&mut self) -> Result<(), StdError> {
-        
         
         Ok(())
     }

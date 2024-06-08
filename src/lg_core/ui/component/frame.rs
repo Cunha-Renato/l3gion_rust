@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::lg_core::{event::LgEvent, gui::{UiDirection, UiOffsetMode, UiTotalOffset, UiUnit}};
+use crate::lg_core::{event::LgEvent, ui::{UiDirection, UiOffsetMode, UiTotalOffset, UiUnit}};
 
 use super::{UiComponent, UiPosition, UiSize};
 
-pub struct Frame {
+pub struct UiFrame {
     offset: UiTotalOffset,
     position: UiPosition,
     scale: UiSize,
@@ -14,7 +14,7 @@ pub struct Frame {
 
     children: HashMap<String, Box<dyn UiComponent>>,
 }
-impl UiComponent for Frame {
+impl UiComponent for UiFrame {
     fn is_hover(&self) -> bool {
         self.is_hover
     }
@@ -76,6 +76,15 @@ impl UiComponent for Frame {
         &self.offset
     }
 }
-impl Frame {
-
+impl Default for UiFrame {
+    fn default() -> Self {
+        Self {
+            offset: UiTotalOffset::default(),
+            position: (UiUnit::PIXEL(0), UiUnit::PIXEL(0), UiUnit::PIXEL(0)),
+            scale: (UiUnit::PIXEL(0), UiUnit::PIXEL(0)),
+            is_hover: false,
+            is_active: false,
+            children: HashMap::default(),
+        }
+    }
 }

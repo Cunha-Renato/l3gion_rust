@@ -1,16 +1,17 @@
 pub struct LgWindow {
-    width: u32,
-    height: u32,
+    window: winit::window::Window,
 }
 impl LgWindow {
-    pub fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
+    pub fn new(window: winit::window::Window) -> Self {
+        Self { window }
     }
-    pub const fn size(&self) -> (u32, u32) {
-        (self.width, self.height)
+
+    pub fn size(&self) -> (u32, u32) {
+        (self.window.inner_size().width, self.window.inner_size().height)
     }
-    pub fn set_size(&mut self, size: (u32, u32)) {
-        self.width = size.0;
-        self.height = size.1;
+}
+impl LgWindow {
+    pub(crate) fn request_redraw(&self) {
+        self.window.request_redraw();
     }
 }

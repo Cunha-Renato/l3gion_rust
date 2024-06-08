@@ -1,3 +1,4 @@
+pub mod manager;
 pub mod component;
 pub mod layout;
 
@@ -35,7 +36,15 @@ pub(crate) struct UiOffset {
     right: UiUnit,
 }
 impl UiOffset {
-    fn new() -> Self {
+    fn set_all(&mut self, unit: UiUnit) {
+        self.top = unit;
+        self.bottom = unit;
+        self.left = unit;
+        self.right = unit;
+    }
+}
+impl Default for UiOffset {
+    fn default() -> Self {
         let zero = UiUnit::PIXEL(0);
         Self {
             top: zero,
@@ -44,26 +53,12 @@ impl UiOffset {
             right: zero,
         }
     }
-    fn set_all(&mut self, unit: UiUnit) {
-        self.top = unit;
-        self.bottom = unit;
-        self.left = unit;
-        self.right = unit;
-    }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct UiTotalOffset {
     pub(crate) padding: UiOffset,
     pub(crate) margin: UiOffset,
-}
-impl UiTotalOffset {
-    fn new() -> Self {
-        Self {
-            padding: UiOffset::new(),
-            margin: UiOffset::new(),
-        }
-    }
 }
 
 pub type UiPosition = (UiUnit, UiUnit, UiUnit);

@@ -118,9 +118,7 @@ impl LgRenderer {
         };
     }
     pub unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
-        self.renderer.resize(new_size)?;
-
-        Ok(())
+        self.renderer.resize(new_size)
     }
 }
 

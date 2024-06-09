@@ -21,7 +21,6 @@ impl L3gion {
     pub fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let event_loop = winit::event_loop::EventLoop::new()?;
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         let mut info = info;
 
@@ -98,14 +97,8 @@ impl L3gion {
                     },
                     _ => ()
                 },
-                winit::event::Event::AboutToWait => if self.app.core.borrow().renderer.is_vsync() { 
-                    self.app.request_redraw() 
-                },
+                winit::event::Event::AboutToWait => self.app.request_redraw(),
                 _ => (),
-            }
-
-            if !self.app.core.borrow().renderer.is_vsync() {
-                self.app.on_update().unwrap();
             }
         })?;
         

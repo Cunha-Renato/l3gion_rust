@@ -1,6 +1,6 @@
 use std::{collections::HashMap, mem::size_of};
 use lg_renderer::renderer::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
-use crate::{lg_core::renderer::vertex::Vertex, StdError};
+use crate::{lg_core::renderer::vertex::Vertex, profile_function, profile_scope, StdError};
 use super::{renderer::{material::Material, mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
 use nalgebra_glm as glm;
 
@@ -69,6 +69,7 @@ pub(crate) struct AssetManager {
 // Public
 impl AssetManager {
     pub(crate) fn init(&mut self) -> Result<(), StdError> {
+        profile_function!();
         self.init_folders()?;
 
         // YAML
@@ -79,6 +80,7 @@ impl AssetManager {
     }
 
     pub(crate) fn read_asset_paths(&mut self, path: &std::path::Path) -> Result<(), StdError> {
+        profile_function!();
         // TODO: Only reading the YAML files
         let entries = std::fs::read_dir(path)?;
         
@@ -86,9 +88,24 @@ impl AssetManager {
             let path = entry?.path();
 
             if path.is_file() && path.extension().unwrap().to_str().unwrap() == YAML_FILE_EXTENSION {
-                let node = serializer::YamlNode::deserialize_full_path(path.to_str().unwrap())?;
+                profile_scope!("reading_yaml");
+
+                let uuid = UUID::from_u128(path.file_stem().unwrap().to_str().unwrap().parse::<u128>()?);
+                let folder_name = std::format!("{}/", path.parent().unwrap().file_name().unwrap().to_str().unwrap());
+                let resource_path_string = path.to_string_lossy().to_string();
+
+                match folder_name.as_str() {
+                    ASSET_FOLDER_TEXTURES => {let _ = self.resource_paths.textures.insert(uuid, resource_path_string); },
+                    ASSET_FOLDER_SHADERS => {let _ = self.resource_paths.shaders.insert(uuid, resource_path_string); },
+                    ASSET_FOLDER_MESHES => {let _ = self.resource_paths.meshes.insert(uuid, resource_path_string); },
+                    ASSET_FOLDER_MATERIALS => {let _ = self.resource_paths.materials.insert(uuid, resource_path_string); },
+                    _ => return Err("Couldn't find resource!".into()),
+                }
+
+/*              let node = serializer::YamlNode::deserialize_full_path(path.to_str().unwrap())?;
 
                 for child in node.children {
+                    profile_scope!("reading_child");
                     match child.name.as_str() {
                         UUID_YAML => {
                             let uuid = UUID::from_u128(child.value.parse::<u128>()?);
@@ -102,7 +119,7 @@ impl AssetManager {
                         }
                         _ => (),
                     }
-                }
+                } */
             } else { self.read_asset_paths(&path)?; }
         }
         
@@ -163,6 +180,7 @@ impl AssetManager {
     }
 
     pub(crate) fn process_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
+        profile_function!();
         self.init_folders()?;
 
         let entries = std::fs::read_dir(folder_path)?;
@@ -408,7 +426,7 @@ impl AssetManager {
 
         // Serializing
         let mut texture_node = serializer::YamlNode {
-            name: texture_name.clone(),
+            name: texture_name,
             node_type: TEXTURE_YAML.to_string(),
             ..Default::default()
         };
@@ -458,7 +476,7 @@ impl AssetManager {
         });
         
         let tex_resources_path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_TEXTURES);
-        texture_node.serialize(&tex_resources_path, &texture_name)?;
+        texture_node.serialize(&tex_resources_path, &texture_uuid.get_value().to_string())?;
 
         Ok(())
     }
@@ -476,7 +494,7 @@ impl AssetManager {
         };
         
         let mut shader_node = serializer::YamlNode {
-            name: shader_name.clone(),
+            name: shader_name,
             node_type: SHADER_YAML.to_string(),
             ..Default::default()
         };
@@ -503,7 +521,7 @@ impl AssetManager {
         });
 
         let path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_SHADERS);
-        shader_node.serialize(&path, &shader_name)?;
+        shader_node.serialize(&path, &shader_uuid.get_value().to_string())?;
 
         Ok(())
     }
@@ -513,7 +531,7 @@ impl AssetManager {
         let mesh_name = file_path.file_stem().unwrap().to_string_lossy().to_string();
         
         let mut mesh_node = serializer::YamlNode {
-            name: mesh_name.clone(),
+            name: mesh_name,
             node_type: MESH_YAML.to_string(),
             ..Default::default()
         };
@@ -567,7 +585,7 @@ impl AssetManager {
         });
 
         let mesh_resources_path = std::format!("{}{}{}", ASSET_FOLDER, ASSET_FOLDER_YAML, ASSET_FOLDER_MESHES);
-        mesh_node.serialize(&mesh_resources_path, &mesh_name)?;
+        mesh_node.serialize(&mesh_resources_path, &mesh_uuid.get_value().to_string())?;
 
         Ok(())
     }
@@ -578,6 +596,7 @@ impl AssetManager {
     
     // ------------------------- Init ------------------------- 
     fn init_folders(&self) -> Result<(), StdError> {
+        profile_function!();
         for root in [CORE_ASSET_FOLDER, ASSET_FOLDER] {
             for format in [ASSET_FOLDER_YAML, ASSET_FOLDER_BINARY] {
                 let meshes_string = std::format!("{}{}{}", root, format, ASSET_FOLDER_MESHES);

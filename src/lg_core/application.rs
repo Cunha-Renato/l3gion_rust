@@ -1,9 +1,14 @@
 use lg_renderer::renderer::LgRendererCreationInfo;
 
-use crate::{as_dyn, lg_core::frame_time::FrameTime, profile_function, profile_scope, StdError};
+use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig}, profile_function, profile_scope, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
 
+pub struct PersistentApplicationInfo {
+    pub v_sync: bool,
+}
+
 pub struct ApplicationCreateInfo<'a> {
+    pub persistant_info: PersistentApplicationInfo,
     pub renderer_api: lg_renderer::renderer::CreationApiInfo,
     pub window_info: lg_renderer::renderer::CreationWindowInfo<'a>,
 }
@@ -14,7 +19,10 @@ pub struct L3gion {
 }
 impl L3gion {
     pub fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
+        profile_function!();
         let event_loop = winit::event_loop::EventLoop::new()?;
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
         let mut info = info;
 
         info.window_info.event_loop = Some(&event_loop);
@@ -90,8 +98,14 @@ impl L3gion {
                     },
                     _ => ()
                 },
-                winit::event::Event::AboutToWait => self.app.request_redraw(),
+                winit::event::Event::AboutToWait => if self.app.core.borrow().renderer.is_vsync() { 
+                    self.app.request_redraw() 
+                },
                 _ => (),
+            }
+
+            if !self.app.core.borrow().renderer.is_vsync() {
+                self.app.on_update().unwrap();
             }
         })?;
         
@@ -128,6 +142,7 @@ impl Application {
 // Private
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
+        profile_function!();
         let (window, renderer) = lg_renderer::renderer::LgRenderer::new(LgRendererCreationInfo {
             renderer_api: info.renderer_api,
             window_info: info.window_info,
@@ -135,7 +150,7 @@ impl Application {
 
         let core = Rfc::new(ApplicationCore {
             window: LgWindow::new(window),
-            renderer: LgRenderer::new(renderer)?,
+            renderer: LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?,
         });
         
         Ok(Self {
@@ -145,6 +160,7 @@ impl Application {
     }
 
     fn init(&mut self) -> Result<(), StdError> {
+        profile_function!();
         LgInput::init()?;
         FrameTime::init()?;
         self.core.borrow_mut().renderer.init()
@@ -182,7 +198,7 @@ impl Application {
         
         FrameTime::start()?;
 
-        unsafe { 
+        { 
             profile_scope!("render_begin");
             self.core.borrow().renderer.begin()?;
         }
@@ -193,7 +209,7 @@ impl Application {
             }
         }
 
-        unsafe { 
+        { 
             profile_scope!("render_end");
             self.core.borrow_mut().renderer.end()?; 
         }
@@ -205,10 +221,8 @@ impl Application {
 
     fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
         profile_function!();
-        unsafe {
-            self.core.borrow().renderer.resize(new_size)?;
-            
-            Ok(())
-        }
+        self.core.borrow().renderer.resize(new_size)?;
+        
+        Ok(())
     }
 }

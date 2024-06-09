@@ -16,8 +16,13 @@ pub mod shader;
 pub mod uniform;
 pub mod buffer;
 
+pub struct RendererConfig {
+    pub v_sync: bool,
+}
+
 pub struct LgRenderer {
     renderer: lg_renderer::renderer::LgRenderer<UUID>,
+    config: RendererConfig,
     asset_manager: AssetManager,
     
     // (Material UUID, Data)
@@ -31,10 +36,11 @@ pub struct LgRenderer {
     pub draw_calls: usize,
 }
 impl LgRenderer {
-    pub fn new(renderer: lg_renderer::renderer::LgRenderer<UUID>) -> Result<Self, StdError> {
+    pub fn new(renderer: lg_renderer::renderer::LgRenderer<UUID>, config: RendererConfig) -> Result<Self, StdError> {
 
         Ok(Self {
             renderer,
+            config,
             asset_manager: AssetManager::default(),
             instance_draw_data: HashMap::default(),
             in_use_instance_data: InstanceData::default(),
@@ -48,17 +54,30 @@ impl LgRenderer {
     }
 
     pub fn init(&mut self) -> Result<(), StdError> {
-        self.asset_manager.process_folder(std::path::Path::new("assets"))?;
+        profile_function!();
+        // self.asset_manager.process_folder(std::path::Path::new("assets"))?;
         self.asset_manager.init()?;
         
-        unsafe { self.renderer.init() }
+        self.set_vsync(self.config.v_sync);
+        self.renderer.init()
     }
     
-    pub fn shutdown(&mut self) -> Result<(), StdError> {
-        unsafe { self.renderer.shutdown() }
+    pub fn set_vsync(&mut self, v_sync: bool) {
+        self.config.v_sync = v_sync;
+
+        if self.config.v_sync != self.renderer.is_vsync() {
+            self.renderer.set_vsync(v_sync);
+        }
+    }
+    pub fn is_vsync(&self) -> bool {
+        self.config.v_sync
     }
 
-    pub unsafe fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+    pub fn shutdown(&mut self) -> Result<(), StdError> {
+        self.renderer.shutdown()
+    }
+
+    pub fn draw_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
 
         self.asset_manager.prepare_mesh(&entity.mesh)?;
@@ -93,11 +112,11 @@ impl LgRenderer {
             ubos,
         )
     }
-    pub unsafe fn begin(&self) -> Result<(), StdError>{
-        self.renderer.begin();
+    pub fn begin(&self) -> Result<(), StdError>{
+        self.renderer.begin()?;
         Ok(())
     }
-    pub unsafe fn end(&mut self) -> Result<(), StdError> {
+    pub fn end(&mut self) -> Result<(), StdError> {
         self.flush()?;
         self.draw_calls = 0;
         {
@@ -116,7 +135,7 @@ impl LgRenderer {
             None => (),
         };
     }
-    pub unsafe fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
+    pub fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         self.renderer.resize(new_size)
     }
 }
@@ -135,7 +154,7 @@ impl LgRenderer {
             data: HashMap::new(),
         }
     }
-    pub unsafe fn queue_instance<V: LgVertex, F>(&mut self, entity: &LgEntity, instance_data: &mut TestInstanceData<V>, f: F) -> Result<(), StdError>
+    pub fn queue_instance<V: LgVertex, F>(&mut self, entity: &LgEntity, instance_data: &mut TestInstanceData<V>, f: F) -> Result<(), StdError>
     where F: FnOnce(&LgEntity) -> V
     {
         profile_function!();
@@ -173,7 +192,7 @@ impl LgRenderer {
 
         Ok(())
     }
-    pub unsafe fn end_instancing<V: LgVertex>(&mut self, instance_data: &mut TestInstanceData<V>) -> Result<(), StdError> {
+    pub fn end_instancing<V: LgVertex>(&mut self, instance_data: &mut TestInstanceData<V>) -> Result<(), StdError> {
         profile_function!();
         for (mat_uuid, dd) in &instance_data.data {
             let material = self.asset_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;
@@ -257,7 +276,7 @@ static INSTANCING_CONSTRAINTS: InstancingConstraints = InstancingConstraints {
 };
 
 impl LgRenderer {
-    pub unsafe fn instance_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
+    pub fn instance_entity(&mut self, entity: &LgEntity) -> Result<(), StdError> {
         profile_function!();
 
         {
@@ -302,7 +321,7 @@ impl LgRenderer {
 
         Ok(())
     }
-    unsafe fn flush(&mut self) -> Result<(), StdError> {
+    fn flush(&mut self) -> Result<(), StdError> {
         profile_function!();
         for (mat_uuid, dd) in &self.instance_draw_data {
             let material = self.asset_manager.get_material(mat_uuid).ok_or("Failed to get Material in flush! (Renderer)")?;

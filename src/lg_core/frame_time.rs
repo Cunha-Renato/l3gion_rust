@@ -1,18 +1,17 @@
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use crate::StdError;
-use super::lg_types::units_of_time::{AsLgTime, LgTime};
+use super::{lg_types::units_of_time::{AsLgTime, LgTime}, timer::Timer};
 
 static FRAME_TIME: OnceLock<Arc<Mutex<FrameTime>>> = OnceLock::new();
 
 /// Time is stored in SECONDS.
-#[derive(Debug)]
 pub struct FrameTime {
     current: LgTime,
-    begin: std::time::Instant,
+    timer: Timer
 }
 // Public
 impl FrameTime {
-    pub fn elapsed() -> Result<LgTime, StdError> {
+    pub fn value() -> Result<LgTime, StdError> {
         Ok(Self::get_locked()?.current)
     }
 }
@@ -21,20 +20,20 @@ impl FrameTime {
     pub(crate) fn init() -> Result<(), StdError> {
         match FRAME_TIME.set(Arc::new(Mutex::new(FrameTime {
             current: 16.6.ms(),
-            begin: std::time::Instant::now(),
+            timer: Timer::new(),
         }))) {
             Err(_) => Err("Failed to create FrameTime!".into()),
             _ => Ok(())
         }
     }
     pub(crate) fn start() -> Result<(), StdError> {
-        Self::get_locked()?.begin = std::time::Instant::now();
+        Self::get_locked()?.timer.restart();
 
         Ok(())
     }
     pub(crate) fn end() -> Result<(), StdError> {
         let mut ft = Self::get_locked()?;
-        ft.current = ft.begin.elapsed().as_nanos().ns();
+        ft.current = ft.timer.elapsed();
         
         Ok(())
     }

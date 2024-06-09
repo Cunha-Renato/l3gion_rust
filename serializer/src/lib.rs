@@ -37,6 +37,8 @@ pub fn deserialize<T: DeserializeOwned>(path: &str, name: &str) -> Result<T, Std
     Ok(result)
 }
 pub fn deserialize_full_path<T: DeserializeOwned>(path: &str) -> Result<T, StdError> {
-    let content = std::fs::read_to_string(path)?;
-    Ok(serde_yaml::from_str(&content)?)
+    // let content = std::path::Path::new(path);
+    let file = std::fs::File::open(path)?;
+    Ok(serde_yaml::from_reader::<std::fs::File, T>(file)?)
+    // Ok(serde_yaml::from_str(&content)?)
 }

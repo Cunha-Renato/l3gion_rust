@@ -11,6 +11,7 @@ pub mod window;
 pub mod layer;
 pub mod scene;
 pub mod frame_time;
+pub mod timer;
 pub mod ui;
 
 pub mod test_scene;

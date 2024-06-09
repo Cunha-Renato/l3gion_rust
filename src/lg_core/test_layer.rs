@@ -1,4 +1,6 @@
-use crate::{profile_function, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use std::borrow::BorrowMut;
+
+use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
@@ -66,6 +68,7 @@ impl Layer for TestLayer {
 
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
+
         self.camera.on_update();
         
         // Update uniform
@@ -79,7 +82,7 @@ impl Layer for TestLayer {
             // view: glm::Mat4::identity(),
             // proj: glm::Mat4::identity(),
         };
-        self.core.as_mut().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
+        self.core.as_ref().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
         
         // TESTING
         #[derive(Clone, Debug)]
@@ -94,26 +97,24 @@ impl Layer for TestLayer {
         let renderer = &mut self.core.as_ref().unwrap().borrow_mut().renderer;
         let mut instance_data = renderer.begin_instancing::<InstanceVertex>();
 
-        unsafe {
-            for e in &self.entities {
-                /* self.core.as_ref().unwrap()
-                    .borrow_mut().renderer.instance_entity(&e)?; */
-                renderer.queue_instance(e, &mut instance_data, |e| {
-                    let model = e.model();
-                    let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
-                    let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
-                    let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
-                    InstanceVertex {
-                        row_0,
-                        row_1,
-                        row_2,
-                        tex_index: 0// TODO: For now is only one texture
-                    }
-                })?;
-            }
-            
-            renderer.end_instancing(&mut instance_data)?;
+        for e in &self.entities {
+            /* self.core.as_ref().unwrap()
+                .borrow_mut().renderer.instance_entity(&e)?; */
+            renderer.queue_instance(e, &mut instance_data, |e| {
+                let model = e.model();
+                let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
+                let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
+                let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
+                InstanceVertex {
+                    row_0,
+                    row_1,
+                    row_2,
+                    tex_index: 0// TODO: For now is only one texture
+                }
+            })?;
         }
+        
+        renderer.end_instancing(&mut instance_data)?;
         
         Ok(())
     }
@@ -146,8 +147,13 @@ impl Layer for TestLayer {
                         ));
                     }
                 }
-                if e.key == LgKeyCode::J {
-                    
+                if e.key == LgKeyCode::V {
+                    let renderer = &mut self.core.as_ref().unwrap().borrow_mut().renderer;
+                    if renderer.is_vsync() {
+                        renderer.set_vsync(false);
+                    } else {
+                        renderer.set_vsync(true);
+                    }
                 }
                 if e.key == LgKeyCode::I {
                 }

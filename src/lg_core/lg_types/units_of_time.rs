@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub, Mul, Div};
+use std::{fmt::Debug, ops::{Add, Div, Mul, Sub}};
 
 const HOUR_IN_SECOND:   f64 = MIN_IN_SECOND / 60.0;
 const MIN_IN_SECOND:    f64 = 1.0 / 60.0;
@@ -18,7 +18,7 @@ pub enum TIME_UNIT {
 
 /// The standard unit of measurement of time is SECONDS.
 /// So the value is always stored as SECONDS.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct LgTime {
     unit: TIME_UNIT,
     value: f64,
@@ -28,7 +28,7 @@ impl LgTime {
         self.value
     }
 
-    pub fn get(&self) -> f64 {
+    pub fn convert(&self) -> f64 {
         match self.unit {
             TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,
             TIME_UNIT::MIN => self.value * MIN_IN_SECOND,
@@ -95,6 +95,22 @@ impl LgTime {
         Self {
             unit: TIME_UNIT::NANO,
             value: self.value,
+        }
+    }
+}
+impl Debug for LgTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LgTime")
+            .field("unit", &self.unit)
+            .field("in seconds", &self.value)
+            .finish()
+    }
+}
+impl Default for LgTime {
+    fn default() -> Self {
+        Self { 
+            unit: TIME_UNIT::SEC, 
+            value: 0.0 
         }
     }
 }

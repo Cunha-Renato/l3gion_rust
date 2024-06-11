@@ -1,7 +1,7 @@
 use lg_renderer::renderer::LgRendererCreationInfo;
 
-use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig}, profile_function, profile_scope, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
+use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig, ui_layer::UiLayer}, profile_function, profile_scope, StdError};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::manager::Ui, window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -26,7 +26,9 @@ impl L3gion {
 
         info.window_info.event_loop = Some(&event_loop);
         let mut application = Application::new(info)?;
+
         application.init()?;
+        application.push_layer(UiLayer::default())?;
 
         Ok(Self {
             app: application,
@@ -97,7 +99,7 @@ impl L3gion {
                     },
                     _ => ()
                 },
-                winit::event::Event::AboutToWait => self.app.request_redraw(),
+                winit::event::Event::AboutToWait => self.app.core.window.borrow().request_redraw(),
                 _ => (),
             }
         })?;
@@ -106,18 +108,21 @@ impl L3gion {
     }
 }
 
+#[derive(Clone)]
 pub struct ApplicationCore {
-    pub window: LgWindow,
-    pub renderer: LgRenderer,
+    pub window: Rfc<LgWindow>,
+    pub ui: Rfc<Ui>,
+    pub renderer: Rfc<LgRenderer>,
 }
 pub struct Application {
-    core: Rfc<ApplicationCore>,
+    core: ApplicationCore,
     layers: Vec<Rfc<dyn Layer>>
 }
 // Public
 impl Application {
     pub fn push_layer(&mut self, mut layer: impl Layer + 'static) -> Result<(), StdError> {
         layer.on_attach(self.core.clone())?;
+
         self.layers.push(as_dyn!(layer, dyn Layer));
 
         Ok(())
@@ -141,11 +146,17 @@ impl Application {
             window_info: info.window_info,
         })?;
 
-        let core = Rfc::new(ApplicationCore {
-            window: LgWindow::new(window),
-            renderer: LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?,
-        });
-        
+        // Singleton
+        let window = Rfc::new(LgWindow::new(window));
+        let ui = Rfc::new(Ui::new(window.clone()));
+        let renderer = Rfc::new(LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?);
+
+        let core = ApplicationCore {
+            window,
+            ui,
+            renderer,
+        };
+
         Ok(Self {
             core,
             layers: Vec::new()
@@ -154,9 +165,12 @@ impl Application {
 
     fn init(&mut self) -> Result<(), StdError> {
         profile_function!();
+
+        // Singletons
         LgInput::init()?;
         FrameTime::init()?;
-        self.core.borrow_mut().renderer.init()
+
+        self.core.renderer.borrow_mut().init()
     }
 
     fn shutdown(&mut self) -> Result<(), StdError> {
@@ -166,12 +180,7 @@ impl Application {
             layer.borrow_mut().on_detach()?;
         }
 
-        self.core.borrow_mut().renderer.shutdown()
-    }
-    
-    fn request_redraw(&self) {
-        profile_function!();
-        self.core.borrow().window.request_redraw();
+        self.core.renderer.borrow_mut().shutdown()
     }
     
     fn on_event(&mut self, event: LgEvent) {
@@ -193,7 +202,7 @@ impl Application {
 
         { 
             profile_scope!("render_begin");
-            self.core.borrow().renderer.begin()?;
+            self.core.renderer.borrow_mut().begin()?;
         }
         {
             profile_scope!("layers_on_update");
@@ -204,7 +213,7 @@ impl Application {
 
         { 
             profile_scope!("render_end");
-            self.core.borrow_mut().renderer.end()?; 
+            self.core.renderer.borrow_mut().end()?; 
         }
         
         FrameTime::end()?;
@@ -212,9 +221,9 @@ impl Application {
         Ok(())
     }
 
-    fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError>{
+    fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         profile_function!();
-        self.core.borrow().renderer.resize(new_size)?;
+        self.core.renderer.borrow().resize(new_size)?;
         
         Ok(())
     }

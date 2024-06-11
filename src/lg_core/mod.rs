@@ -13,6 +13,7 @@ pub mod scene;
 pub mod frame_time;
 pub mod timer;
 pub mod ui;
+mod ui_layer;
 
 pub mod test_scene;
 pub mod test_layer;

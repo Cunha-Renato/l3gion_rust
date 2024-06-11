@@ -61,5 +61,5 @@ pub struct UiTotalOffset {
     pub(crate) margin: UiOffset,
 }
 
-pub type UiPosition = (UiUnit, UiUnit, UiUnit);
+pub type UiPosition = (UiUnit, UiUnit);
 pub type UiSize = (UiUnit, UiUnit);

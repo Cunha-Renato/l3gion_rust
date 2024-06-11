@@ -50,7 +50,7 @@ impl LgInput {
     pub(crate) fn init() -> Result<(), StdError> {
         profile_function!();
         match INPUT.set(Arc::new(Mutex::new(LgInput::default()))) {
-            Err(_) => return Err("Failed to create Input! (LgInput)".into()),
+            Err(_) => Err("Failed to create Input! (LgInput)".into()),
             _ => Ok(())
         }
     }

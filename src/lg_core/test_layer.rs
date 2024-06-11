@@ -1,12 +1,10 @@
-use std::borrow::BorrowMut;
-
-use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, ui::{component::UiComponentCreateInfo, UiOffset, UiTotalOffset, UiUnit}, window::LgWindow}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
 
 pub struct TestLayer {
-    core: Option<Rfc<ApplicationCore>>,
+    core: Option<ApplicationCore>,
     camera: Camera,
     entities: Vec<LgEntity>,
     profile: bool,
@@ -21,10 +19,17 @@ impl TestLayer {
         }
     }
 }
+// Private
+impl TestLayer {
+    fn core(&self) -> &ApplicationCore {
+        self.core.as_ref().unwrap()
+    } 
+}
 impl Layer for TestLayer {
-    fn on_attach(&mut self, app_core: Rfc<ApplicationCore>) -> Result<(), StdError> {
+    fn on_attach(&mut self, app_core: ApplicationCore) -> Result<(), StdError> {
         profile_function!();
-        let vp = app_core.borrow().window.size();
+        let vp = app_core.window.borrow().size();
+
         self.camera = Camera::new(
             to_radians(45.0) as f32, 
             vp.0 as f32, 
@@ -32,13 +37,21 @@ impl Layer for TestLayer {
             0.1, 
             1000.0
         );
-        app_core.borrow_mut().renderer.set_uniform(Uniform::new(
+        app_core.renderer.borrow_mut().set_uniform(Uniform::new(
             "ViewMatrix", 
             lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
             0, 
             0, 
             true,
         ));
+        app_core.ui.borrow_mut().add_frame(UiComponentCreateInfo {
+            name: "test_frame".to_string(),
+            offset: UiTotalOffset {
+                padding: UiOffset::default(),
+                margin: UiOffset::default(),
+            },
+            scale: (UiUnit::PIXEL(100), UiUnit::PIXEL(100)),
+        });
 
         self.entities = vec![
             LgEntity::new(
@@ -82,7 +95,7 @@ impl Layer for TestLayer {
             // view: glm::Mat4::identity(),
             // proj: glm::Mat4::identity(),
         };
-        self.core.as_ref().unwrap().borrow_mut().renderer.update_uniform("ViewMatrix", &view_proj);
+        self.core().renderer.borrow_mut().update_uniform("ViewMatrix", &view_proj);
         
         // TESTING
         #[derive(Clone, Debug)]
@@ -94,7 +107,7 @@ impl Layer for TestLayer {
         }
         lg_vertex!(InstanceVertex, row_0, row_1, row_2, tex_index);
 
-        let renderer = &mut self.core.as_ref().unwrap().borrow_mut().renderer;
+        let renderer = &mut self.core().renderer.borrow_mut();
         let mut instance_data = renderer.begin_instancing::<InstanceVertex>();
 
         for e in &self.entities {
@@ -148,7 +161,7 @@ impl Layer for TestLayer {
                     }
                 }
                 if e.key == LgKeyCode::V {
-                    let renderer = &mut self.core.as_ref().unwrap().borrow_mut().renderer;
+                    let renderer = &mut self.core().renderer.borrow_mut();
                     if renderer.is_vsync() {
                         renderer.set_vsync(false);
                     } else {

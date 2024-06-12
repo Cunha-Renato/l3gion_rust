@@ -1,4 +1,5 @@
 pub mod frame;
+pub mod button;
 
 use crate::lg_core::{event::LgEvent, uuid::UUID};
 use super::{UiDirection, UiOffsetMode, UiPosition, UiSize, UiTotalOffset, UiUnit};
@@ -20,12 +21,11 @@ pub trait UiComponentPublic {
     fn is_active(&self) -> bool;
 
     fn position(&self) -> UiPosition;
-    fn scale(&self) -> UiSize;
 
+    fn scale(&self) -> UiSize;
     fn set_scale(&mut self, new_scale: UiSize);
     
     fn set_offset(&mut self, amount: UiUnit, direction: UiDirection, mode: UiOffsetMode);
-    
     fn get_offset(&self) -> &UiTotalOffset;
 }
 pub(crate) trait UiManageComponent {
@@ -35,5 +35,8 @@ pub(crate) trait UiManageComponent {
     fn set_normalized_position(&mut self, new_pos: glm::Vec2);
     fn set_normalized_size(&mut self, new_size: glm::Vec2);
 
-    fn set_position(&mut self, new_pos: UiPosition);
+    fn set_local_position(&mut self, new_pos: UiPosition);
+    fn set_ss_position(&mut self, new_pos: UiPosition);
+    
+    fn set_ss_scale(&mut self, new_scale: UiSize);
 }

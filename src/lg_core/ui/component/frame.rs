@@ -8,20 +8,23 @@ use super::{UiComponent, UiComponentCreateInfo, UiComponentPublic, UiManageCompo
 pub struct UiFrame {
     pub(crate) entity: LgEntity,
 
+    // Visual
     layout: UI_LAYOUT,
     offset: UiTotalOffset,
     position: UiPosition,
     scale: UiSize,
     
+    // Interaction
     is_hover: bool,
     is_active: bool,
 
-    children: HashMap<String, Box<dyn UiComponent>>,
-    
     mouse_position: (u64, u64),
     move_frame: bool,
     resize_frame: bool,
+
+    children: HashMap<String, Box<dyn UiComponent>>,
 }
+// Public(crate)
 impl UiFrame {
     pub(crate) fn new(info: UiComponentCreateInfo) -> Self {
         let mut result = Self::default();
@@ -29,6 +32,9 @@ impl UiFrame {
         result.scale = info.scale;
 
         result
+    }
+    fn add(&mut self, name: &str, component: Box<dyn UiComponent>) -> &mut Box<dyn UiComponent>{
+        self.children.entry(name.to_string()).or_insert(component)
     }
 }
 impl UiComponentPublic for UiFrame {
@@ -178,8 +184,16 @@ impl UiManageComponent for UiFrame {
         self.entity.set_scale(glm::vec3(new_size.x, new_size.y, 1.0));
     }
 
-    fn set_position(&mut self, new_pos: UiPosition) {
+    fn set_local_position(&mut self, new_pos: UiPosition) {
         self.position = new_pos;
+    }
+    
+    fn set_ss_position(&mut self, new_pos: UiPosition) {
+        self.position = new_pos;
+    }
+    
+    fn set_ss_scale(&mut self, new_scale: UiSize) {
+        self.scale = new_scale;
     }
 }
 impl Default for UiFrame {

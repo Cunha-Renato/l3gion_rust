@@ -3,13 +3,10 @@ use crate::lg_core::ui::component::frame::UiFrame;
 use super::UiLayout;
 
 pub(crate) struct VerticalLayout {
-    window_size: (u32, u32),
 }
 impl VerticalLayout {
-    pub(crate) fn new(window_size: (u32, u32)) -> Self {
-        Self {
-            window_size,
-        }
+    pub(crate) fn new() -> Self {
+        Self {}
     }
 }
 impl UiLayout for VerticalLayout {

@@ -13,7 +13,18 @@ lg_vertex!(UiInstanceVertex, color, row_0, row_1, row_2);
 
 #[derive(Default)]
 pub(crate) struct UiLayer {
+    _debug_name: String,
+
     core: Option<ApplicationCore>,
+}
+// Public(crate)
+impl UiLayer {
+    pub(crate) fn new() -> Self {
+        Self {
+            _debug_name: "UiLayer".to_string(),
+            core: None,
+        }
+    }
 }
 // Private
 impl UiLayer {
@@ -23,6 +34,10 @@ impl UiLayer {
 }
 
 impl Layer for UiLayer {
+    fn debug_name(&self) -> &str {
+        &self._debug_name
+    }
+
     fn on_attach(&mut self, app_core: ApplicationCore) -> Result<(), crate::StdError> {
         self.core = Some(app_core);
         
@@ -63,9 +78,6 @@ impl Layer for UiLayer {
     }
 
     fn on_event(&mut self, event: &super::event::LgEvent) -> bool {
-        for (_, f) in &mut self.core().ui.borrow_mut().frames {
-            f.on_event(event);
-        }
-        false
+        self.core().ui.borrow_mut().on_event(event)
     }
 }

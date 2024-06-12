@@ -4,6 +4,8 @@ use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
 
 pub struct TestLayer {
+    _debug_name: String,
+
     core: Option<ApplicationCore>,
     camera: Camera,
     entities: Vec<LgEntity>,
@@ -12,6 +14,7 @@ pub struct TestLayer {
 impl TestLayer {
     pub fn new() -> Self {
         Self { 
+            _debug_name: "TestLayer".to_string(),
             core: None, 
             camera: Camera::default(),
             entities: Vec::new(),
@@ -26,6 +29,10 @@ impl TestLayer {
     } 
 }
 impl Layer for TestLayer {
+    fn debug_name(&self) -> &str {
+        &self._debug_name
+    }
+
     fn on_attach(&mut self, app_core: ApplicationCore) -> Result<(), StdError> {
         profile_function!();
         let vp = app_core.window.borrow().size();
@@ -50,7 +57,7 @@ impl Layer for TestLayer {
                 padding: UiOffset::default(),
                 margin: UiOffset::default(),
             },
-            scale: (UiUnit::PIXEL(100), UiUnit::PIXEL(100)),
+            scale: (UiUnit::PIXEL(400), UiUnit::PIXEL(100)),
         });
 
         self.entities = vec![

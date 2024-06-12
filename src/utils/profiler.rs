@@ -8,9 +8,9 @@ macro_rules! profiler_begin {
 
 #[macro_export]
 macro_rules! profiler_end {
-    ($path:tt) => {
+    ($_path:tt) => {
         #[cfg(debug_assertions)]
-        optick::stop_capture($path);
+        optick::stop_capture($_path);
     };
 }
 
@@ -18,8 +18,8 @@ macro_rules! profiler_end {
 #[cfg(debug_assertions)]
 macro_rules! profile_function {
     () => {
-        let func_name = optick::function!();
-        optick::event!(func_name);
+        let _func_name = optick::function!();
+        optick::event!(_func_name);
     };
 }
 #[macro_export]
@@ -29,10 +29,10 @@ macro_rules! profile_function {() => {};}
 #[macro_export]
 #[cfg(debug_assertions)]
 macro_rules! profile_scope {
-    ($name:tt) => {
-        optick::event!($name);
+    ($_name:tt) => {
+        optick::event!($_name);
     };
 }
 #[macro_export]
 #[cfg(not(debug_assertions))]
-macro_rules! profile_scope {($name:tt) => {};}
+macro_rules! profile_scope {($_name:tt) => {};}

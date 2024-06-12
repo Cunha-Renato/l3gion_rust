@@ -1,17 +1,10 @@
-use std::{cell::OnceCell, collections::HashMap, sync::{Arc, Mutex, OnceLock}};
-
+use std::collections::HashMap;
 use crate::{lg_core::{event::LgEvent, lg_types::reference::Rfc, window::LgWindow}, StdError};
-
-use super::{component::{frame::UiFrame, UiComponent, UiComponentCreateInfo}, layout::{to_normalized_position, to_normalized_size, vertical::VerticalLayout}, UiUnit};
-
-enum Layout {
-    NONE,
-    VERTICAL(VerticalLayout),
-}
+use super::{component::{frame::UiFrame, UiComponentCreateInfo, UiComponentPublic, UiManageComponent}, to_normalized_position, to_normalized_size, UiUnit};
+use nalgebra_glm as glm;
 
 pub struct Ui {
     window: Rfc<LgWindow>,
-    layout: Layout,
 
     pub(crate) frames: HashMap<String, UiFrame>
 }
@@ -30,12 +23,12 @@ impl Ui {
     pub(crate) fn new(window: Rfc<LgWindow>) -> Self {
         Self {
             window,
-            layout: Layout::NONE,
             frames: HashMap::default(),
         }
     }
     pub(crate) fn on_event(&mut self, event: &LgEvent) -> bool {
         let mut block = false;
+
         for (_, f) in &mut self.frames {
             if f.on_event(event) {
                 block = true;
@@ -53,8 +46,11 @@ impl Ui {
     pub(crate) fn update(&mut self) -> Result<(), StdError> {
         let window_size = self.window.borrow().size();
         for (_, f) in &mut self.frames {
-            f.set_normalized_position(to_normalized_position(&window_size, &f.position()));
-            f.set_normalized_size(to_normalized_size(&window_size, &f.scale()))
+            let n_pos = to_normalized_position(&window_size, &f.position());
+            let n_size = to_normalized_size(&window_size, &f.scale());
+
+            f.set_normalized_position(n_pos + glm::vec2(n_size.x * 0.5, -n_size.y * 0.5));
+            f.set_normalized_size(n_size);
         }
         
         Ok(())

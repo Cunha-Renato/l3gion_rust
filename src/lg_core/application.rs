@@ -1,7 +1,7 @@
 use lg_renderer::renderer::LgRendererCreationInfo;
 
 use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig, ui_layer::UiLayer}, profile_function, profile_scope, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::manager::Ui, window::LgWindow};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::ui_manager::Ui, window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -15,7 +15,7 @@ pub struct ApplicationCreateInfo<'a> {
 
 pub struct L3gion {
     app: Application,
-    event_loop: winit::event_loop::EventLoop<()>,
+    _event_loop: winit::event_loop::EventLoop<()>,
 }
 impl L3gion {
     pub fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
@@ -23,16 +23,16 @@ impl L3gion {
         let event_loop = winit::event_loop::EventLoop::new()?;
 
         let mut info = info;
-
         info.window_info.event_loop = Some(&event_loop);
+
         let mut application = Application::new(info)?;
 
         application.init()?;
-        application.push_layer(UiLayer::default())?;
+        application.push_layer(UiLayer::new())?;
 
         Ok(Self {
             app: application,
-            event_loop
+            _event_loop: event_loop,
         })
     }
 
@@ -44,7 +44,7 @@ impl L3gion {
     }
 
     pub fn run(mut self) -> Result<(), StdError> {
-        self.event_loop.run(move |event, window_target| {
+        self._event_loop.run(move |event, window_target| {
             match event {
                 winit::event::Event::WindowEvent { event, .. } => match event {
                     winit::event::WindowEvent::CloseRequested => {
@@ -189,7 +189,7 @@ impl Application {
 
         for layer in &self.layers {
             if layer.borrow_mut().on_event(&event) {
-                break;
+                return;
             }
         }
     }

@@ -13,22 +13,27 @@ pub struct UiComponentCreateInfo {
     pub scale: UiSize,
 }
 
-pub(crate) trait UiComponent {
+pub(crate) trait UiComponent: UiComponentPublic + UiManageComponent {}
+
+pub trait UiComponentPublic {
     fn is_hover(&self) -> bool;
     fn is_active(&self) -> bool;
-    fn on_update(&mut self);
-    fn on_event(&mut self, event: &LgEvent) -> bool;
 
     fn position(&self) -> UiPosition;
     fn scale(&self) -> UiSize;
 
-    fn set_normalized_position(&mut self, new_pos: glm::Vec2);
-    fn set_normalized_size(&mut self, new_size: glm::Vec2);
-
-    fn set_position(&mut self, new_pos: UiPosition);
     fn set_scale(&mut self, new_scale: UiSize);
     
     fn set_offset(&mut self, amount: UiUnit, direction: UiDirection, mode: UiOffsetMode);
     
     fn get_offset(&self) -> &UiTotalOffset;
+}
+pub(crate) trait UiManageComponent {
+    fn on_update(&mut self);
+    fn on_event(&mut self, event: &LgEvent) -> bool;
+    
+    fn set_normalized_position(&mut self, new_pos: glm::Vec2);
+    fn set_normalized_size(&mut self, new_size: glm::Vec2);
+
+    fn set_position(&mut self, new_pos: UiPosition);
 }

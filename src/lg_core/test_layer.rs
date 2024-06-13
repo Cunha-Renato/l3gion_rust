@@ -1,4 +1,4 @@
-use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, ui::{component::UiComponentCreateInfo, UiOffset, UiTotalOffset, UiUnit}, window::LgWindow}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, window::LgWindow}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
@@ -81,25 +81,6 @@ impl Layer for TestLayer {
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         self.camera.on_update();
-
-        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
-            name: "frame1".to_string(),
-            offset: UiTotalOffset::default(),
-            scale: (UiUnit::PIXEL(400), UiUnit::PIXEL(100)),
-        });
-        self.core().ui.borrow_mut().end_frame();
-        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
-            name: "frame2".to_string(),
-            offset: UiTotalOffset::default(),
-            scale: (UiUnit::PIXEL(100), UiUnit::PIXEL(150)),
-        });
-        self.core().ui.borrow_mut().end_frame();
-        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
-            name: "frame3".to_string(),
-            offset: UiTotalOffset::default(),
-            scale: (UiUnit::PIXEL(600), UiUnit::PIXEL(150)),
-        });
-        self.core().ui.borrow_mut().end_frame();
 
         // Update uniform
         struct ViewProj {

@@ -1,7 +1,7 @@
 use lg_renderer::renderer::LgRendererCreationInfo;
 
-use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig, ui_layer::UiLayer}, profile_function, profile_scope, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::ui_manager::Ui, window::LgWindow};
+use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig}, profile_function, profile_scope, StdError};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -29,7 +29,6 @@ impl L3gion {
         let mut application = Application::new(info)?;
 
         application.init()?;
-        application.push_layer(UiLayer::new())?;
 
         Ok(Self {
             app: application,
@@ -62,7 +61,6 @@ impl L3gion {
                     winit::event::WindowEvent::Resized(window_size) => {
                         if window_size.width > 0 && window_size.height > 0 {
                             self.app.resize(window_size.into()).unwrap();
-                            self.app.core.ui.borrow().on_resize();
                         }
                     },
                     // winit::event::WindowEvent::RedrawRequested => {
@@ -120,7 +118,6 @@ impl L3gion {
 #[derive(Clone)]
 pub struct ApplicationCore {
     pub window: Rfc<LgWindow>,
-    pub ui: Rfc<Ui>,
     pub renderer: Rfc<LgRenderer>,
 }
 pub struct Application {
@@ -157,12 +154,10 @@ impl Application {
 
         // Singleton
         let window = Rfc::new(LgWindow::new(window));
-        let ui = Rfc::new(Ui::new(window.clone()));
         let renderer = Rfc::new(LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?);
 
         let core = ApplicationCore {
             window,
-            ui,
             renderer,
         };
 

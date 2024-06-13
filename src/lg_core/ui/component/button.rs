@@ -1,5 +1,5 @@
 use crate::lg_core::{entity::LgEntity, ui::{is_inside, UiPosition, UiSize, UiTotalOffset, UiUnit, UI_LAYOUT}};
-use super::{UiComponentCreateInfo, UiComponentPublic, UiManageComponent, UI_MATERIAL, UI_MESH};
+use super::{UiComponent, UiComponentCreateInfo, UiComponentPublic, UiManageComponent, UI_MATERIAL, UI_MESH};
 use nalgebra_glm as glm;
 
 pub struct UiButton {
@@ -18,7 +18,7 @@ pub struct UiButton {
 }
 // Public(crate)
 impl UiButton {
-    pub(crate) fn new(info: UiComponentCreateInfo) -> Self {
+    pub(crate) fn new(info: &UiComponentCreateInfo) -> Self {
         let mut result = Self::default();
         result.offset = info.offset;
         result.local_scale = info.scale;
@@ -26,6 +26,7 @@ impl UiButton {
         result
     }
 }
+impl UiComponent for UiButton {}
 impl UiComponentPublic for UiButton {
     fn is_hover(&self) -> bool {
         self.is_hover

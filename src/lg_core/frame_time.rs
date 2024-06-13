@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
-use crate::StdError;
+use crate::{profile_function, StdError};
 use super::{lg_types::units_of_time::{AsLgTime, LgTime}, timer::Timer};
 
 static FRAME_TIME: OnceLock<Arc<Mutex<FrameTime>>> = OnceLock::new();
@@ -27,11 +27,13 @@ impl FrameTime {
         }
     }
     pub(crate) fn start() -> Result<(), StdError> {
+        profile_function!();
         Self::get_locked()?.timer.restart();
 
         Ok(())
     }
     pub(crate) fn end() -> Result<(), StdError> {
+        profile_function!();
         let mut ft = Self::get_locked()?;
         ft.current = ft.timer.elapsed();
         

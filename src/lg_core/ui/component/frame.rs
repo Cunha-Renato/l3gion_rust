@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use nalgebra_glm as glm;
 
-use crate::lg_core::{entity::LgEntity, event::LgEvent, input::LgInput, ui::{is_inside, layout::vertical::VerticalLayout, UiDirection, UiOffsetMode, UiTotalOffset, UiUnit, UI_LAYOUT}};
+use crate::lg_core::{entity::LgEntity, event::LgEvent, input::LgInput, lg_types::reference::Rfc, ui::{is_inside, layout::vertical::VerticalLayout, UiDirection, UiOffsetMode, UiTotalOffset, UiUnit, UI_LAYOUT}};
 
 use super::{UiComponent, UiComponentCreateInfo, UiComponentPublic, UiManageComponent, UiPosition, UiSize, UI_MATERIAL, UI_MESH};
 
@@ -22,19 +22,19 @@ pub struct UiFrame {
     move_frame: bool,
     resize_frame: bool,
 
-    children: HashMap<String, Box<dyn UiComponent>>,
+    children: HashMap<String, Rfc<dyn UiComponent>>,
 }
 // Public(crate)
 impl UiFrame {
-    pub(crate) fn new(info: UiComponentCreateInfo) -> Self {
+    pub(crate) fn new(info: &UiComponentCreateInfo) -> Self {
         let mut result = Self::default();
         result.offset = info.offset;
         result.scale = info.scale;
 
         result
     }
-    fn add(&mut self, name: &str, component: Box<dyn UiComponent>) -> &mut Box<dyn UiComponent>{
-        self.children.entry(name.to_string()).or_insert(component)
+    pub(crate) fn add(&mut self, name: String, component: Rfc<dyn UiComponent>) -> Rfc<dyn UiComponent>{
+        self.children.entry(name.to_string()).or_insert(component).clone()
     }
 }
 impl UiComponentPublic for UiFrame {
@@ -85,8 +85,8 @@ impl UiComponentPublic for UiFrame {
 }
 impl UiManageComponent for UiFrame {
     fn on_update(&mut self) {
-        for (_, c) in &mut self.children {
-            c.on_update();
+        for (_, c) in &self.children {
+            c.borrow_mut().on_update();
         }
     }
 
@@ -121,13 +121,15 @@ impl UiManageComponent for UiFrame {
                     }
 
                     // Move
-                    self.move_frame = mbe.pressed && !self.resize_frame && is_inside(
-                        (mp.x as u32, mp.y as u32),
+                    self.move_frame = mbe.pressed && !self.resize_frame && self.is_hover;
+                },
+                crate::lg_core::event::MouseEvent::MoveEvent(mme) => {
+                    self.is_hover = is_inside(
+                        (mme.position.0 as u32, mme.position.1 as u32), 
                         &self.position, 
                         &self.scale
                     );
-                },
-                crate::lg_core::event::MouseEvent::MoveEvent(mme) => {
+
                     let delta = (
                         self.mouse_position.0 as i32 - mme.position.0 as i32,
                         self.mouse_position.1 as i32 - mme.position.1 as i32
@@ -142,7 +144,6 @@ impl UiManageComponent for UiFrame {
                             },
                             _ => todo!(),
                         };
-                        block = true;
                     }
                     self.mouse_position = mme.position;
                     
@@ -152,25 +153,21 @@ impl UiManageComponent for UiFrame {
                             (UiUnit::PIXEL(width), UiUnit::PIXEL(height)) => {
                                 *width = *width as i32 - delta.0;                                
                                 *height = *height as i32 - delta.1;
-                                
-                                match &mut self.position {
-                                    (UiUnit::PIXEL(x), UiUnit::PIXEL(y)) => {
-                                        
-                                    },
-                                    _ => (),
-                                }
                             },
                             _ => (),
                         }
                     }
+                    
+                    self.is_active = self.resize_frame || self.move_frame;
+                    block = self.is_active;
                 },
                 _ => (),
             },
             _ => (),
         }
 
-        for (_, c) in &mut self.children {
-            c.on_event(event);
+        for (_, c) in &self.children {
+            c.borrow_mut().on_event(event);
         }
         
         block

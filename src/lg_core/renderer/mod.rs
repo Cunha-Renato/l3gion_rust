@@ -113,10 +113,12 @@ impl LgRenderer {
         )
     }
     pub fn begin(&self) -> Result<(), StdError>{
+        profile_function!();
         self.renderer.begin()?;
         Ok(())
     }
     pub fn end(&mut self) -> Result<(), StdError> {
+        profile_function!();
         self.flush()?;
         self.draw_calls = 0;
         {

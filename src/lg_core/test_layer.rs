@@ -51,14 +51,6 @@ impl Layer for TestLayer {
             0, 
             true,
         ));
-        app_core.ui.borrow_mut().add_frame(UiComponentCreateInfo {
-            name: "test_frame".to_string(),
-            offset: UiTotalOffset {
-                padding: UiOffset::default(),
-                margin: UiOffset::default(),
-            },
-            scale: (UiUnit::PIXEL(400), UiUnit::PIXEL(100)),
-        });
 
         self.entities = vec![
             LgEntity::new(
@@ -88,16 +80,34 @@ impl Layer for TestLayer {
 
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
-
         self.camera.on_update();
-        
+
+        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
+            name: "frame1".to_string(),
+            offset: UiTotalOffset::default(),
+            scale: (UiUnit::PIXEL(400), UiUnit::PIXEL(100)),
+        });
+        self.core().ui.borrow_mut().end_frame();
+        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
+            name: "frame2".to_string(),
+            offset: UiTotalOffset::default(),
+            scale: (UiUnit::PIXEL(100), UiUnit::PIXEL(150)),
+        });
+        self.core().ui.borrow_mut().end_frame();
+        self.core().ui.borrow_mut().begin_frame(&UiComponentCreateInfo {
+            name: "frame3".to_string(),
+            offset: UiTotalOffset::default(),
+            scale: (UiUnit::PIXEL(600), UiUnit::PIXEL(150)),
+        });
+        self.core().ui.borrow_mut().end_frame();
+
         // Update uniform
         struct ViewProj {
             view: glm::Mat4,
             proj: glm::Mat4,
         }
         let view_proj = ViewProj {
-            view: self.camera.get_view_matrix().clone(),
+            view: self.camera.get_view_matrix(),
             proj: self.camera.get_projection_matrix()
             // view: glm::Mat4::identity(),
             // proj: glm::Mat4::identity(),

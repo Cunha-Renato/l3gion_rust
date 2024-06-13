@@ -1,3 +1,5 @@
+use crate::profile_function;
+
 use super::{application::ApplicationCore, layer::Layer, lg_types::reference::Rfc, ui::component::UiComponent};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
@@ -50,13 +52,13 @@ impl Layer for UiLayer {
     }
 
     fn on_update(&mut self) -> Result<(), crate::StdError> {
+        profile_function!();
         let core = self.core();
-        core.ui.borrow_mut().update()?;
         
         let mut instance_data = core.renderer.borrow_mut().begin_instancing::<UiInstanceVertex>();
 
-        for (_, f) in &mut core.ui.borrow_mut().frames {
-            core.renderer.borrow_mut().queue_instance(&f.entity, &mut instance_data, |e| {
+        for f in &core.ui.borrow_mut().frames_in_use {
+            core.renderer.borrow_mut().queue_instance(&f.borrow().entity, &mut instance_data, |e| {
                 let model = e.model();
                 let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
                 let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
@@ -73,6 +75,7 @@ impl Layer for UiLayer {
         }
         
         core.renderer.borrow_mut().end_instancing(&mut instance_data)?;
+        core.ui.borrow_mut().on_update();
 
         Ok(())
     }

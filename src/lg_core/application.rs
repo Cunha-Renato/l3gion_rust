@@ -21,6 +21,7 @@ impl L3gion {
     pub fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let event_loop = winit::event_loop::EventLoop::new()?;
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         let mut info = info;
         info.window_info.event_loop = Some(&event_loop);
@@ -46,6 +47,13 @@ impl L3gion {
     pub fn run(mut self) -> Result<(), StdError> {
         self._event_loop.run(move |event, window_target| {
             match event {
+                winit::event::Event::NewEvents(cause) => match cause {
+                    winit::event::StartCause::Poll => {
+                        optick::next_frame();
+                        self.app.on_update().unwrap();
+                    },
+                    _ => (),
+                },
                 winit::event::Event::WindowEvent { event, .. } => match event {
                     winit::event::WindowEvent::CloseRequested => {
                         self.app.shutdown().unwrap();
@@ -53,12 +61,13 @@ impl L3gion {
                     },
                     winit::event::WindowEvent::Resized(window_size) => {
                         if window_size.width > 0 && window_size.height > 0 {
-                            self.app.resize(window_size.into()).unwrap()
+                            self.app.resize(window_size.into()).unwrap();
+                            self.app.core.ui.borrow().on_resize();
                         }
                     },
-                    winit::event::WindowEvent::RedrawRequested => {
-                        self.app.on_update().unwrap();
-                    },
+                    // winit::event::WindowEvent::RedrawRequested => {
+                        // self.app.on_update().unwrap();
+                    // },
                     winit::event::WindowEvent::KeyboardInput { event, .. } => {
                         match event.physical_key {
                             winit::keyboard::PhysicalKey::Code(key_code) => {
@@ -99,7 +108,7 @@ impl L3gion {
                     },
                     _ => ()
                 },
-                winit::event::Event::AboutToWait => self.app.core.window.borrow().request_redraw(),
+                // winit::event::Event::AboutToWait => self.app.core.window.borrow().request_redraw(),
                 _ => (),
             }
         })?;
@@ -195,26 +204,14 @@ impl Application {
     }
     
     fn on_update(&mut self) -> Result<(), StdError> {
-        optick::next_frame();
         profile_function!();
-        
         FrameTime::start()?;
 
-        { 
-            profile_scope!("render_begin");
-            self.core.renderer.borrow_mut().begin()?;
+        self.core.renderer.borrow_mut().begin()?;
+        for layer in &self.layers {
+            layer.borrow_mut().on_update()?;
         }
-        {
-            profile_scope!("layers_on_update");
-            for layer in &self.layers {
-                layer.borrow_mut().on_update()?;
-            }
-        }
-
-        { 
-            profile_scope!("render_end");
-            self.core.renderer.borrow_mut().end()?; 
-        }
+        self.core.renderer.borrow_mut().end()?; 
         
         FrameTime::end()?;
 

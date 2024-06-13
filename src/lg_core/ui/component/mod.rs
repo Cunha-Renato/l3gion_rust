@@ -14,7 +14,7 @@ pub struct UiComponentCreateInfo {
     pub scale: UiSize,
 }
 
-pub(crate) trait UiComponent: UiComponentPublic + UiManageComponent {}
+pub trait UiComponent: UiComponentPublic + UiManageComponent {}
 
 pub trait UiComponentPublic {
     fn is_hover(&self) -> bool;

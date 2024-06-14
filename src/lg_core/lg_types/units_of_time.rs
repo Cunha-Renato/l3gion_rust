@@ -24,10 +24,12 @@ pub struct LgTime {
     value: f64,
 }
 impl LgTime {
+    /// Returns the seconds regardles of TIME_UNIT
     pub fn value(&self) -> f64 {
         self.value
     }
 
+    /// Converts the value (SEC) into the specified TIME_UNIT
     pub fn convert(&self) -> f64 {
         match self.unit {
             TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,

@@ -15,6 +15,7 @@ pub mod texture;
 pub mod shader;
 pub mod uniform;
 pub mod buffer;
+pub mod mt_renderer;
 
 pub struct RendererConfig {
     pub v_sync: bool,

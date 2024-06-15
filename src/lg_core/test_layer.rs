@@ -46,7 +46,7 @@ impl Layer for TestLayer {
         );
         app_core.renderer.borrow_mut().set_uniform(Uniform::new(
             "ViewMatrix", 
-            lg_renderer::renderer::lg_uniform::LgUniformType::STRUCT, 
+            lg_renderer::renderer_core::lg_uniform::LgUniformType::STRUCT, 
             0, 
             0, 
             true,

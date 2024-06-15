@@ -1,5 +1,5 @@
 use std::{collections::HashMap, mem::size_of};
-use lg_renderer::renderer::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
+use lg_renderer::renderer_core::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
 use crate::{lg_core::renderer::vertex::Vertex, profile_function, profile_scope, StdError};
 use super::{renderer::{material::Material, mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
 use nalgebra_glm as glm;

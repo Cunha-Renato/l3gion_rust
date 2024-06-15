@@ -3,7 +3,7 @@ use super::buffer::Buffer;
 #[derive(Clone, Debug)]
 pub struct Uniform {
     name: String,
-    u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+    u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
     binding: usize,
     set: usize,
     update_data: bool,
@@ -12,7 +12,7 @@ pub struct Uniform {
 impl Uniform {
     pub fn new(
         name: &str,
-        u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+        u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
         binding: usize,
         set: usize,
         update_data: bool,
@@ -30,7 +30,7 @@ impl Uniform {
     
     pub unsafe fn new_with_data<D>(
         name: &str,
-        u_type: lg_renderer::renderer::lg_uniform::LgUniformType,
+        u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
         binding: usize,
         set: usize,
         update_data: bool,
@@ -47,12 +47,12 @@ impl Uniform {
         }
     }
 }
-impl lg_renderer::renderer::lg_uniform::LgUniform for Uniform {
+impl lg_renderer::renderer_core::lg_uniform::LgUniform for Uniform {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn u_type(&self) -> lg_renderer::renderer::lg_uniform::LgUniformType {
+    fn u_type(&self) -> lg_renderer::renderer_core::lg_uniform::LgUniformType {
         self.u_type
     }
 

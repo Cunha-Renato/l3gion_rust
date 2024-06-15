@@ -1,7 +1,7 @@
 pub(crate) mod utils;
 
 use std::hash::Hash;
-use lg_renderer::renderer::lg_shader::ShaderStage;
+use lg_renderer::renderer_core::lg_shader::ShaderStage;
 use crate::lg_core::uuid::UUID;
 
 /// src_code can be empty if you are using SPIR-V, bytes can be empty if you are using raw glsl.
@@ -46,7 +46,7 @@ impl Shader {
         &self.name
     }
 }
-impl lg_renderer::renderer::lg_shader::LgShader for Shader {
+impl lg_renderer::renderer_core::lg_shader::LgShader for Shader {
     fn bytes(&self) -> &[u8] {
         &self.bytes
     }

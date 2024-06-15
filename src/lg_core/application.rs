@@ -1,4 +1,4 @@
-use lg_renderer::renderer::LgRendererCreationInfo;
+use lg_renderer::renderer_core::LgRendererCreationInfo;
 
 use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig}, profile_function, profile_scope, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
@@ -9,8 +9,8 @@ pub struct PersistentApplicationInfo {
 
 pub struct ApplicationCreateInfo<'a> {
     pub persistant_info: PersistentApplicationInfo,
-    pub renderer_api: lg_renderer::renderer::CreationApiInfo,
-    pub window_info: lg_renderer::renderer::CreationWindowInfo<'a>,
+    pub renderer_api: lg_renderer::renderer_core::CreationApiInfo,
+    pub window_info: lg_renderer::renderer_core::CreationWindowInfo<'a>,
 }
 
 pub struct L3gion {
@@ -147,7 +147,7 @@ impl Application {
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
-        let (window, renderer) = lg_renderer::renderer::LgRenderer::new(LgRendererCreationInfo {
+        let (window, renderer) = lg_renderer::renderer_core::LgRenderer::new(LgRendererCreationInfo {
             renderer_api: info.renderer_api,
             window_info: info.window_info,
         })?;

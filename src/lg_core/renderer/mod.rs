@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}};
-use lg_renderer::{lg_vertex, renderer_core::{lg_uniform::LgUniform, lg_vertex::*}};
+use lg_renderer::{lg_vertex, renderer_core::{lg_uniform::LgUniform, lg_vertex::LgVertex}};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::texture::Texture;

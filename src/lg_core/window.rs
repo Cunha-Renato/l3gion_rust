@@ -1,5 +1,5 @@
 pub struct LgWindow {
-    window: winit::window::Window,
+    pub(crate) window: winit::window::Window,
 }
 // Public
 impl LgWindow {

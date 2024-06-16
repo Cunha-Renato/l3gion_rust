@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}};
-use lg_renderer::{lg_vertex, renderer::{lg_uniform::LgUniform, lg_vertex::LgVertex}};
+use lg_renderer::{lg_vertex, renderer_core::{lg_uniform::LgUniform, lg_vertex::LgVertex}};
 use uniform::Uniform;
 use crate::{profile_function, profile_scope, StdError};
 use self::texture::Texture;
@@ -21,7 +21,7 @@ pub struct RendererConfig {
 }
 
 pub struct LgRenderer {
-    renderer: lg_renderer::renderer::LgRenderer<UUID>,
+    renderer: lg_renderer::renderer_core::LgRenderer<UUID>,
     config: RendererConfig,
     asset_manager: AssetManager,
     
@@ -36,7 +36,7 @@ pub struct LgRenderer {
     pub draw_calls: usize,
 }
 impl LgRenderer {
-    pub fn new(renderer: lg_renderer::renderer::LgRenderer<UUID>, config: RendererConfig) -> Result<Self, StdError> {
+    pub fn new(renderer: lg_renderer::renderer_core::LgRenderer<UUID>, config: RendererConfig) -> Result<Self, StdError> {
 
         Ok(Self {
             renderer,

@@ -5,8 +5,8 @@ fn main() {
 
     let mut legion = L3gion::new(ApplicationCreateInfo {
         persistant_info: PersistentApplicationInfo { v_sync: false },
-        renderer_api: lg_renderer::renderer::CreationApiInfo::OPEN_GL,
-        window_info: lg_renderer::renderer::CreationWindowInfo::new("L3gion", 1080, 720),
+        renderer_api: lg_renderer::renderer_core::CreationApiInfo::OPEN_GL,
+        window_info: lg_renderer::renderer_core::CreationWindowInfo::new("L3gion", 1080, 720),
     }).unwrap();
     
     let app = legion.get_app_mut();

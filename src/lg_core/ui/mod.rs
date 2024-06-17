@@ -7,8 +7,8 @@ use nalgebra_glm as glm;
 pub mod ui_manager;
 pub mod component;
 
-pub type UiPosition = (i32, i32);
-pub type UiSize = (u32, u32);
+pub type UiPosition = glm::Vec2;
+pub type UiSize = glm::Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Condition {
@@ -23,31 +23,28 @@ bitflags! {
         const ON_HOVER = 1;
         const ON_ACTIVE = 2;
         const ON_KEYBOARD = 3;
+
+        const SHOW = 4;
     }
 }
 
-pub(crate) fn is_inside(point: (u32, u32), position: &UiPosition, size: &UiSize) -> bool {
-    let point = (point.0 as i32, point.1 as i32);
-    let size = (size.0 as i32, size.1 as i32);
+pub(crate) fn is_inside(point: &glm::Vec2, position: &UiPosition, size: &UiSize) -> bool {
+    let point = (point.x as f32, point.y as f32);
 
     // Good for now
-    point.0 >= position.0 && point.0 <= position.0 + size.0 &&
-    point.1 >= position.1 && point.1 <= position.1 + size.1
+    point.0 >= position.x && point.0 <= position.x + size.x &&
+    point.1 >= position.y && point.1 <= position.y + size.y
 }
 
-pub(crate) fn to_normalized_position(screen_space: &(u32, u32), position: &UiPosition) -> glm::Vec2 {
-    let width = position.0 as f32 / screen_space.0 as f32;
-    let height = position.1 as f32 / screen_space.1 as f32;
+pub(crate) fn to_normalized_position(screen_space: &glm::Vec2, position: &UiPosition, size: &UiSize) -> glm::Vec2 {
+    let pos = position.component_div(screen_space);
+    let size = size.component_div(screen_space);
+    let dimensions = pos + (size / 2.0);
 
-    glm::vec2(width * 2.0 - 1.0, height * -2.0 + 1.0)                        
+    glm::vec2(dimensions.x * 2.0 - 1.0, dimensions.y * -2.0 + 1.0)
 }
-pub(crate) fn to_normalized_size(screen_space: &(u32, u32), size: &UiPosition) -> glm::Vec2 {
+pub(crate) fn to_normalized_size(screen_space: &glm::Vec2, size: &UiPosition) -> glm::Vec2 {
         // Mesh Dimensions
-        let pixel_quad_width = screen_space.0 as f32 * 0.5;
-        let pixel_quad_height = screen_space.1 as f32 * 0.5;
-
-        let width = size.0 as f32 / pixel_quad_width;
-        let height = size.1 as f32 / pixel_quad_height;
-
-        glm::vec2(width, height)
+        let screen_space = screen_space * 0.5;
+        size.component_div(&screen_space)
 }

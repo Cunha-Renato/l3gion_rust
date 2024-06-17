@@ -1,3 +1,6 @@
+extern crate nalgebra_glm;
+use nalgebra_glm as glm;
+
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub enum MouseEvent {
     ButtonEvent(MouseButtonEvent),
@@ -20,10 +23,10 @@ pub enum MouseButton {
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub struct MouseMoveEvent {
-    pub position: (u64, u64),
+    pub position: glm::DVec2,
 }
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub struct MouseScrollEvent {
-    pub delta: (f32, f32),
+    pub delta: glm::Vec2,
 }

@@ -178,7 +178,7 @@ impl Camera {
             match event {
                 LgEvent::MouseEvent(e) => match e {
                     MouseEvent::ScrollEvent(scroll_event) => {
-                        let delta = scroll_event.delta.1 * 0.1;
+                        let delta = scroll_event.delta.y * 0.1;
                         self.mouse_zoom(delta);
                     },
                     _ => (),

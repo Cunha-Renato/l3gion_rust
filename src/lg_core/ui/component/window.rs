@@ -1,7 +1,12 @@
-use crate::lg_core::ui::{ui_manager::Ui, Condition, UiFlags, UiPosition, UiSize};
+use crate::lg_core::{entity::LgEntity, glm, ui::{ui_manager::Ui, Condition, UiFlags, UiPosition, UiSize}, uuid::UUID};
 
-#[derive(Debug, Default)]
+const WINDOW_MESH: UUID = UUID::from_u128(316691656959075038046595414025328715723);
+const WINDOW_MATERIAL: UUID = UUID::from_u128(4);
+
+#[derive(Default, Clone)]
 pub(crate) struct WindowConfig {
+    pub(crate) _entity: LgEntity,
+
     pub(crate) name: String,
     pub(crate) flags: UiFlags,
     pub(crate) position: UiPosition,
@@ -38,40 +43,38 @@ impl<'ui> Window<'ui> {
         self
     }
 
-    pub fn insert<F: FnOnce()>(mut self, f: Option<F>) {
-        let config = self.ui.windows_config.entry(self.name.clone())
-            .or_insert(WindowConfig {
-                name: self.name,
-                flags: self.flags,
-                position: self.position,
-                size: self.size,
+    pub fn insert<F: FnOnce()>(self, f: F) {
+        let config = WindowConfig {
+            _entity: LgEntity::new(
+                WINDOW_MESH.clone(),
+                WINDOW_MATERIAL.clone(),
+                glm::vec3(0.0, 0.0, 0.0)
+            ),
+            name: self.name.clone(),
+            flags: self.flags,
+            position: self.position,
+            size: self.size,
 
-                focused: true,
-                active: false,
-                hover: false,
-            });
+            focused: false,
+            active: false,
+            hover: false,
+        };
 
-        if self.condition == Condition::ALWAYS {
-            config.flags = self.flags;
-            config.position = self.position;
-            config.size = self.size;
-        }
+        self.ui.insert_window(config, self.condition);
 
-        self.ui.set_current_window(self.name);
-
-        if let Some(f) = f { f(); }
+        f()
     }
 }
 // Public(crate)
 impl<'ui> Window<'ui> {
-    pub(crate) fn new(ui: &mut Ui, label: &str, condition: Condition) -> Self {
+    pub(crate) fn new(ui: &'ui mut Ui, label: &str, condition: Condition) -> Self {
         Self {
             ui,
             flags: UiFlags::NONE,
             condition,
             name: label.to_string(),
-            position: (0, 0),
-            size: (0, 0),
+            position: glm::vec2(0.0, 0.0),
+            size: glm::vec2(0.0, 0.0),
         }
     }
 }

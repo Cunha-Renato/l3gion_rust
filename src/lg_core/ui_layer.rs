@@ -1,6 +1,6 @@
 use crate::profile_function;
 
-use super::{application::ApplicationCore, layer::Layer, lg_types::reference::Rfc, ui::component::UiComponent};
+use super::{application::ApplicationCore, layer::Layer, lg_types::reference::Rfc};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
 
@@ -53,6 +53,7 @@ impl Layer for UiLayer {
 
     fn on_update(&mut self) -> Result<(), crate::StdError> {
         profile_function!();
+        self.core().ui.borrow_mut().on_update(&mut self.core().renderer.borrow_mut())?;
         Ok(())
     }
 

@@ -2,7 +2,7 @@ use super::{renderer::uniform::Uniform, uuid::UUID};
 use nalgebra_glm as glm;
 
 /// Angle in Radians
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LgEntity {
     pub uniforms: Vec<Uniform>,
     pub mesh: UUID,

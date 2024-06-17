@@ -1,4 +1,4 @@
-use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, window::LgWindow}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, ui::UiFlags, window::LgWindow}, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
@@ -10,6 +10,9 @@ pub struct TestLayer {
     camera: Camera,
     entities: Vec<LgEntity>,
     profile: bool,
+    
+    big: bool,
+    num_window: u32,
 }
 impl TestLayer {
     pub fn new() -> Self {
@@ -19,6 +22,9 @@ impl TestLayer {
             camera: Camera::default(),
             entities: Vec::new(),
             profile: false,
+
+            big: false,
+            num_window: 1,
         }
     }
 }
@@ -39,8 +45,8 @@ impl Layer for TestLayer {
 
         self.camera = Camera::new(
             to_radians(45.0) as f32, 
-            vp.0 as f32, 
-            vp.1 as f32, 
+            vp.x,
+            vp.y,
             0.1, 
             1000.0
         );
@@ -81,6 +87,25 @@ impl Layer for TestLayer {
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         self.camera.on_update();
+
+        let mut flags = UiFlags::SHOW;
+        let mut ui = self.core().ui.borrow_mut();
+        ui.window("small", crate::lg_core::ui::Condition::FIRST_TIME)
+            .flags(flags)
+            .position(self.core().window.borrow().size() / 2.0)
+            .size(glm::vec2(100.0, 200.0))
+            .insert(|| {});
+        
+        if self.big { flags.remove(UiFlags::SHOW); }
+
+        for i in 0..self.num_window {
+            let string = std::format!("big{}", i.to_string());
+            ui.window(&string, crate::lg_core::ui::Condition::FIRST_TIME)
+                .flags(flags)
+                .position(glm::vec2(0.0, 0.0))
+                .size(glm::vec2(200.0, 200.0))
+                .insert(|| {});
+        }
 
         // Update uniform
         struct ViewProj {
@@ -167,6 +192,10 @@ impl Layer for TestLayer {
                     }
                 }
                 if e.key == LgKeyCode::I {
+                    self.big = !self.big;
+                }
+                if e.key == LgKeyCode::L {
+                    self.num_window += 1;
                 }
             },
             _ => (),

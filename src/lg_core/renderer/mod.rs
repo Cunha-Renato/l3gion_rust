@@ -55,7 +55,7 @@ impl LgRenderer {
 
     pub fn init(&mut self) -> Result<(), StdError> {
         profile_function!();
-        // self.asset_manager.process_folder(std::path::Path::new("assets"))?;
+        self.asset_manager.process_folder(std::path::Path::new("assets"))?;
         self.asset_manager.init()?;
         
         self.set_vsync(self.config.v_sync);

@@ -1,10 +1,12 @@
+use crate::lg_core::glm;
+
 pub struct LgWindow {
     pub(crate) window: winit::window::Window,
 }
 // Public
 impl LgWindow {
-    pub fn size(&self) -> (u32, u32) {
-        (self.window.inner_size().width, self.window.inner_size().height)
+    pub fn size(&self) -> glm::Vec2 {
+        glm::vec2(self.window.inner_size().width as f32, self.window.inner_size().height as f32)
     }
 }
 // Public(crate)

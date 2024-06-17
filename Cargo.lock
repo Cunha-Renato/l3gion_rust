@@ -951,7 +951,6 @@ dependencies = [
  "sha2",
  "shaderc",
  "sllog",
- "syn",
  "tobj",
  "winit",
 ]

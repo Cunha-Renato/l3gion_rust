@@ -3,12 +3,12 @@ use std::{borrow::Borrow, collections::HashMap};
 use lg_renderer::lg_vertex;
 use sllog::info;
 
-use crate::{lg_core::{event::{LgEvent, MouseEvent}, glm, lg_types::reference::Rfc, renderer::LgRenderer, uuid::UUID, window::LgWindow}, profile_function, StdError};
+use crate::{lg_core::{event::{LgEvent, MouseEvent}, glm, lg_types::reference::Rfc, renderer::LgRenderer, ui::component::constants::{self, WINDOW_COLOR, WINDOW_TITTLE_HEIGHT}, uuid::UUID, window::LgWindow}, profile_function, StdError};
 use super::{component::window::{Window, WindowConfig}, is_inside, to_normalized_position, to_normalized_size, Condition, UiFlags};
 
 // Similar to Dear ImGui, but worse
 pub struct Ui {
-    window: Rfc<LgWindow>,
+    pub(super) window: Rfc<LgWindow>,
 
     mouse_delta: glm::Vec2,
     mouse_position: glm::Vec2,
@@ -78,13 +78,14 @@ impl Ui {
     pub(crate) fn on_update(&mut self, renderer: &mut LgRenderer) -> Result<(), StdError> {
         profile_function!();
 
+        #[derive(Clone, Copy)]
         struct UiInst {
-            color: glm::Vec4,
+            window_color: glm::Vec4,
             row_0: glm::Vec4,
             row_1: glm::Vec4,
             row_2: glm::Vec4,            
         }
-        lg_vertex!(UiInst, color, row_0, row_1, row_2);
+        lg_vertex!(UiInst, window_color, row_0, row_1, row_2);
 
         // Drawing
         let mut inst_data = renderer.begin_instancing::<UiInst>();
@@ -93,7 +94,42 @@ impl Ui {
             if !window.flags.contains(UiFlags::SHOW) { continue; } // If isn't visible then don't calculate
 
             renderer.queue_instance(
-                &window._entity, 
+                &window._title_bar_entity, 
+                &mut inst_data, 
+                |_| {
+                    let mut title_bar_position = window.position;
+                    title_bar_position.y -= WINDOW_TITTLE_HEIGHT;
+                    let mut title_bar_size = window.size;
+                    title_bar_size.y = WINDOW_TITTLE_HEIGHT;
+
+                    let identity = glm::Mat4::identity();
+                    let translation = glm::translate(
+                        &identity, 
+                        &glm::vec2_to_vec3(&to_normalized_position(&self.window.borrow().size(), &title_bar_position, &title_bar_size))
+                    );
+                    let scale = glm::scale(
+                        &identity, 
+                        &glm::vec2_to_vec3(&to_normalized_size(&self.window.borrow().size(), &title_bar_size))
+                    );
+
+                    let model = translation * scale;
+                    let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
+                    let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
+                    let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
+
+                    let title_bar_color = if window.focused { constants::WINDOW_TITTLE_COLOR_FOCUSED } else { constants::WINDOW_TITTLE_COLOR };
+
+                    UiInst { 
+                        window_color: title_bar_color,
+                        row_0,
+                        row_1, 
+                        row_2,
+                    }
+                }
+            )?;
+
+            renderer.queue_instance(
+                &window._window_entity, 
                 &mut inst_data, 
                 |_| {
                     let identity = glm::Mat4::identity();
@@ -111,15 +147,10 @@ impl Ui {
                     let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
                     let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
 
-                    let color = glm::vec4(
-                        window.hover as u32 as f32,
-                        window.focused as u32 as f32,
-                        window.active as u32 as f32,
-                        1.0,
-                    );
+                    let window_color = WINDOW_COLOR;
 
                     UiInst { 
-                        color,
+                        window_color,
                         row_0,
                         row_1, 
                         row_2,

@@ -3,7 +3,7 @@ use lg_renderer::renderer_core::lg_texture::{TextureFormat, TextureType};
 
 use crate::{lg_core::uuid::UUID, StdError};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Texture {
     uuid: UUID,
     width: u32,

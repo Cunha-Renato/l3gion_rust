@@ -1,11 +1,11 @@
 use crate::lg_core::{entity::LgEntity, glm, ui::{ui_manager::Ui, Condition, UiFlags, UiPosition, UiSize}, uuid::UUID};
 
-const WINDOW_MESH: UUID = UUID::from_u128(316691656959075038046595414025328715723);
-const WINDOW_MATERIAL: UUID = UUID::from_u128(4);
+use super::constants::{WINDOW_MATERIAL, WINDOW_MESH};
 
 #[derive(Default, Clone)]
 pub(crate) struct WindowConfig {
-    pub(crate) _entity: LgEntity,
+    pub(crate) _window_entity: LgEntity,
+    pub(crate) _title_bar_entity: LgEntity,
 
     pub(crate) name: String,
     pub(crate) flags: UiFlags,
@@ -45,7 +45,12 @@ impl<'ui> Window<'ui> {
 
     pub fn insert<F: FnOnce()>(self, f: F) {
         let config = WindowConfig {
-            _entity: LgEntity::new(
+            _window_entity: LgEntity::new(
+                WINDOW_MESH.clone(),
+                WINDOW_MATERIAL.clone(),
+                glm::vec3(0.0, 0.0, 0.0)
+            ),
+            _title_bar_entity: LgEntity::new(
                 WINDOW_MESH.clone(),
                 WINDOW_MATERIAL.clone(),
                 glm::vec3(0.0, 0.0, 0.0)
@@ -68,12 +73,13 @@ impl<'ui> Window<'ui> {
 // Public(crate)
 impl<'ui> Window<'ui> {
     pub(crate) fn new(ui: &'ui mut Ui, label: &str, condition: Condition) -> Self {
+        let pos = ui.window.borrow().size() / 2.0;
         Self {
             ui,
             flags: UiFlags::NONE,
             condition,
             name: label.to_string(),
-            position: glm::vec2(0.0, 0.0),
+            position: pos,
             size: glm::vec2(0.0, 0.0),
         }
     }

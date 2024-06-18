@@ -92,7 +92,6 @@ impl Layer for TestLayer {
         let mut ui = self.core().ui.borrow_mut();
         ui.window("small", crate::lg_core::ui::Condition::FIRST_TIME)
             .flags(flags)
-            .position(self.core().window.borrow().size() / 2.0)
             .size(glm::vec2(100.0, 200.0))
             .insert(|| {});
         
@@ -102,7 +101,6 @@ impl Layer for TestLayer {
             let string = std::format!("big{}", i.to_string());
             ui.window(&string, crate::lg_core::ui::Condition::FIRST_TIME)
                 .flags(flags)
-                .position(glm::vec2(0.0, 0.0))
                 .size(glm::vec2(200.0, 200.0))
                 .insert(|| {});
         }
@@ -121,7 +119,7 @@ impl Layer for TestLayer {
         self.core().renderer.borrow_mut().update_uniform("ViewMatrix", &view_proj);
         
         // TESTING
-        #[derive(Clone, Debug)]
+        #[derive(Debug, Clone, Copy)]
         struct InstanceVertex {
             row_0: glm::Vec4,
             row_1: glm::Vec4,

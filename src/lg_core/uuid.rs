@@ -3,7 +3,7 @@ use sha2::Digest;
 
 use crate::StdError;
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct UUID(u128);
 impl UUID {
     pub fn generate() -> Self {

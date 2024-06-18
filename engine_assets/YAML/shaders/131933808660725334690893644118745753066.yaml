@@ -1,11 +1,11 @@
 ---
-name: UI_f
+name: UI_window_f
 node_type: SHADER
 value: ""
 children:
   - name: uuid
     node_type: ""
-    value: "128716678121240516521830015415010210032"
+    value: "131933808660725334690893644118745753066"
     children: []
   - name: stage
     node_type: ""
@@ -17,5 +17,5 @@ children:
     children: []
   - name: src_code
     node_type: ""
-    value: "#version 450\r\n\r\nin vec4 inst_color;\r\n\r\nout vec4 frag_color;\r\n\r\nvoid main() {\r\n    frag_color = vec4(1.0, 1.0, 1.0, 1.0);\r\n}"
+    value: "#version 450\r\n\r\nin vec4 v_window_color;\r\n\r\nout vec4 frag_color;\r\n\r\nvoid main() {\r\n    frag_color = v_window_color;\r\n}"
     children: []

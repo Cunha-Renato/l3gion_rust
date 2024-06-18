@@ -1,7 +1,10 @@
-use lg_renderer::renderer::LgRendererCreationInfo;
+extern crate nalgebra_glm;
+use nalgebra_glm as glm;
 
-use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig}, profile_function, profile_scope, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, window::LgWindow};
+use lg_renderer::renderer_core::LgRendererCreationInfo;
+
+use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig, ui_layer::UiLayer}, profile_function, StdError};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::ui_manager::Ui, window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -9,8 +12,8 @@ pub struct PersistentApplicationInfo {
 
 pub struct ApplicationCreateInfo<'a> {
     pub persistant_info: PersistentApplicationInfo,
-    pub renderer_api: lg_renderer::renderer::CreationApiInfo,
-    pub window_info: lg_renderer::renderer::CreationWindowInfo<'a>,
+    pub renderer_api: lg_renderer::renderer_core::CreationApiInfo,
+    pub window_info: lg_renderer::renderer_core::CreationWindowInfo<'a>,
 }
 
 pub struct L3gion {
@@ -27,7 +30,7 @@ impl L3gion {
         info.window_info.event_loop = Some(&event_loop);
 
         let mut application = Application::new(info)?;
-
+        application.push_layer(UiLayer::new())?;
         application.init()?;
 
         Ok(Self {
@@ -94,13 +97,13 @@ impl L3gion {
                     },
                     winit::event::WindowEvent::CursorMoved { position, .. } => {
                         self.app.on_event(LgEvent::MouseEvent(MouseEvent::MoveEvent(MouseMoveEvent {
-                            position: (position.x as u64, position.y as u64),
+                            position: glm::vec2(position.x, position.y),
                         })));
                     },
                     winit::event::WindowEvent::MouseWheel { delta, .. } => {
                         if let winit::event::MouseScrollDelta::LineDelta(x, y) = delta {
                             self.app.on_event(LgEvent::MouseEvent(MouseEvent::ScrollEvent(MouseScrollEvent {
-                                delta: (x, y),
+                                delta: glm::vec2(x, y),
                             })));
                         }
                     },
@@ -118,6 +121,7 @@ impl L3gion {
 #[derive(Clone)]
 pub struct ApplicationCore {
     pub window: Rfc<LgWindow>,
+    pub ui: Rfc<Ui>,
     pub renderer: Rfc<LgRenderer>,
 }
 pub struct Application {
@@ -147,17 +151,19 @@ impl Application {
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
-        let (window, renderer) = lg_renderer::renderer::LgRenderer::new(LgRendererCreationInfo {
+        let (window, renderer) = lg_renderer::renderer_core::LgRenderer::new(LgRendererCreationInfo {
             renderer_api: info.renderer_api,
             window_info: info.window_info,
         })?;
 
         // Singleton
         let window = Rfc::new(LgWindow::new(window));
+        let ui = Rfc::new(Ui::new(window.clone()));
         let renderer = Rfc::new(LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?);
 
         let core = ApplicationCore {
             window,
+            ui,
             renderer,
         };
 
@@ -203,11 +209,13 @@ impl Application {
         FrameTime::start()?;
 
         self.core.renderer.borrow_mut().begin()?;
-        for layer in &self.layers {
+
+        for layer in self.layers.iter().rev() {
             layer.borrow_mut().on_update()?;
         }
+
         self.core.renderer.borrow_mut().end()?; 
-        
+
         FrameTime::end()?;
 
         Ok(())

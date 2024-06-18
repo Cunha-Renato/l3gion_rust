@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::{Add, Div, Mul, Sub}};
 
 const HOUR_IN_SECOND:   f64 = MIN_IN_SECOND / 60.0;
 const MIN_IN_SECOND:    f64 = 1.0 / 60.0;
-const MILIS_IN_SECOND:  f64 = 1_000.0;
+const MILLIS_IN_SECOND:  f64 = 1_000.0;
 const MICRO_IN_SECOND:  f64 = 1_000_000.0;
 const NANO_IN_SECOND:   f64 = 1_000_000_000.0;
 
@@ -11,12 +11,12 @@ pub enum TIME_UNIT {
     HOUR,
     MIN,
     SEC,
-    MILIS,
+    MILLIS,
     MICRO,
     NANO,
 }
 
-/// The standard unit of measurement of time is SECONDS.
+/// The standard unit of time is SECONDS.
 /// So the value is always stored as SECONDS.
 #[derive(Clone, Copy)]
 pub struct LgTime {
@@ -35,7 +35,7 @@ impl LgTime {
             TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,
             TIME_UNIT::MIN => self.value * MIN_IN_SECOND,
             TIME_UNIT::SEC => self.value,
-            TIME_UNIT::MILIS => self.value * MILIS_IN_SECOND,
+            TIME_UNIT::MILLIS => self.value * MILLIS_IN_SECOND,
             TIME_UNIT::MICRO => self.value * MICRO_IN_SECOND,
             TIME_UNIT::NANO => self.value * NANO_IN_SECOND,
         }
@@ -47,7 +47,7 @@ impl LgTime {
             TIME_UNIT::HOUR => value / HOUR_IN_SECOND,
             TIME_UNIT::MIN => value / MIN_IN_SECOND,
             TIME_UNIT::SEC => value,
-            TIME_UNIT::MILIS => value / MILIS_IN_SECOND,
+            TIME_UNIT::MILLIS => value / MILLIS_IN_SECOND,
             TIME_UNIT::MICRO => value / MICRO_IN_SECOND,
             TIME_UNIT::NANO => value / NANO_IN_SECOND,
         };
@@ -81,7 +81,7 @@ impl LgTime {
     
     pub fn ms(&self) -> Self {
         Self {
-            unit: TIME_UNIT::MILIS,
+            unit: TIME_UNIT::MILLIS,
             value: self.value,
         }
     }
@@ -193,7 +193,7 @@ macro_rules! impl_aslgtime {
                 LgTime::from(TIME_UNIT::SEC, *self as f64)
             }
             fn ms(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::MILIS, *self as f64)
+                LgTime::from(TIME_UNIT::MILLIS, *self as f64)
             }
             fn us(&self) -> LgTime {
                 LgTime::from(TIME_UNIT::MICRO, *self as f64)

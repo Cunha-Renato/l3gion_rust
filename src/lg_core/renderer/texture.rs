@@ -1,9 +1,9 @@
 use std::{hash::Hash, mem::size_of};
-use lg_renderer::renderer::lg_texture::{TextureFormat, TextureType};
+use lg_renderer::renderer_core::lg_texture::{TextureFormat, TextureType};
 
 use crate::{lg_core::uuid::UUID, StdError};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Texture {
     uuid: UUID,
     width: u32,
@@ -78,7 +78,7 @@ impl Hash for Texture {
     }
 }
 
-impl lg_renderer::renderer::lg_texture::LgTexture for Texture {
+impl lg_renderer::renderer_core::lg_texture::LgTexture for Texture {
     fn width(&self) -> u32 {
         self.width
     }
@@ -99,11 +99,11 @@ impl lg_renderer::renderer::lg_texture::LgTexture for Texture {
         self.mip_level
     }
     
-    fn texture_type(&self) -> lg_renderer::renderer::lg_texture::TextureType {
+    fn texture_type(&self) -> lg_renderer::renderer_core::lg_texture::TextureType {
         self.texture_type
     }
     
-    fn texture_format(&self) -> lg_renderer::renderer::lg_texture::TextureFormat {
+    fn texture_format(&self) -> lg_renderer::renderer_core::lg_texture::TextureFormat {
         self.format
     }
 }

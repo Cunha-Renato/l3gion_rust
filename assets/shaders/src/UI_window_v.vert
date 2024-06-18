@@ -3,12 +3,12 @@
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec2 tex_coord;
 
-layout(location = 2) in vec4 color;
+layout(location = 2) in vec4 window_color;
 layout(location = 3) in vec4 row_0;
 layout(location = 4) in vec4 row_1;
 layout(location = 5) in vec4 row_2;
 
-out vec4 inst_color;
+out vec4 v_window_color;
 
 void main() {
     vec2 _ = tex_coord;
@@ -19,6 +19,6 @@ void main() {
         vec4(row_0.w, row_1.w, row_2.w, 1)
     );
     
-    inst_color = color;
+    v_window_color = window_color;
     gl_Position = model * vec4(position, 1.0);
 }

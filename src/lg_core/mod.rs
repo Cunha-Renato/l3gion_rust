@@ -12,6 +12,11 @@ pub mod layer;
 pub mod scene;
 pub mod frame_time;
 pub mod timer;
+pub mod ui;
 
 pub mod test_scene;
 pub mod test_layer;
+pub mod ui_layer;
+
+pub extern crate nalgebra_glm;
+pub use nalgebra_glm as glm;

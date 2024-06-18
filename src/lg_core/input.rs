@@ -15,7 +15,7 @@ static INPUT: OnceLock<Arc<Mutex<LgInput>>> = OnceLock::new();
 pub struct LgInput {
     key_states: HashMap<LgKeyCode, bool>,    
     mouse_states: HashMap<MouseButton, bool>,
-    mouse_position: glm::U64Vec2,
+    mouse_position: glm::DVec2,
 }
 // Public
 impl LgInput {
@@ -34,7 +34,7 @@ impl LgInput {
             .unwrap_or(&false)
     }
     
-    pub fn get_mouse_position(&self) -> glm::U64Vec2 {
+    pub fn get_mouse_position(&self) -> glm::DVec2 {
         profile_function!();
         self.mouse_position
     }
@@ -62,7 +62,7 @@ impl LgInput {
             LgEvent::MouseEvent(me) => match me {
                 super::event::MouseEvent::ButtonEvent(mbe) => { self.mouse_states.insert(mbe.button, mbe.pressed); },
                 super::event::MouseEvent::MoveEvent(mme) => {
-                    self.mouse_position = glm::vec2(mme.position.0, mme.position.1);
+                    self.mouse_position = mme.position;
                 },
                 _ => (),
             },

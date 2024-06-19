@@ -13,4 +13,4 @@ pub(crate) const WINDOW_MATERIAL: UUID = UUID::from_u128(4);
 
 // --------------------------------------- MESHES ---------------------------------------
 // WINDOW
-pub(crate) const WINDOW_MESH: UUID = UUID::from_u128(316691656959075038046595414025328715723);
+pub(crate) const WINDOW_MESH: UUID = UUID::from_u128(252411435688744967694609164507863584779);

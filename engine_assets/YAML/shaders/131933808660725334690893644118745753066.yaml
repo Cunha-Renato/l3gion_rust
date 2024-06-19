@@ -17,5 +17,5 @@ children:
     children: []
   - name: src_code
     node_type: ""
-    value: "#version 450\r\n\r\nin vec4 v_window_color;\r\n\r\nout vec4 frag_color;\r\n\r\nvoid main() {\r\n    frag_color = v_window_color;\r\n}"
+    value: "#version 450\r\n\r\nin vec4 v_window_color;\r\nin vec4 v_window_title_color;\r\nin vec4 v_window_position_and_size;\r\nin vec4 v_window_title_position_and_size;\r\n\r\nout vec4 frag_color;\r\n\r\nbool check_bound(vec2 frag, vec4 pos_size) {\r\n    return frag.x >= pos_size.x\r\n        && frag.y <= pos_size.y\r\n        && frag.x <= (pos_size.x + pos_size.z)\r\n        && frag.y >= (pos_size.y - pos_size.w);\r\n}\r\n\r\nvoid main() {\r\n    vec2 frag_coord = gl_FragCoord.xy;\r\n\r\n    // Window\r\n    if (check_bound(frag_coord, v_window_position_and_size)) {\r\n        frag_color = v_window_color;\r\n    } \r\n    // Title Bar\r\n    else if (check_bound(frag_coord, v_window_title_position_and_size)) {\r\n        frag_color = v_window_title_color;\r\n    } \r\n    else {\r\n        discard;\r\n    }\r\n}"
     children: []

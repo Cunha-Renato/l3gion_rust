@@ -1,0 +1,25 @@
+---
+name: ui_screen
+node_type: MESH
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "252411435688744967694609164507863584779"
+    children: []
+  - name: positions
+    node_type: ""
+    value: "1,1,0,-1,1,0,-1,-1,0,1,-1,0"
+    children: []
+  - name: indices
+    node_type: ""
+    value: "0,1,2,0,2,3"
+    children: []
+  - name: tex_coords
+    node_type: ""
+    value: "0,0,1,0,1,1,0,1"
+    children: []
+  - name: normals
+    node_type: ""
+    value: "1,-0,-0,1,-0,-0,1,-0,-0,1,-0,-0"
+    children: []

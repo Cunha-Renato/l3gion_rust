@@ -3,12 +3,13 @@ use std::{borrow::Borrow, collections::HashMap};
 use lg_renderer::lg_vertex;
 use sllog::info;
 
-use crate::{lg_core::{event::{LgEvent, MouseEvent}, glm, lg_types::reference::Rfc, renderer::LgRenderer, ui::component::constants::{self, WINDOW_COLOR, WINDOW_TITTLE_HEIGHT}, uuid::UUID, window::LgWindow}, profile_function, StdError};
-use super::{component::window::{Window, WindowConfig}, is_inside, to_normalized_position, to_normalized_size, Condition, UiFlags};
+use crate::{lg_core::{entity::LgEntity, event::{LgEvent, MouseEvent}, glm, lg_types::reference::Rfc, renderer::LgRenderer, ui::component::constants::{self, WINDOW_COLOR, WINDOW_TITTLE_HEIGHT}, uuid::UUID, window::LgWindow}, profile_function, StdError};
+use super::{component::{constants::{WINDOW_MATERIAL, WINDOW_MESH}, window::{Window, WindowConfig}}, is_inside, to_normalized_position, to_normalized_size, Condition, UiFlags};
 
 // Similar to Dear ImGui, but worse
 pub struct Ui {
     pub(super) window: Rfc<LgWindow>,
+    screen_entity: LgEntity,
 
     mouse_delta: glm::Vec2,
     mouse_position: glm::Vec2,
@@ -24,6 +25,11 @@ impl Ui {
     pub fn new(window: Rfc<LgWindow>) -> Self {
         Self {
             window,
+            screen_entity: LgEntity::new(
+                WINDOW_MESH.clone(), 
+                WINDOW_MATERIAL.clone(), 
+                glm::vec3(0.0, 0.0, 0.0),
+            ),
             mouse_delta: glm::vec2(0.0, 0.0),
             mouse_position: glm::vec2(0.0, 0.0),
             current_window: None,
@@ -81,11 +87,11 @@ impl Ui {
         #[derive(Clone, Copy)]
         struct UiInst {
             window_color: glm::Vec4,
-            row_0: glm::Vec4,
-            row_1: glm::Vec4,
-            row_2: glm::Vec4,            
+            window_title_color: glm::Vec4,
+            window_position_and_size: glm::Vec4,
+            window_title_position_and_size: glm::Vec4,
         }
-        lg_vertex!(UiInst, window_color, row_0, row_1, row_2);
+        lg_vertex!(UiInst, window_color, window_title_color, window_position_and_size, window_title_position_and_size);
 
         // Drawing
         let mut inst_data = renderer.begin_instancing::<UiInst>();
@@ -94,7 +100,7 @@ impl Ui {
             if !window.flags.contains(UiFlags::SHOW) { continue; } // If isn't visible then don't calculate
 
             renderer.queue_instance(
-                &window._title_bar_entity, 
+                &self.screen_entity, 
                 &mut inst_data, 
                 |_| {
                     let mut title_bar_position = window.position;
@@ -102,58 +108,27 @@ impl Ui {
                     let mut title_bar_size = window.size;
                     title_bar_size.y = WINDOW_TITTLE_HEIGHT;
 
-                    let identity = glm::Mat4::identity();
-                    let translation = glm::translate(
-                        &identity, 
-                        &glm::vec2_to_vec3(&to_normalized_position(&self.window.borrow().size(), &title_bar_position, &title_bar_size))
+
+                    let window_title_color = if window.focused { constants::WINDOW_TITTLE_COLOR_FOCUSED } else { constants::WINDOW_TITTLE_COLOR };
+
+                    let screen_size = self.window.borrow().size();
+                    let window_position_and_size = glm::vec4(
+                        window.position.x,
+                        screen_size.y - window.position.y,
+                        window.size.x,
+                        window.size.y,
                     );
-                    let scale = glm::scale(
-                        &identity, 
-                        &glm::vec2_to_vec3(&to_normalized_size(&self.window.borrow().size(), &title_bar_size))
+                    let window_title_position_and_size = glm::vec4(
+                        title_bar_position.x,
+                        screen_size.y - title_bar_position.y,
+                        title_bar_size.x,
+                        title_bar_size.y,
                     );
-
-                    let model = translation * scale;
-                    let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
-                    let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
-                    let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
-
-                    let title_bar_color = if window.focused { constants::WINDOW_TITTLE_COLOR_FOCUSED } else { constants::WINDOW_TITTLE_COLOR };
-
                     UiInst { 
-                        window_color: title_bar_color,
-                        row_0,
-                        row_1, 
-                        row_2,
-                    }
-                }
-            )?;
-
-            renderer.queue_instance(
-                &window._window_entity, 
-                &mut inst_data, 
-                |_| {
-                    let identity = glm::Mat4::identity();
-                    let translation = glm::translate(
-                        &identity, 
-                        &glm::vec2_to_vec3(&to_normalized_position(&self.window.borrow().size(), &window.position, &window.size))
-                    );
-                    let scale = glm::scale(
-                        &identity, 
-                        &glm::vec2_to_vec3(&to_normalized_size(&self.window.borrow().size(), &window.size))
-                    );
-
-                    let model = translation * scale;
-                    let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);
-                    let row_1 = glm::vec4(model[(1, 0)], model[(1, 1)], model[(1, 2)], model[(1, 3)]);
-                    let row_2 = glm::vec4(model[(2, 0)], model[(2, 1)], model[(2, 2)], model[(2, 3)]);
-
-                    let window_color = WINDOW_COLOR;
-
-                    UiInst { 
-                        window_color,
-                        row_0,
-                        row_1, 
-                        row_2,
+                        window_color: WINDOW_COLOR, 
+                        window_title_color, 
+                        window_position_and_size,  
+                        window_title_position_and_size,
                     }
                 }
             )?;
@@ -178,11 +153,9 @@ impl Ui {
         }
 
         // Windows
-        let mut windows_vec = self.windows_vec.clone(); // Hey I know this is ugly as fuck, and I know heap alocation and lookup is slow.
-        // println!("+===============================================+");
+        let mut windows_vec = std::mem::take(&mut self.windows_vec); // Hey I know this is ugly as fuck, and I know heap alocation and lookup is slow.
         for window in &windows_vec {
             let window = &mut window.borrow_mut();
-            // println!("{}", window.name);
 
             if !window.flags.contains(UiFlags::SHOW) { continue; }
 

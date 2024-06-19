@@ -4,21 +4,21 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec2 tex_coord;
 
 layout(location = 2) in vec4 window_color;
-layout(location = 3) in vec4 row_0;
-layout(location = 4) in vec4 row_1;
-layout(location = 5) in vec4 row_2;
+layout(location = 3) in vec4 window_title_color;
+layout(location = 4) in vec4 window_position_and_size;
+layout(location = 5) in vec4 window_title_position_and_size;
 
 out vec4 v_window_color;
+out vec4 v_window_title_color;
+out vec4 v_window_position_and_size;
+out vec4 v_window_title_position_and_size;
 
 void main() {
     vec2 _ = tex_coord;
-    mat4 model = mat4(
-        vec4(row_0.x, row_1.x, row_2.x, 0),
-        vec4(row_0.y, row_1.y, row_2.y, 0),
-        vec4(row_0.z, row_1.z, row_2.z, 0),
-        vec4(row_0.w, row_1.w, row_2.w, 1)
-    );
     
     v_window_color = window_color;
-    gl_Position = model * vec4(position, 1.0);
+    v_window_title_color = window_title_color;
+    v_window_position_and_size = window_position_and_size; 
+    v_window_title_position_and_size = window_title_position_and_size;
+    gl_Position = vec4(position, 1.0);
 }

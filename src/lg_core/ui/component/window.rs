@@ -1,12 +1,7 @@
 use crate::lg_core::{entity::LgEntity, glm, ui::{ui_manager::Ui, Condition, UiFlags, UiPosition, UiSize}, uuid::UUID};
 
-use super::constants::{WINDOW_MATERIAL, WINDOW_MESH};
-
 #[derive(Default, Clone)]
 pub(crate) struct WindowConfig {
-    pub(crate) _window_entity: LgEntity,
-    pub(crate) _title_bar_entity: LgEntity,
-
     pub(crate) name: String,
     pub(crate) flags: UiFlags,
     pub(crate) position: UiPosition,
@@ -45,16 +40,6 @@ impl<'ui> Window<'ui> {
 
     pub fn insert<F: FnOnce()>(self, f: F) {
         let config = WindowConfig {
-            _window_entity: LgEntity::new(
-                WINDOW_MESH.clone(),
-                WINDOW_MATERIAL.clone(),
-                glm::vec3(0.0, 0.0, 0.0)
-            ),
-            _title_bar_entity: LgEntity::new(
-                WINDOW_MESH.clone(),
-                WINDOW_MATERIAL.clone(),
-                glm::vec3(0.0, 0.0, 0.0)
-            ),
             name: self.name.clone(),
             flags: self.flags,
             position: self.position,

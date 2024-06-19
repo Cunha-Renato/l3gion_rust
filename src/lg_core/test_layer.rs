@@ -61,14 +61,15 @@ impl Layer for TestLayer {
         self.entities = vec![
             LgEntity::new(
                 UUID::from_u128(316691656959075038046595414025328715723), 
-                UUID::from_u128(1), 
+                UUID::from_u128(2), 
                 glm::vec3(0.0, 0.0, 0.0)
             ),
             LgEntity::new(
                 UUID::from_u128(316691656959075038046595414025328715723), 
                 UUID::from_u128(1), 
                 glm::vec3(0.5, 0.0, 0.0)
-            )];
+            ),
+        ];
 
         self.core = Some(app_core);
         
@@ -132,8 +133,6 @@ impl Layer for TestLayer {
         let mut instance_data = renderer.begin_instancing::<InstanceVertex>();
 
         for e in &self.entities {
-            /* self.core.as_ref().unwrap()
-                .borrow_mut().renderer.instance_entity(&e)?; */
             renderer.queue_instance(e, &mut instance_data, |e| {
                 let model = e.model();
                 let row_0 = glm::vec4(model[(0, 0)], model[(0, 1)], model[(0, 2)], model[(0, 3)]);

@@ -105,8 +105,8 @@ impl Camera {
     
     pub fn on_update(&mut self) {
         profile_function!();
-        let input = LgInput::get_locked().unwrap();
-        let mouse = input.get_mouse_position();
+        let input = LgInput::get().unwrap();
+        let mouse = input.mouse_position();
         let mouse = glm::vec2(mouse.x as f32, mouse.y as f32);
 
         let delta = (mouse - self.initial_mouse_position) * 0.003;
@@ -173,7 +173,7 @@ impl Camera {
     
     pub fn on_event(&mut self, event: &LgEvent) {
         profile_function!();
-        let input = LgInput::get_locked().unwrap();
+        let input = LgInput::get().unwrap();
         if input.is_key_pressed(LgKeyCode::LAlt) {
             match event {
                 LgEvent::MouseEvent(e) => match e {

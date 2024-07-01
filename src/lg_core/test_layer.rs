@@ -62,7 +62,7 @@ impl Layer for TestLayer {
             LgEntity::new(
                 UUID::from_u128(316691656959075038046595414025328715723), 
                 UUID::from_u128(2), 
-                glm::vec3(0.0, 0.0, 0.0)
+                glm::vec3(-0.5, 0.0, 0.0)
             ),
             LgEntity::new(
                 UUID::from_u128(316691656959075038046595414025328715723), 

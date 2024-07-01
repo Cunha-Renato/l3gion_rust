@@ -147,6 +147,7 @@ impl Application {
         Ok(())
     }
 }
+
 // Private
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
@@ -177,7 +178,7 @@ impl Application {
         profile_function!();
 
         // Singletons
-        LgInput::init()?;
+        LgInput::init();
         FrameTime::init()?;
 
         self.core.renderer.borrow_mut().init()
@@ -195,7 +196,7 @@ impl Application {
     
     fn on_event(&mut self, event: LgEvent) {
         profile_function!();
-        LgInput::get_locked().unwrap().on_event(&event);
+        LgInput::on_event(&event);
 
         for layer in &self.layers {
             if layer.borrow_mut().on_event(&event) {

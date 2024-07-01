@@ -861,6 +861,7 @@ dependencies = [
  "image",
  "lg_renderer",
  "nalgebra-glm",
+ "once_cell",
  "optick",
  "rand",
  "raw-window-handle",

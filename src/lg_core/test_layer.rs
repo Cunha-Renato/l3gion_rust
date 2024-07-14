@@ -2,6 +2,7 @@ use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, 
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::uniform::Uniform, uuid::UUID};
 use lg_renderer::lg_vertex;
 use nalgebra_glm as glm;
+use sllog::info;
 
 pub struct TestLayer {
     _debug_name: String,
@@ -10,9 +11,6 @@ pub struct TestLayer {
     camera: Camera,
     entities: Vec<LgEntity>,
     profile: bool,
-    
-    big: bool,
-    num_window: u32,
 }
 impl TestLayer {
     pub fn new() -> Self {
@@ -22,9 +20,6 @@ impl TestLayer {
             camera: Camera::default(),
             entities: Vec::new(),
             profile: false,
-
-            big: false,
-            num_window: 1,
         }
     }
 }
@@ -60,14 +55,9 @@ impl Layer for TestLayer {
 
         self.entities = vec![
             LgEntity::new(
-                UUID::from_u128(316691656959075038046595414025328715723), 
-                UUID::from_u128(2), 
-                glm::vec3(-0.5, 0.0, 0.0)
-            ),
-            LgEntity::new(
-                UUID::from_u128(316691656959075038046595414025328715723), 
+                UUID::from_u128(82133816883675309422823400350076070065), 
                 UUID::from_u128(1), 
-                glm::vec3(0.5, 0.0, 0.0)
+                glm::vec3(0.0, 0.0, 0.0)
             ),
         ];
 
@@ -88,23 +78,6 @@ impl Layer for TestLayer {
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         self.camera.on_update();
-
-        let mut flags = UiFlags::SHOW;
-        let mut ui = self.core().ui.borrow_mut();
-        ui.window("small", crate::lg_core::ui::Condition::FIRST_TIME)
-            .flags(flags)
-            .size(glm::vec2(100.0, 200.0))
-            .insert(|| {});
-        
-        if self.big { flags.remove(UiFlags::SHOW); }
-
-        for i in 0..self.num_window {
-            let string = std::format!("big{}", i.to_string());
-            ui.window(&string, crate::lg_core::ui::Condition::FIRST_TIME)
-                .flags(flags)
-                .size(glm::vec2(200.0, 200.0))
-                .insert(|| {});
-        }
 
         // Update uniform
         struct ViewProj {
@@ -158,13 +131,15 @@ impl Layer for TestLayer {
 
         match event {
             LgEvent::KeyEvent(e) => if e.pressed {
-                if e.key == LgKeyCode::F12  {
+                if e.key == LgKeyCode::P  {
                     match self.profile {
                         true => {
+                            info!("Ending Profile!");
                             self.profile = false;
                             profiler_end!("profiles/test_layer");
                         },
                         false => {
+                            info!("Begining Profile!");
                             self.profile = true;
                             profiler_begin!();
                         },
@@ -187,12 +162,6 @@ impl Layer for TestLayer {
                     } else {
                         renderer.set_vsync(true);
                     }
-                }
-                if e.key == LgKeyCode::I {
-                    self.big = !self.big;
-                }
-                if e.key == LgKeyCode::L {
-                    self.num_window += 1;
                 }
             },
             _ => (),

@@ -1,9 +1,6 @@
 use std::{borrow::Borrow, collections::HashMap};
 
-use lg_renderer::lg_vertex;
-use sllog::info;
-
-use crate::{lg_core::{entity::LgEntity, event::{LgEvent, MouseEvent}, glm, input::LgInput, lg_types::reference::Rfc, renderer::LgRenderer, ui::component::constants::{self, WINDOW_TITTLE_HEIGHT}, uuid::UUID, window::LgWindow}, profile_function, StdError};
+use crate::{lg_core::{entity::LgEntity, event::{LgEvent, MouseEvent}, glm, input::LgInput, lg_types::reference::Rfc, renderer::Renderer, ui::component::constants::{self, WINDOW_TITTLE_HEIGHT}, uuid::UUID, window::LgWindow}, profile_function, StdError};
 use super::{component::{constants::{WINDOW_MATERIAL, WINDOW_MESH}, window::{Window, WindowBuilder}}, is_inside, to_normalized_position, to_normalized_size, Condition, UiFlags};
 
 // Similar to Dear ImGui, but worse
@@ -64,8 +61,8 @@ impl Ui {
 
 // Public(crate)
 impl Ui {
-    pub(crate) fn on_update(&mut self, renderer: &mut LgRenderer) -> Result<(), StdError> {
-        profile_function!();
+    pub(crate) fn on_update(&mut self, renderer: &mut Renderer) -> Result<(), StdError> {
+        /*profile_function!();
 
         #[derive(Clone, Copy)]
         struct UiInst {
@@ -107,7 +104,7 @@ impl Ui {
             )?;
         }
 
-        renderer.end_instancing(&mut inst_data)?;
+        renderer.end_instancing(&mut inst_data)?;*/
         
         Ok(())
     }

@@ -1,5 +1,6 @@
 use crate::lg_core::glm;
 
+#[derive(Debug)]
 pub struct LgWindow {
     pub(crate) window: winit::window::Window,
 }

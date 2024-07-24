@@ -1,8 +1,40 @@
 pub(crate) mod utils;
 
 use std::hash::Hash;
-use lg_renderer::renderer_core::lg_shader::ShaderStage;
-use crate::lg_core::uuid::UUID;
+use crate::{lg_core::uuid::UUID, StdError};
+
+use super::opengl::gl_shader::GlShader;
+
+#[derive(Debug, Clone, Copy)]
+pub enum ShaderStage {
+    VERTEX,
+    FRAGMENT,
+    COMPUTE,
+}
+impl ShaderStage {
+    pub fn to_shaderc_stage(&self) -> Result<shaderc::ShaderKind, StdError> {
+        match self {
+            ShaderStage::VERTEX => Ok(shaderc::ShaderKind::Vertex),
+            ShaderStage::FRAGMENT => Ok(shaderc::ShaderKind::Fragment),
+            ShaderStage::COMPUTE => Err("Invalid ShaderStage! (Shader)".into()),
+        }
+    }
+    pub(crate) fn to_gl_stage(&self) -> gl::types::GLenum {
+        match self {
+            ShaderStage::VERTEX => gl::VERTEX_SHADER,
+            ShaderStage::FRAGMENT => gl::FRAGMENT_SHADER,
+            ShaderStage::COMPUTE => gl::COMPUTE_SHADER,
+        }
+    }
+    pub fn from_u32(val: u32) -> Result<Self, StdError> {
+        Ok(match val {
+            0 => Self::VERTEX,
+            1 => Self::FRAGMENT,
+            2 => Self::COMPUTE,
+            _ => return Err("Failed to convert u32 into ShaderStage!".into())
+        })
+    }
+}
 
 /// src_code can be empty if you are using SPIR-V, bytes can be empty if you are using raw glsl.
 ///
@@ -45,17 +77,16 @@ impl Shader {
     pub fn name(&self) -> &str {
         &self.name
     }
-}
-impl lg_renderer::renderer_core::lg_shader::LgShader for Shader {
-    fn bytes(&self) -> &[u8] {
+
+    pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
-    fn stage(&self) -> ShaderStage {
+    pub fn stage(&self) -> ShaderStage {
         self.stage
     }
 
-    fn src_code(&self) -> &str {
+    pub fn src_code(&self) -> &str {
         &self.src_code
     }
 }

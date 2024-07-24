@@ -1,0 +1,21 @@
+---
+name: final_pass
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "5"
+    children: []
+  - name: textures
+    node_type: ""
+    value: ""
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "136147226315025290318689618184931243987"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "276512397783758533672708774564588231421"
+    children: []

@@ -1,6 +1,5 @@
 use std::{collections::HashMap, mem::size_of};
-use lg_renderer::renderer_core::{lg_shader::ShaderStage, lg_texture::{TextureFormat, TextureType}};
-use crate::{lg_core::renderer::vertex::Vertex, profile_function, profile_scope, StdError};
+use crate::{lg_core::renderer::{shader::ShaderStage, texture::{TextureFormat, TextureSpecs, TextureType}, vertex::Vertex}, profile_function, profile_scope, StdError};
 use super::{renderer::{material::Material, mesh::Mesh, shader::Shader, texture::Texture}, uuid::UUID};
 use nalgebra_glm as glm;
 
@@ -178,6 +177,14 @@ impl AssetManager {
     pub(crate) fn get_material(&self, material_uuid: &UUID) -> Option<&Material> {
         self.loaded.materials.get(material_uuid)
     }
+    
+    pub(crate) fn get_mut_mesh(&mut self, mesh_uuid: &UUID) -> Option<&mut Mesh> {
+        self.loaded.meshes.get_mut(mesh_uuid)
+    }
+
+    pub(crate) fn get_mut_material(&mut self, material_uuid: &UUID) -> Option<&mut Material> {
+        self.loaded.materials.get_mut(material_uuid)
+    }
 
     pub(crate) fn process_folder(&mut self, folder_path: &std::path::Path) -> Result<(), StdError> {
         profile_function!();
@@ -252,7 +259,12 @@ impl AssetManager {
         
         assert!(uuid == texture_uuid.get_value() && texture_uuid.is_valid());
         
-        let texture = Texture::construct(UUID::from_u128(uuid), &name, width, height, bytes, size, mip_level, texture_type, format);
+        let specs = TextureSpecs {
+            tex_format: format,
+            tex_type: texture_type,
+            tex_filter: crate::lg_core::renderer::texture::TextureFilter::LINEAR,
+        };
+        let texture = Texture::construct(UUID::from_u128(uuid), &name, width, height, bytes, size, mip_level, specs);
         self.loaded.textures.insert(UUID::from_u128(uuid), texture);
         
         Ok(())

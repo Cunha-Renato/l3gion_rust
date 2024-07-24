@@ -1,10 +1,11 @@
 extern crate nalgebra_glm;
+use std::sync::{Arc, Mutex};
+
 use nalgebra_glm as glm;
+use sllog::info;
 
-use lg_renderer::renderer_core::LgRendererCreationInfo;
-
-use crate::{as_dyn, lg_core::{frame_time::FrameTime, renderer::RendererConfig, ui_layer::UiLayer}, profile_function, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::LgRenderer, ui::ui_manager::Ui, window::LgWindow};
+use crate::{as_dyn, lg_core::{asset_manager::AssetManager, frame_time::FrameTime, renderer::{command::ReceiveRendererCommand, Renderer}}, profile_function, StdError};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo, ui::ui_manager::Ui, window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -12,8 +13,7 @@ pub struct PersistentApplicationInfo {
 
 pub struct ApplicationCreateInfo<'a> {
     pub persistant_info: PersistentApplicationInfo,
-    pub renderer_api: lg_renderer::renderer_core::CreationApiInfo,
-    pub window_info: lg_renderer::renderer_core::CreationWindowInfo<'a>,
+    pub window_info: CreationWindowInfo<'a>,
 }
 
 pub struct L3gion {
@@ -30,7 +30,7 @@ impl L3gion {
         info.window_info.event_loop = Some(&event_loop);
 
         let mut application = Application::new(info)?;
-        application.push_layer(UiLayer::new())?;
+        // application.push_layer(UiLayer::new())?;
         application.init()?;
 
         Ok(Self {
@@ -122,7 +122,7 @@ impl L3gion {
 pub struct ApplicationCore {
     pub window: Rfc<LgWindow>,
     pub ui: Rfc<Ui>,
-    pub renderer: Rfc<LgRenderer>,
+    pub renderer: Rfc<Renderer>,
 }
 pub struct Application {
     core: ApplicationCore,
@@ -152,15 +152,16 @@ impl Application {
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
-        let (window, renderer) = lg_renderer::renderer_core::LgRenderer::new(LgRendererCreationInfo {
-            renderer_api: info.renderer_api,
-            window_info: info.window_info,
-        })?;
+        let am = Arc::new(Mutex::new(AssetManager::default()));
+        am.lock().unwrap().process_folder(std::path::Path::new("assets"))?;
+        am.lock().unwrap().init()?;
+
+        let (renderer, window) = Renderer::new(&info.window_info, am)?;
+        let renderer = Rfc::new(renderer);
+        let window = Rfc::new(window);
 
         // Singleton
-        let window = Rfc::new(LgWindow::new(window));
         let ui = Rfc::new(Ui::new(window.clone()));
-        let renderer = Rfc::new(LgRenderer::new(renderer, RendererConfig { v_sync: info.persistant_info.v_sync })?);
 
         let core = ApplicationCore {
             window,
@@ -179,9 +180,7 @@ impl Application {
 
         // Singletons
         LgInput::init();
-        FrameTime::init()?;
-
-        self.core.renderer.borrow_mut().init()
+        FrameTime::init()
     }
 
     fn shutdown(&mut self) -> Result<(), StdError> {
@@ -191,7 +190,9 @@ impl Application {
             layer.borrow_mut().on_detach()?;
         }
 
-        self.core.renderer.borrow_mut().shutdown()
+        self.core.renderer.borrow_mut().shutdown();
+        
+        Ok(())
     }
     
     fn on_event(&mut self, event: LgEvent) {
@@ -208,14 +209,12 @@ impl Application {
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         FrameTime::start()?;
-
-        self.core.renderer.borrow_mut().begin()?;
-
+        
         for layer in self.layers.iter().rev() {
             layer.borrow_mut().on_update()?;
         }
 
-        self.core.renderer.borrow_mut().end()?; 
+        self.core.renderer.borrow_mut().end();
 
         FrameTime::end()?;
 
@@ -224,7 +223,7 @@ impl Application {
 
     fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         profile_function!();
-        self.core.renderer.borrow().resize(new_size)?;
+        self.core.renderer.borrow_mut().send(crate::lg_core::renderer::command::SendRendererCommand::SET_SIZE(new_size));
         
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::profile_function;
+/*use crate::profile_function;
 
 use super::{application::ApplicationCore, layer::Layer, lg_types::reference::Rfc};
 use lg_renderer::lg_vertex;
@@ -61,3 +61,4 @@ impl Layer for UiLayer {
         self.core().ui.borrow_mut().on_event(event)
     }
 }
+*/

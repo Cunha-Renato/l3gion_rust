@@ -1,9 +1,25 @@
 use super::buffer::Buffer;
 
+#[derive(Clone, Copy, Debug)]
+pub enum LgUniformType {
+    STRUCT,
+    STORAGE_BUFFER,
+    COMBINED_IMAGE_SAMPLER
+}
+impl LgUniformType {
+    pub(crate) fn to_opengl(&self) -> gl::types::GLenum {
+        match &self {
+            LgUniformType::STRUCT => gl::UNIFORM_BUFFER,
+            LgUniformType::STORAGE_BUFFER => gl::SHADER_STORAGE_BUFFER,
+            LgUniformType::COMBINED_IMAGE_SAMPLER => gl::SAMPLER_2D,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Uniform {
     name: String,
-    u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
+    u_type: LgUniformType,
     binding: usize,
     set: usize,
     update_data: bool,
@@ -12,7 +28,7 @@ pub struct Uniform {
 impl Uniform {
     pub fn new(
         name: &str,
-        u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
+        u_type: LgUniformType,
         binding: usize,
         set: usize,
         update_data: bool,
@@ -30,7 +46,7 @@ impl Uniform {
     
     pub unsafe fn new_with_data<D>(
         name: &str,
-        u_type: lg_renderer::renderer_core::lg_uniform::LgUniformType,
+        u_type: LgUniformType,
         binding: usize,
         set: usize,
         update_data: bool,
@@ -46,37 +62,36 @@ impl Uniform {
             buffer: Buffer::new(&data)
         }
     }
-}
-impl lg_renderer::renderer_core::lg_uniform::LgUniform for Uniform {
-    fn name(&self) -> &str {
+
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn u_type(&self) -> lg_renderer::renderer_core::lg_uniform::LgUniformType {
+    pub fn u_type(&self) -> LgUniformType {
         self.u_type
     }
 
-    fn binding(&self) -> usize {
+    pub fn binding(&self) -> usize {
         self.binding
     }
 
-    fn set(&self) -> usize {
+    pub fn set(&self) -> usize {
         self.set
     }
 
-    fn update_data(&self) -> bool {
+    pub fn update_data(&self) -> bool {
         self.update_data
     }
     
-    fn data_size(&self) -> usize {
+    pub fn data_size(&self) -> usize {
         self.buffer.data_size()
     }
     
-    fn get_raw_data(&self) -> *const std::ffi::c_void {
+    pub fn get_raw_data(&self) -> *const std::ffi::c_void {
         self.buffer.get_raw_data()
     }
     
-    fn set_data<D>(&mut self, data: &D) {
+    pub fn set_data<D>(&mut self, data: &D) {
         unsafe { self.buffer.set_data(data) };
     }
 }

@@ -1,0 +1,21 @@
+---
+name: test_texture
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "325699289483174847292149352498212715256"
+    children: []
+  - name: textures
+    node_type: ""
+    value: "assets\\textures\\stripes.png"
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\instancing_v.vert"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\instancing_f.frag"
+    children: []

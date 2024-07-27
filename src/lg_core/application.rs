@@ -2,10 +2,9 @@ extern crate nalgebra_glm;
 use std::sync::{Arc, Mutex};
 
 use nalgebra_glm as glm;
-use sllog::info;
 
-use crate::{as_dyn, lg_core::{asset_manager::AssetManager, frame_time::FrameTime, renderer::{command::ReceiveRendererCommand, Renderer}}, profile_function, StdError};
-use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo, ui::ui_manager::Ui, window::LgWindow};
+use crate::{as_dyn, lg_core::{am::AssetManager, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
+use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo,  window::LgWindow};
 
 pub struct PersistentApplicationInfo {
     pub v_sync: bool,
@@ -30,7 +29,6 @@ impl L3gion {
         info.window_info.event_loop = Some(&event_loop);
 
         let mut application = Application::new(info)?;
-        // application.push_layer(UiLayer::new())?;
         application.init()?;
 
         Ok(Self {
@@ -62,6 +60,8 @@ impl L3gion {
                         window_target.exit()
                     },
                     winit::event::WindowEvent::Resized(window_size) => {
+                        self.app.on_event(LgEvent::WindowEvent(super::event::WindowEvent::Resize(window_size.width, window_size.height)));
+
                         if window_size.width > 0 && window_size.height > 0 {
                             self.app.resize(window_size.into()).unwrap();
                         }
@@ -121,7 +121,6 @@ impl L3gion {
 #[derive(Clone)]
 pub struct ApplicationCore {
     pub window: Rfc<LgWindow>,
-    pub ui: Rfc<Ui>,
     pub renderer: Rfc<Renderer>,
 }
 pub struct Application {
@@ -153,19 +152,14 @@ impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let am = Arc::new(Mutex::new(AssetManager::default()));
-        am.lock().unwrap().process_folder(std::path::Path::new("assets"))?;
-        am.lock().unwrap().init()?;
 
         let (renderer, window) = Renderer::new(&info.window_info, am)?;
+        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_INIT);
         let renderer = Rfc::new(renderer);
         let window = Rfc::new(window);
 
-        // Singleton
-        let ui = Rfc::new(Ui::new(window.clone()));
-
         let core = ApplicationCore {
             window,
-            ui,
             renderer,
         };
 
@@ -223,7 +217,7 @@ impl Application {
 
     fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         profile_function!();
-        self.core.renderer.borrow_mut().send(crate::lg_core::renderer::command::SendRendererCommand::SET_SIZE(new_size));
+        self.core.renderer.borrow_mut().resize(new_size);
         
         Ok(())
     }

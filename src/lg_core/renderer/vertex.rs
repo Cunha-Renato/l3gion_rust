@@ -25,6 +25,7 @@ pub trait GlVertex {
 macro_rules! lg_vertex {
     ($struct_name:ident, $($fields:tt), *) => {
         impl crate::lg_core::renderer::vertex::GlVertex for $struct_name {
+            #[allow(unused_assignments)]
             unsafe fn gl_info() -> Vec<(u32, i32, i32)> {
                 const fn size_of_raw<T>(_: *const T) -> usize {
                     core::mem::size_of::<T>()

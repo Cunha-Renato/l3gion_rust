@@ -26,6 +26,15 @@ impl ShaderStage {
             ShaderStage::COMPUTE => gl::COMPUTE_SHADER,
         }
     }
+    pub fn from_str(val: &str) -> Result<Self, StdError> {
+        Ok(match val {
+            "vert" => Self::VERTEX,
+            "frag" => Self::FRAGMENT,
+            "comp" => Self::COMPUTE,
+
+            _ => return Err(std::format!("{} is an invalid shader stage!", val).into()),
+        })
+    }
     pub fn from_u32(val: u32) -> Result<Self, StdError> {
         Ok(match val {
             0 => Self::VERTEX,

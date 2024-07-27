@@ -1,0 +1,21 @@
+---
+name: post_processing_pass
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "301145279096715772727227604736418320970"
+    children: []
+  - name: textures
+    node_type: ""
+    value: ""
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\final_pass_v.vert"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\post_processing_f.frag"
+    children: []

@@ -1,0 +1,21 @@
+---
+name: test_red
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "229355871321227895111753443892732218389"
+    children: []
+  - name: textures
+    node_type: ""
+    value: "assets\\textures\\directiton.png"
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\instancing_v.vert"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\instancing_f.frag"
+    children: []

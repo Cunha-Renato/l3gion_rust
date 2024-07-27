@@ -16,6 +16,10 @@ impl YamlNode {
         serialize(&self, path, name)?;
         Ok(())
     }
+    pub fn serialize_full(&self, path: &str) -> Result<(), StdError> {
+        serialize_full(&self, path)?;
+        Ok(())
+    }
     pub fn deserialize(path: &str, name: &str) -> Result<Self, StdError> {
         deserialize(path, name)
     }
@@ -26,6 +30,10 @@ impl YamlNode {
 
 pub fn serialize<T: Serialize>(value: &T, path: &str, name: &str) -> Result<(), StdError> {
     let path = format!("{}{}.yaml", path, name);
+    std::fs::write(path, serde_yaml::to_string(value)?)?;
+    Ok(())
+}
+pub fn serialize_full<T: Serialize>(value: &T, path: &str) -> Result<(), StdError> {
     std::fs::write(path, serde_yaml::to_string(value)?)?;
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::{lg_core::{frame_time::FrameTime, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendRendererCommand}, render_target::RenderTargetSpecs, texture::TextureSpecs, uniform::LgUniformType}, ui::UiFlags, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{am::AssetManager, frame_time::FrameTime, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::RenderTargetSpecs, texture::TextureSpecs, uniform::LgUniformType}, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::{render_target::RenderTarget, uniform::Uniform}, uuid::UUID};
 use crate::lg_core::renderer::vertex::LgVertex;
 use nalgebra_glm as glm;
@@ -12,7 +12,8 @@ pub struct TestLayer {
     entities: Vec<LgEntity>,
     profile: bool,
     
-    targets: Vec<RenderTargetSpecs>,
+    geometry_pass: RenderTargetSpecs,
+    post_processing_pass: RenderTargetSpecs,
 }
 impl TestLayer {
     pub fn new() -> Self {
@@ -22,7 +23,9 @@ impl TestLayer {
             camera: Camera::default(),
             entities: Vec::new(),
             profile: false,
-            targets: Vec::new(),
+            
+            geometry_pass: RenderTargetSpecs::default(),
+            post_processing_pass: RenderTargetSpecs::default(),
         }
     }
 }
@@ -42,6 +45,9 @@ impl Layer for TestLayer {
         let vp = app_core.window.borrow().size();
         
         let specs = RenderTargetSpecs {
+            clear: true,
+            clear_color: glm::vec4(0.5, 0.1, 0.2, 1.0),
+            clear_depth: 1.0,
             viewport: (0, 0, vp.x as i32, vp.y as i32),
             depth_test: true,
             depth_filter: crate::lg_core::renderer::texture::TextureFilter::LINEAR,
@@ -51,7 +57,11 @@ impl Layer for TestLayer {
                 tex_filter: crate::lg_core::renderer::texture::TextureFilter::LINEAR,
             },
         };
-        self.targets.push(specs);
+        self.geometry_pass = specs.clone();
+        self.post_processing_pass = specs;
+        
+        app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("GEOMETRY".to_string(), self.geometry_pass.clone()));
+        app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("POST".to_string(), self.post_processing_pass.clone()));
 
         self.camera = Camera::new(
             to_radians(45.0) as f32, 
@@ -64,7 +74,7 @@ impl Layer for TestLayer {
         self.entities = vec![
             LgEntity::new(
                 UUID::from_u128(82133816883675309422823400350076070065), 
-                UUID::from_u128(1), 
+                UUID::from_u128(229355871321227895111753443892732218389), 
                 glm::vec3(0.0, 0.0, 0.0)
             ),
         ];
@@ -110,9 +120,10 @@ impl Layer for TestLayer {
         }
         lg_vertex!(InstanceVertex, row_0, row_1, row_2, tex_index);
 
+
         let renderer = &mut self.core().renderer.borrow_mut();
 
-        renderer.send(SendRendererCommand::BEGIN_RENDER_PASS(self.targets[0].clone()));
+        renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("GEOMETRY".to_string()));
         for e in &self.entities {
             let instance_vertex = {
                 let model = e.model();
@@ -128,7 +139,7 @@ impl Layer for TestLayer {
             };
             
             unsafe {
-                renderer.send(SendRendererCommand::SEND_DATA(SendDrawData {
+                renderer.send(SendRendererCommand::SEND_INSTANCE_DATA(SendInstanceDrawData {
                     mesh: e.mesh.clone(),
                     material: e.material.clone(),
                     instance_data: (instance_vertex.vertex_info(), vec![instance_vertex.clone()].align_to::<u8>().1.to_vec()),
@@ -139,11 +150,24 @@ impl Layer for TestLayer {
                         0, 
                         true,
                         view_proj.clone(),
-                    )]}));
+                    )],
+                }));
             }
         }
-
         renderer.send(SendRendererCommand::DRAW_INSTANCED);
+
+        // Post processing
+        renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("GEOMETRY".to_string()));
+        if let Some(geo_tex) = renderer.get_pass_color_texture_gl("GEOMETRY".to_string()) {
+            renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("POST".to_string()));
+
+            renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
+                mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
+                material: UUID::from_string("assets\\materials\\post_processing_pass.lgmat")?,
+                uniforms: vec![],
+                textures: vec![TextureOption::GL_TEXTURE(geo_tex)],
+            }));
+        }
 
         Ok(())
     }
@@ -153,6 +177,14 @@ impl Layer for TestLayer {
         self.camera.on_event(event);
 
         match event {
+            LgEvent::WindowEvent(e) => match e {
+                crate::lg_core::event::WindowEvent::Resize(width, height) => {
+                    let renderer = self.core().renderer.borrow();
+                    renderer.send(SendRendererCommand::RESIZE_RENDER_PASS("GEOMETRY".to_string(), (*width as i32, *height as i32)));
+                    renderer.send(SendRendererCommand::RESIZE_RENDER_PASS("POST".to_string(), (*width as i32, *height as i32)));
+                },
+                _ => (),
+            },
             LgEvent::KeyEvent(e) => if e.pressed {
                 if e.key == LgKeyCode::P  {
                     match self.profile {
@@ -169,8 +201,8 @@ impl Layer for TestLayer {
                     }
                 }
                 if e.key == LgKeyCode::K {
-                    for i in 0..2_000 {
-                        let shader = if i % 2 == 0 { 1 } else { 2 };
+                    for i in 0..2_000u128 {
+                        let shader: u128 = if i % 2 == 0 { 229355871321227895111753443892732218389 } else { 325699289483174847292149352498212715256 };
                         self.entities.push(LgEntity::new(
                             UUID::from_u128(280168720002063226134650013125607437790), 
                             UUID::from_u128(shader as u128), 
@@ -179,6 +211,11 @@ impl Layer for TestLayer {
                     }
                 }
                 if e.key == LgKeyCode::V {
+                    static mut V_SYNC: bool = false;
+                    unsafe { 
+                        V_SYNC = !V_SYNC; 
+                        self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(V_SYNC));
+                    }
                 }
             },
             _ => (),

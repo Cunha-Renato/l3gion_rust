@@ -1,6 +1,6 @@
-use crate::lg_core::renderer::texture::{TextureFilter, TextureSpecs};
+use crate::lg_core::{glm, renderer::texture::{TextureFilter, TextureSpecs}};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct RenderTarget {
     pub framebuffer: gl::types::GLuint,
     pub color_texture: gl::types::GLuint,
@@ -117,8 +117,11 @@ impl Drop for RenderTarget {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct RenderTargetSpecs {
+    pub clear: bool,
+    pub clear_color: glm::Vec4,
+    pub clear_depth: f64,
     pub viewport: (i32, i32, i32, i32),
     pub depth_test: bool,
     pub depth_filter: TextureFilter,

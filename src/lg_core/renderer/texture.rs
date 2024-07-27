@@ -29,7 +29,8 @@ impl TextureType {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextureFormat {
-    RGBA
+    RGB,
+    RGBA,
 }
 impl Default for TextureFormat {
     fn default() -> Self {
@@ -39,13 +40,15 @@ impl Default for TextureFormat {
 impl TextureFormat {
     pub fn from(value: u32) -> Result<Self, StdError> {
         match value {
-            0 => Ok(Self::RGBA),
+            0 => Ok(Self::RGB),
+            1 => Ok(Self::RGBA),
             _ => Err("Failed to convert from u32! (TextureFormat)".into())
         }
     }
     
     pub fn to_opengl(&self) -> gl::types::GLenum {
         match &self {
+            TextureFormat::RGB => gl::RGB,
             TextureFormat::RGBA => gl::RGBA,
         }
     }
@@ -94,15 +97,16 @@ impl Texture {
         let height = image.height();
         let bytes = image.as_bytes().to_vec();
         let size = (bytes.len() * size_of::<u8>()) as u64;
+        let mip_level = (width.max(height) as f32).log2().floor() as u32 + 1;
 
         Ok(Self {
-            uuid: UUID::generate(),
+            uuid: UUID::from_string(path)?,
             name: String::from(name),
             width,
             height,
             bytes,
             size,
-            mip_level: (width.max(height) as f32).log2().floor() as u32 + 1,
+            mip_level,
             specs,
         })
     }
@@ -165,5 +169,10 @@ impl Texture {
 impl Hash for Texture {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.uuid.hash(state);
+    }
+}
+impl PartialEq for Texture {
+    fn eq(&self, other: &Self) -> bool {
+        self.uuid == other.uuid
     }
 }

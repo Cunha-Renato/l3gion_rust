@@ -14,6 +14,8 @@ out int vert_tex_index;
 out vec3 vert_normal;
 out vec3 vert_position;
 out vec3 camera_direction;
+out vec3 light_position;
+out vec3 light_color;
 
 out vec2 vert_tex_coord;
 
@@ -23,6 +25,11 @@ layout(binding = 0) uniform Camera {
     vec3 dir;
 } camera;
 
+layout(binding = 1) uniform LightProperties {
+    vec3 position;
+    vec3 color;
+} light_properties;
+
 void main() {
     mat4 model = mat4(
         vec4(row_0.x, row_1.x, row_2.x, 0),
@@ -30,6 +37,7 @@ void main() {
         vec4(row_0.z, row_1.z, row_2.z, 0),
         vec4(row_0.w, row_1.w, row_2.w, 1)
     );
+    vec4 world_position = model * vec4(position, 1.0);
 
     vert_tex_index = tex_index;
     vert_tex_coord = tex_coord;
@@ -37,7 +45,9 @@ void main() {
     // BRDF
     camera_direction = camera.dir;
     vert_normal = normalize(mat3(transpose(inverse(model))) * normal);
+    light_color = light_properties.color;
+    light_position = light_properties.position;
+    vert_position = world_position.xyz;
     
-    gl_Position = camera.proj * camera.view * model * vec4(position, 1.0);
-    vert_position = gl_Position.xyz;
+    gl_Position = camera.proj * camera.view * world_position;
 }

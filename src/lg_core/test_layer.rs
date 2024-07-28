@@ -27,7 +27,7 @@ impl TestLayer {
             entities: Vec::new(),
 
             profile: false,
-            light_position: glm::vec3(0.0, 0.0, 0.0),
+            light_position: glm::vec3(-1.0, 0.0, 3.0),
             
             geometry_pass: RenderTargetSpecs::default(),
             post_processing_pass: RenderTargetSpecs::default(),
@@ -82,7 +82,13 @@ impl Layer for TestLayer {
                 UUID::from_string("assets\\materials\\BP_BRDF.lgmat")?,
                 glm::vec3(0.0, 0.0, 0.0)
             ),
+            LgEntity::new(
+                UUID::from_string("assets\\objects\\sphere.obj")?,
+                UUID::from_string("assets\\materials\\BP_BRDF.lgmat")?,
+                glm::vec3(0.0, 0.0, 0.0)
+            ),
         ];
+        self.entities[1].set_scale(glm::vec3(0.3, 0.3, 0.3));
 
         self.core = Some(app_core);
         
@@ -101,6 +107,7 @@ impl Layer for TestLayer {
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
         self.camera.on_update();
+        self.entities[1].set_position(self.light_position);
 
         // Update uniform
         #[repr(C)]
@@ -220,9 +227,9 @@ impl Layer for TestLayer {
             LgEvent::KeyEvent(e) => if e.pressed {
                 match e.key {
                     LgKeyCode::W => self.light_position.y += 1.0,
-                    LgKeyCode::A => self.light_position.x += 1.0,
+                    LgKeyCode::A => self.light_position.x -= 1.0,
                     LgKeyCode::S => self.light_position.y -= 1.0,
-                    LgKeyCode::D => self.light_position.x -= 1.0,
+                    LgKeyCode::D => self.light_position.x += 1.0,
                     LgKeyCode::Q => self.light_position.z += 1.0,
                     LgKeyCode::E => self.light_position.z -= 1.0,
                     LgKeyCode::P => match self.profile {

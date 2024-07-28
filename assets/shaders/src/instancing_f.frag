@@ -1,6 +1,7 @@
 #version 450
 
 flat in int vert_tex_index;
+in vec3 vert_normal;
 in vec2 vert_tex_coord;
 
 uniform sampler2D textures[32];

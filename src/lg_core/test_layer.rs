@@ -10,7 +10,10 @@ pub struct TestLayer {
     core: Option<ApplicationCore>,
     camera: Camera,
     entities: Vec<LgEntity>,
+
+    // Misc / Testing
     profile: bool,
+    light_position: glm::Vec3,
     
     geometry_pass: RenderTargetSpecs,
     post_processing_pass: RenderTargetSpecs,
@@ -22,7 +25,9 @@ impl TestLayer {
             core: None, 
             camera: Camera::default(),
             entities: Vec::new(),
+
             profile: false,
+            light_position: glm::vec3(0.0, 0.0, 0.0),
             
             geometry_pass: RenderTargetSpecs::default(),
             post_processing_pass: RenderTargetSpecs::default(),
@@ -73,8 +78,8 @@ impl Layer for TestLayer {
 
         self.entities = vec![
             LgEntity::new(
-                UUID::from_u128(82133816883675309422823400350076070065), 
-                UUID::from_u128(229355871321227895111753443892732218389), 
+                UUID::from_string("assets\\objects\\sphere.obj")?,
+                UUID::from_string("assets\\materials\\BP_BRDF.lgmat")?,
                 glm::vec3(0.0, 0.0, 0.0)
             ),
         ];
@@ -98,16 +103,32 @@ impl Layer for TestLayer {
         self.camera.on_update();
 
         // Update uniform
+        #[repr(C)]
         #[derive(Clone)]
-        struct ViewProj {
+        struct Camera {
             view: glm::Mat4,
             proj: glm::Mat4,
+            dir: glm::Vec3,
         }
-        let view_proj = ViewProj {
+        let view_proj = Camera {
             view: self.camera.get_view_matrix(),
-            proj: self.camera.get_projection_matrix()
-            // view: glm::Mat4::identity(),
-            // proj: glm::Mat4::identity(),
+            proj: self.camera.get_projection_matrix(),
+            dir: self.camera.get_forward_direction().clone(),
+        };
+
+        #[repr(C)]
+        #[derive(Clone)]
+        struct LightProperties {
+            position: glm::Vec3,
+            _padding1: f32,
+            color: glm::Vec3,
+            _padding2: f32,
+        }
+        let light_properties = LightProperties {
+            position: self.light_position,
+            _padding1: 0.0,
+            color: glm::vec3(1.0, 1.0, 1.0),
+            _padding2: 0.0,
         };
 
         // TESTING
@@ -120,6 +141,24 @@ impl Layer for TestLayer {
         }
         lg_vertex!(InstanceVertex, row_0, row_1, row_2, tex_index);
 
+        let uniforms = unsafe { vec![
+            Uniform::new_with_data(
+                "ViewProj", 
+                LgUniformType::STRUCT, 
+                0, 
+                0, 
+                true,
+                view_proj.clone()
+            ),
+            Uniform::new_with_data(
+                "LightProperties", 
+                LgUniformType::STRUCT, 
+                1, 
+                1, 
+                true,
+                light_properties.clone()
+            ),
+        ]};
 
         let renderer = &mut self.core().renderer.borrow_mut();
 
@@ -143,14 +182,7 @@ impl Layer for TestLayer {
                     mesh: e.mesh.clone(),
                     material: e.material.clone(),
                     instance_data: (instance_vertex.vertex_info(), vec![instance_vertex.clone()].align_to::<u8>().1.to_vec()),
-                    uniforms: vec![Uniform::new_with_data(
-                        "ViewMatrix", 
-                        LgUniformType::STRUCT, 
-                        0, 
-                        0, 
-                        true,
-                        view_proj.clone(),
-                    )],
+                    uniforms: uniforms.clone(),
                 }));
             }
         }
@@ -186,8 +218,14 @@ impl Layer for TestLayer {
                 _ => (),
             },
             LgEvent::KeyEvent(e) => if e.pressed {
-                if e.key == LgKeyCode::P  {
-                    match self.profile {
+                match e.key {
+                    LgKeyCode::W => self.light_position.y += 1.0,
+                    LgKeyCode::A => self.light_position.x += 1.0,
+                    LgKeyCode::S => self.light_position.y -= 1.0,
+                    LgKeyCode::D => self.light_position.x -= 1.0,
+                    LgKeyCode::Q => self.light_position.z += 1.0,
+                    LgKeyCode::E => self.light_position.z -= 1.0,
+                    LgKeyCode::P => match self.profile {
                         true => {
                             info!("Ending Profile!");
                             self.profile = false;
@@ -198,25 +236,25 @@ impl Layer for TestLayer {
                             self.profile = true;
                             profiler_begin!();
                         },
-                    }
-                }
-                if e.key == LgKeyCode::K {
-                    for i in 0..2_000u128 {
-                        let shader: u128 = if i % 2 == 0 { 229355871321227895111753443892732218389 } else { 325699289483174847292149352498212715256 };
-                        self.entities.push(LgEntity::new(
-                            UUID::from_u128(280168720002063226134650013125607437790), 
-                            UUID::from_u128(shader as u128), 
+                    },
+                    LgKeyCode::K => for i in 0..2_000u128 {
+                        let mut entity = LgEntity::new(
+                            UUID::from_string("assets\\objects\\cube.obj").unwrap(),
+                            UUID::from_string("assets\\materials\\BP_BRDF.lgmat").unwrap(),
                             glm::vec3((i * 2) as f32, 0.0, 0.0)
-                        ));
-                    }
-                }
-                if e.key == LgKeyCode::V {
-                    static mut V_SYNC: bool = false;
-                    unsafe { 
-                        V_SYNC = !V_SYNC; 
-                        self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(V_SYNC));
-                    }
-                }
+                        );
+                        entity.set_scale(glm::vec3(0.5, 0.5, 0.5));
+                        self.entities.push(entity);
+                    },
+                    LgKeyCode::V => {
+                        static mut V_SYNC: bool = false;
+                        unsafe { 
+                            V_SYNC = !V_SYNC; 
+                            self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(V_SYNC));
+                        }
+                    },
+                    _ => (),
+                };
             },
             _ => (),
         }

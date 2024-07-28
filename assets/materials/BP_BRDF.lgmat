@@ -1,0 +1,21 @@
+---
+name: BP_BRDF
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "331091949917615302927797021709345056532"
+    children: []
+  - name: textures
+    node_type: ""
+    value: ""
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\BP_BRDF_v.vert"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\BP_BRDF_f.frag"
+    children: []

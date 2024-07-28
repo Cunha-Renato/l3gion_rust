@@ -116,7 +116,6 @@ impl Renderer {
         let (r_sender, r_receiver) = std::sync::mpsc::channel();
 
         let (window, gl_config) = init_window(window_info)?;
-        
         std::thread::spawn(move || {
             let (window, specs) = init_opengl(window, gl_config).unwrap();
             w_sender.send(window).unwrap();

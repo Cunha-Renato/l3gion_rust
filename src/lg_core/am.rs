@@ -202,20 +202,23 @@ impl AssetManager {
     }
     
     fn load_mesh(&mut self, path: &std::path::Path) -> Result<&mut Mesh, StdError> {
-        let tobj_mesh = &tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?.0[0].mesh;
+        let tobj_mesh = &mut tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?.0[0].mesh;
 
         let uuid = UUID::from_string(path.to_str().unwrap())?;
         let name = path.file_stem().unwrap().to_str().unwrap();
-        let positions = tobj_mesh.positions.clone();
-        let tex_coords = tobj_mesh.texcoords.clone();
-        let indices = tobj_mesh.indices.clone();
+        let positions = std::mem::take(&mut tobj_mesh.positions);
+        let normals = std::mem::take(&mut tobj_mesh.normals);
+        let tex_coords = std::mem::take(&mut tobj_mesh.texcoords);
+        let indices = std::mem::take(&mut tobj_mesh.indices);
 
         let vertices = positions.chunks(3)
             .zip(tex_coords.chunks(2))
-            .map(|(p, tc)| {
+            .zip(normals.chunks(3))
+            .map(|((p, tc), n)| {
                 Vertex {
                     position: glm::vec3(p[0], p[1], p[2]),
-                    tex_coord: glm::vec2(tc[0], tc[1])
+                    normal: glm::vec3(n[0], n[1], n[2]),
+                    tex_coord: glm::vec2(tc[0], tc[1]),
                 }
             })
             .collect::<Vec<_>>();

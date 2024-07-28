@@ -59,6 +59,7 @@ use nalgebra_glm as glm;
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex {
     pub position: glm::Vec3,
+    pub normal: glm::Vec3,
     pub tex_coord: glm::Vec2,
 }
-lg_vertex!(Vertex, position, tex_coord);
+lg_vertex!(Vertex, position, normal, tex_coord);

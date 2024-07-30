@@ -1,13 +1,13 @@
-use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex}};
+use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
-use render_target::RenderTarget;
+use render_target::{RenderTarget, RenderTargetSpecs};
 use sllog::{error, info, warn};
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
-use crate::StdError;
+use crate::{lg_core::glm, StdError};
 use super::{am::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
@@ -32,6 +32,7 @@ pub struct CreationWindowInfo<'a> {
 }
 
 pub struct Renderer {
+    core: Arc<Mutex<RendererCore>>,
     sender: Sender<SendRendererCommand>,
     receiver: Receiver<ReceiveRendererCommand>,
     last_frame: Vec<ReceiveRendererCommand>,
@@ -67,6 +68,7 @@ impl Renderer {
         
         None
     }    
+
     /// Will always wait(block).
     pub fn resize(&mut self, new_size: (u32, u32)) {
         self.send(SendRendererCommand::SET_SIZE(new_size));
@@ -111,6 +113,7 @@ impl Renderer {
     ) -> Result<(Self, LgWindow), StdError> 
     {
         let (w_sender, w_receiver) = std::sync::mpsc::channel();
+        let (core_sender, core_receiver) = std::sync::mpsc::channel();
 
         let (s_sender, s_receiver) = std::sync::mpsc::channel();
         let (r_sender, r_receiver) = std::sync::mpsc::channel();
@@ -118,11 +121,48 @@ impl Renderer {
         let (window, gl_config) = init_window(window_info)?;
         std::thread::spawn(move || {
             let (window, specs) = init_opengl(window, gl_config).unwrap();
-            w_sender.send(window).unwrap();
-            let mut r_core = RendererCore::new(specs, Arc::clone(&asset_manager)).unwrap();
+
+            // Imgui -
+            let mut imgui_context = imgui::Context::create();
+
+            // .ini file
+            imgui_context.set_ini_filename(None);
             
+            if let Ok(ini_contents) = std::fs::read_to_string("imgui.ini") {
+                imgui_context.load_ini_settings(&ini_contents);
+            }
+
+            let mut imgui_winit = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
+            imgui_winit.attach_window(
+                imgui_context.io_mut(), 
+                &window, 
+                imgui_winit_support::HiDpiMode::Rounded
+            );
+
+            imgui_context
+                .fonts()
+                .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
+
+            imgui_context
+                .io_mut()
+                .font_global_scale = (1.0 / imgui_winit.hidpi_factor()) as f32;
+            // - Imgui
+            
+            let renderer_core = Arc::new(Mutex::new(RendererCore::new(
+                specs, 
+                Arc::clone(&asset_manager),
+                imgui_context,
+                imgui_winit,
+            ).unwrap()));
+
+            let r_core = Arc::clone(&renderer_core);
+
+            core_sender.send(renderer_core).unwrap();
+            w_sender.send(window).unwrap();
+
             loop {
                 while let Ok(msg) = s_receiver.recv() {
+                    let mut r_core = r_core.lock().unwrap();
                     unsafe { match msg {
                         SendRendererCommand::SET_VSYNC(val) => r_core.set_vsync(val),
                         SendRendererCommand::GET_VSYNC => r_sender.send(ReceiveRendererCommand::VSYNC(r_core.vsync)).unwrap(),
@@ -187,7 +227,7 @@ impl Renderer {
                         },
                         SendRendererCommand::BEGIN_RENDER_PASS(name) => {
                             let target = r_core.render_passes.get(&name).unwrap();
-                            r_core.set_render_target(target.framebuffer, target.specs.viewport, target.specs.depth_test);
+                            r_core.set_render_target(target.framebuffer, &target.specs);
                             r_core.active_pass = name;
                         },
 
@@ -200,27 +240,68 @@ impl Renderer {
                                 .init()
                                 .unwrap();
                         },
-                        SendRendererCommand::_SHUTDOWN => r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap(),
+                        SendRendererCommand::_SHUTDOWN => {
+                            r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap();
+
+                            // ImGui .ini file writing.
+                            let mut ini_contents = String::new();
+                            r_core.imgui_context
+                                .save_ini_settings(&mut ini_contents);
+                            
+                            if let Err(e) = std::fs::write("imgui.ini", ini_contents) {
+                                error!("Failed to write imgui.ini: {}", e);
+                            }
+                        },
                         SendRendererCommand::_BEGIN => todo!(),
                         SendRendererCommand::_END => {
                             r_sender.send(ReceiveRendererCommand::_END_DONE).unwrap();
                             r_core.swap_buffers().unwrap();
                         },
+                        SendRendererCommand::_DRAW_IMGUI => {
+                            r_core.render_imgui();
+                            r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
+                        },
+                        SendRendererCommand::_DRAW_BACKBUFFER => r_core.draw_backbuffer().unwrap(),
                     }
                 }}
             }
         });
         
         let window = LgWindow::new(w_receiver.recv()?);
+        let core = core_receiver.recv()?;
 
         Ok((
             Self {
+                core,
                 sender: s_sender,
                 receiver: r_receiver,
                 last_frame: Vec::new(),
             },
             window,
         ))
+    }
+    
+    pub(crate) fn core(&self) -> MutexGuard<RendererCore> {
+        self.core.lock().unwrap()
+    }
+
+    pub(crate) fn update_imgui_delta_time(&self, delta: std::time::Duration) {
+        let mut core = self.core.lock().unwrap();        
+        
+        core.imgui_context
+            .io_mut()
+            .update_delta_time(delta);
+    }
+    
+    pub(crate) fn prepare_imgui_frame(&self, window: &winit::window::Window) {
+        let mut core = self.core.lock().unwrap();
+        core.prepare_imgui_frame(window);
+    }
+    
+    pub(crate) fn handle_imgui_event<T>(&self, window: &winit::window::Window, event: &winit::event::Event<T>) {
+        let mut core = self.core.lock().unwrap();
+        
+        core.handle_imgui_event(window, event);
     }
 }
 
@@ -236,7 +317,11 @@ struct DrawData {
     first_location: u32,
 }
 
-struct RendererCore {
+pub(crate) struct RendererCore {
+    pub(crate) imgui_context: imgui::Context,
+    pub(crate) imgui_winit: imgui_winit_support::WinitPlatform,
+    pub(crate) imgui_renderer: imgui_glow_renderer::AutoRenderer,
+
     asset_manager: Arc<Mutex<AssetManager>>,
     gl_specs: GlSpecs,
 
@@ -247,8 +332,32 @@ struct RendererCore {
     
     vsync: bool
 }
+unsafe impl Send for RendererCore {}
+unsafe impl Sync for RendererCore {}
+
 impl RendererCore {
-    fn new(specs: GlSpecs, asset_manager: Arc<Mutex<AssetManager>>) -> Result<Self, StdError> {
+    pub(crate) fn handle_imgui_event<T>(&mut self, window: &winit::window::Window, event: &winit::event::Event<T>) {
+        self.imgui_winit
+            .handle_event(self.imgui_context.io_mut(), window, event);
+    }
+
+    pub(crate) fn new_imgui_frame(&mut self) -> *mut imgui::Ui {
+        self.imgui_context.new_frame()
+    }
+    
+    pub(crate) fn prepare_to_render(&mut self, ui: &mut imgui::Ui, window: &winit::window::Window) {
+        self.imgui_winit
+            .prepare_render(ui, window);
+    }
+}
+impl RendererCore {
+    fn new(
+        specs: GlSpecs, 
+        asset_manager: Arc<Mutex<AssetManager>>,
+        mut imgui_context: imgui::Context,
+        imgui_winit: imgui_winit_support::WinitPlatform,
+    ) -> Result<Self, StdError> 
+    {
         gl::load_with(|symbol| {
             let symbol = CString::new(symbol).unwrap();
             specs.gl_display.get_proc_address(symbol.as_c_str()).cast()
@@ -260,18 +369,21 @@ impl RendererCore {
             gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
 
             // Depth, Blend
-            gl::Enable(gl::DEPTH_TEST);
-            gl::DepthFunc(gl::LESS);
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::Enable(gl::BLEND);
         }
 
-        asset_manager.lock().unwrap().create_material("post_processing_pass", vec![], vec![
-            "assets\\shaders\\src\\final_pass_v.vert".to_string(), 
-            "assets\\shaders\\src\\post_processing_f.frag".to_string(), 
-        ])?;
+        let gl_glow = unsafe {
+            glow::Context::from_loader_function_cstr(|s| specs.gl_display.get_proc_address(s).cast())
+        };
+
+        let imgui_renderer = imgui_glow_renderer::AutoRenderer::initialize(gl_glow, &mut imgui_context)?;
 
         Ok(Self {
+            imgui_context,
+            imgui_winit,
+            imgui_renderer,
+
             asset_manager,
             gl_specs: specs,
             draw_data: HashMap::new(),
@@ -281,6 +393,19 @@ impl RendererCore {
         })
     }
     
+    fn prepare_imgui_frame(&mut self, window: &winit::window::Window) {
+        self.imgui_winit
+            .prepare_frame(self.imgui_context.io_mut(), window)
+            .unwrap();
+    }
+
+    fn render_imgui(&mut self) {
+        let dd = self.imgui_context.render();
+        self.imgui_renderer
+            .render(dd)
+            .unwrap();
+    }
+
     fn set_vsync(&mut self, op: bool) {
         self.vsync = op;
         if op {
@@ -467,16 +592,23 @@ impl RendererCore {
        Ok(())
     }
 
-    unsafe fn set_render_target(&self, fb_target: gl::types::GLuint, viewport: (i32, i32, i32, i32), depth_test: bool) {
+    unsafe fn set_render_target(&self, fb_target: gl::types::GLuint, specs: &RenderTargetSpecs) {
+        let viewport = specs.viewport;
         gl::BindFramebuffer(gl::FRAMEBUFFER, fb_target);
         gl::Viewport(viewport.0, viewport.1, viewport.2, viewport.3);
-        gl::ClearColor(0.5, 0.1, 0.2, 1.0);
+        gl::ClearColor(specs.clear_color.x, specs.clear_color.y, specs.clear_color.z, specs.clear_color.w);
         
-        if depth_test {
-            gl::ClearDepth(1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-        } else {
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+        if specs.clear {
+            if specs.depth_test {
+                gl::Enable(gl::DEPTH_TEST);
+                gl::DepthFunc(gl::LESS);
+                
+                gl::ClearDepth(specs.clear_depth);
+                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            } else {
+                gl::Disable(gl::DEPTH_TEST);
+                gl::Clear(gl::COLOR_BUFFER_BIT);
+            }
         }
     }
     
@@ -546,12 +678,21 @@ impl RendererCore {
         Ok(())
     }
 
-    unsafe fn swap_buffers(&self) -> Result<(), StdError> {
+    unsafe fn draw_backbuffer(&mut self) -> Result<(), StdError> {
         let size = (
             self.gl_specs.gl_surface.width().unwrap(),
             self.gl_specs.gl_surface.height().unwrap(),
         );
-        self.set_render_target(0, (0, 0, size.0 as i32, size.1 as i32), true);
+
+        let specs = RenderTargetSpecs {
+            clear: true,
+            clear_color: glm::vec4(0.0, 0.0, 0.0, 1.0),
+            viewport: (0, 0, size.0 as i32, size.1 as i32),
+            depth_test: false,
+            ..Default::default()
+        };
+
+        self.set_render_target(0, &specs);
         let program = self.set_program(FINAL_PASS_MATERIAL.clone())?;
         let vao = self.set_vao(FINAL_PASS_MESH.clone())?;
         program.use_prog()?;
@@ -564,17 +705,23 @@ impl RendererCore {
         gl::ActiveTexture(gl::TEXTURE0);
         gl::BindTexture(gl::TEXTURE_2D, last_pas.color_texture);
         
-        let mut am = self.asset_manager.lock().unwrap();
-        let mesh = am.get_mesh(&FINAL_PASS_MESH)?
-            .as_ref()
-            .unwrap();
+        {
+            let mut am = self.asset_manager.lock().unwrap();
+            let mesh = am.get_mesh(&FINAL_PASS_MESH)?
+                .as_ref()
+                .unwrap();
 
-        gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+            gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+        }
 
         vao.unbind_buffers()?;
         vao.unbind()?;
         program.unuse()?;
         
+        Ok(())
+    }
+
+    unsafe fn swap_buffers(&mut self) -> Result<(), StdError> {
         self.gl_specs.gl_surface.swap_buffers(&self.gl_specs.gl_context)?;
         
         Ok(())
@@ -640,11 +787,13 @@ extern "system" fn debug_callback(
         _ => "Unknown",
     };
 
-    let message_str = unsafe { 
-        std::str::from_utf8(std::ffi::CStr::from_ptr(message).to_bytes()).unwrap() 
-    };
-    error!(
-        "OpenGL Debug Message:\n  Source: {}\n  Type: {}\n  ID: {}\n  Severity: {}\n  Message: {}",
-        source_str, gltype_str, id, severity_str, message_str
-    );
+    if severity != gl::DEBUG_SEVERITY_NOTIFICATION {
+        let message_str = unsafe { 
+            std::str::from_utf8(std::ffi::CStr::from_ptr(message).to_bytes()).unwrap() 
+        };
+        error!(
+            "OpenGL Debug Message:\n  Source: {}\n  Type: {}\n  ID: {}\n  Severity: {}\n  Message: {}",
+            source_str, gltype_str, id, severity_str, message_str
+        );
+    }
 }

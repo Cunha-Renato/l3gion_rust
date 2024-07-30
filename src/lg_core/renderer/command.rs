@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::lg_core::uuid::UUID;
 use super::{render_target::RenderTargetSpecs, texture::Texture, uniform::Uniform, vertex::VertexInfo};
 
@@ -44,10 +46,13 @@ pub enum SendRendererCommand {
     SEND_DRAW_DATA(SendDrawData),
     
 //========================== INTERNAL ====================================== 
+    _DRAW_IMGUI,
+    _DRAW_BACKBUFFER,
+
     _INIT,
-    _SHUTDOWN,
     _BEGIN,
     _END,
+    _SHUTDOWN,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +64,7 @@ pub enum ReceiveRendererCommand {
     RENDER_TARGET_DEPTH_TEXTURE_GL(gl::types::GLuint, String),
 
 //========================== INTERNAL ====================================== 
+    _IMGUI_DONE,
     _RESIZE_DONE,
     _SHUTDOWN_DONE,
     _END_DONE,

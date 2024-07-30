@@ -215,6 +215,10 @@ impl Layer for TestLayer {
         Ok(())
     }
 
+    fn on_imgui(&mut self, ui: &mut imgui::Ui) {
+        ui.show_demo_window(&mut true);
+    }
+
     fn on_event(&mut self, event: &LgEvent) -> bool {
         profile_function!();
         self.camera.on_event(event);
@@ -271,15 +275,5 @@ impl Layer for TestLayer {
         }
 
         false
-    }
-    
-    fn on_gui(&mut self, context: &egui::Context) {
-        egui::Window::new("Some Window").show(context, |ui| {
-            ui.heading("Hello World!");
-            if ui.button("Quit").clicked() {
-                println!("Bitch");
-            }
-            ui.color_edit_button_rgb(&mut glm::vec3(0.7, 0.2, 0.2).into());
-        });
     }
 }

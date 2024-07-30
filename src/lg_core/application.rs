@@ -45,15 +45,25 @@ impl L3gion {
     }
 
     pub fn run(mut self) -> Result<(), StdError> {
+        let mut last_frame = std::time::Instant::now();
+
         self._event_loop.run(move |event, window_target| {
+            match &event {
+                event => {
+                    self.app.core.renderer.borrow().handle_imgui_event(
+                        &self.app.core.window.borrow().window, 
+                        event
+                    );
+                }
+            }
             match event {
-                winit::event::Event::NewEvents(cause) => match cause {
+                /* winit::event::Event::NewEvents(cause) => match cause {
                     winit::event::StartCause::Poll => {
                         optick::next_frame();
                         self.app.on_update().unwrap();
                     },
                     _ => (),
-                },
+                }, */
                 winit::event::Event::WindowEvent { event, .. } => match event {
                     winit::event::WindowEvent::CloseRequested => {
                         self.app.shutdown().unwrap();
@@ -66,9 +76,18 @@ impl L3gion {
                             self.app.resize(window_size.into()).unwrap();
                         }
                     },
-                    // winit::event::WindowEvent::RedrawRequested => {
-                        // self.app.on_update().unwrap();
-                    // },
+                    winit::event::WindowEvent::RedrawRequested => {
+                        optick::next_frame();
+                        let now = std::time::Instant::now();
+
+                        self.app.core.renderer
+                            .borrow()
+                            .update_imgui_delta_time(now.duration_since(last_frame));
+
+                        last_frame = now;
+
+                        self.app.on_update().unwrap();
+                    },
                     winit::event::WindowEvent::KeyboardInput { event, .. } => {
                         match event.physical_key {
                             winit::keyboard::PhysicalKey::Code(key_code) => {
@@ -109,7 +128,12 @@ impl L3gion {
                     },
                     _ => ()
                 },
-                // winit::event::Event::AboutToWait => self.app.core.window.borrow().request_redraw(),
+                winit::event::Event::AboutToWait => {
+                    self.app.core.renderer.borrow_mut().prepare_imgui_frame(
+                        &self.app.core.window.borrow().window
+                    );
+                    self.app.core.window.borrow().request_redraw();
+                },
                 _ => (),
             }
         })?;
@@ -204,11 +228,29 @@ impl Application {
         profile_function!();
         FrameTime::start()?;
         
-        for layer in self.layers.iter().rev() {
+        for layer in &self.layers {
             layer.borrow_mut().on_update()?;
         }
 
-        self.core.renderer.borrow_mut().end();
+        let mut renderer = self.core.renderer.borrow_mut();
+        {
+            let mut core = renderer.core();
+            let ui = unsafe { core
+                .new_imgui_frame()
+                .as_mut()
+                .unwrap()
+            };
+            
+            for layer in &self.layers {
+                layer.borrow_mut().on_imgui(ui);
+            }
+            
+            core.prepare_to_render(ui, &self.core.window.borrow().window);
+        }
+
+        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
+        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_IMGUI);
+        renderer.end();
 
         FrameTime::end()?;
 

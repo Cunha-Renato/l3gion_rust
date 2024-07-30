@@ -8,4 +8,5 @@ pub trait Layer {
     fn on_detach(&mut self) -> Result<(), StdError>;
     fn on_update(&mut self) -> Result<(), StdError>;
     fn on_event(&mut self, event: &LgEvent) -> bool;
+    fn on_imgui(&mut self, ui: &mut imgui::Ui);
 }

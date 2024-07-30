@@ -4,7 +4,7 @@ use super::GlError;
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct GlTexture {
-    id: gl::types::GLuint,
+    pub(crate) id: gl::types::GLuint,
 }
 impl GlTexture {
     pub(crate) fn new() -> Result<Self, GlError> {

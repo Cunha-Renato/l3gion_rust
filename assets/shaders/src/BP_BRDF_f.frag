@@ -18,7 +18,7 @@ vec3 half_vec(vec3 v1, vec3 v2) {
 }
 
 void main() {
-    vec3 MATERIAL_COLOR = vec3(0.7, 1.0, 0.6);
+    vec3 MATERIAL_COLOR = vec3(0.2, 0.2, 1.0);
 
     // Params
     float shininess = 42.0;

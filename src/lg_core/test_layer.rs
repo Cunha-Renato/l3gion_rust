@@ -49,7 +49,7 @@ impl Layer for TestLayer {
         profile_function!();
         let vp = app_core.window.borrow().size();
         
-        let specs = RenderTargetSpecs {
+        let mut specs = RenderTargetSpecs {
             clear: true,
             clear_color: glm::vec4(0.5, 0.1, 0.2, 1.0),
             clear_depth: 1.0,
@@ -63,6 +63,7 @@ impl Layer for TestLayer {
             },
         };
         self.geometry_pass = specs.clone();
+        specs.depth_test = false;
         self.post_processing_pass = specs;
         
         app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("GEOMETRY".to_string(), self.geometry_pass.clone()));
@@ -106,6 +107,7 @@ impl Layer for TestLayer {
 
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
+
         self.camera.on_update();
         self.entities[1].set_position(self.light_position);
 
@@ -116,11 +118,13 @@ impl Layer for TestLayer {
             view: glm::Mat4,
             proj: glm::Mat4,
             dir: glm::Vec3,
+            _padding: f32,
         }
         let view_proj = Camera {
             view: self.camera.get_view_matrix(),
             proj: self.camera.get_projection_matrix(),
             dir: self.camera.get_forward_direction().clone(),
+            _padding: 0.0,
         };
 
         #[repr(C)]
@@ -267,5 +271,15 @@ impl Layer for TestLayer {
         }
 
         false
+    }
+    
+    fn on_gui(&mut self, context: &egui::Context) {
+        egui::Window::new("Some Window").show(context, |ui| {
+            ui.heading("Hello World!");
+            if ui.button("Quit").clicked() {
+                println!("Bitch");
+            }
+            ui.color_edit_button_rgb(&mut glm::vec3(0.7, 0.2, 0.2).into());
+        });
     }
 }

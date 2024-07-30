@@ -160,7 +160,7 @@ impl Camera {
         } else { 1.0 };
         
         self.yaw -= yaw_sign * delta.x * self.rotation_speed();
-        self.pitch += delta.y * self.rotation_speed();
+        self.pitch -= delta.y * self.rotation_speed();
     }
     fn mouse_zoom(&mut self, delta: f32) {
         self.distance -= delta * self.zoom_speed();

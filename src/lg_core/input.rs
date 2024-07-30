@@ -1,9 +1,6 @@
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::{collections::HashMap, sync::OnceLock};
-
+use std::collections::HashMap;
 use nalgebra_glm as glm;
-
-use crate::{profile_function, StdError};
+use crate::profile_function;
 
 use super::event::{
     LgEvent, LgKeyCode, MouseButton

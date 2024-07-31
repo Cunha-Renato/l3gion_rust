@@ -29,7 +29,7 @@ impl GlTexture {
                 texture.width() as i32, 
                 texture.height() as i32, 
                 0, 
-                texture.specs().tex_format.to_opengl(),
+                gl::RGB,
                 texture.specs().tex_type.to_opengl(), 
                 texture.bytes().as_ptr() as *const _,
             ),

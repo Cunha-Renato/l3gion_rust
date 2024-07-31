@@ -1,10 +1,13 @@
-use crate::{lg_core::{asset_manager::AssetManager, frame_time::FrameTime, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::RenderTargetSpecs, texture::{self, TextureSpecs}, uniform::LgUniformType}, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
-use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::{render_target::RenderTarget, uniform::Uniform}, uuid::UUID};
-use crate::lg_core::renderer::vertex::LgVertex;
-use nalgebra_glm as glm;
+use core::panic;
+
 use sllog::info;
 
-pub struct EditorLayer {
+use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::lg_core::renderer::vertex::LgVertex;
+
+use super::panels;
+
+pub(crate) struct EditorLayer {
     _debug_name: String,
 
     core: Option<ApplicationCore>,
@@ -15,11 +18,14 @@ pub struct EditorLayer {
     profile: bool,
     light_position: glm::Vec3,
     
+    render_imgui: bool,
+    render_post_processing: bool,
     geometry_pass: RenderTargetSpecs,
     post_processing_pass: RenderTargetSpecs,
+    imgui_correction_pass: RenderTargetSpecs,
 }
 impl EditorLayer {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { 
             _debug_name: "EditorLayer".to_string(),
             core: None, 
@@ -29,8 +35,11 @@ impl EditorLayer {
             profile: false,
             light_position: glm::vec3(-1.0, 0.0, 3.0),
             
+            render_imgui: true,
+            render_post_processing: true,
             geometry_pass: RenderTargetSpecs::default(),
             post_processing_pass: RenderTargetSpecs::default(),
+            imgui_correction_pass: RenderTargetSpecs::default(),
         }
     }
 }
@@ -50,8 +59,9 @@ impl Layer for EditorLayer {
         let vp = app_core.window.borrow().size();
         
         let mut specs = RenderTargetSpecs {
+            framebuffer_format: FramebufferFormat::RGB,
             clear: true,
-            clear_color: glm::vec4(0.5, 0.1, 0.2, 1.0),
+            clear_color: glm::vec4(0.2, 0.2, 0.2, 1.0),
             clear_depth: 1.0,
             viewport: (0, 0, vp.x as i32, vp.y as i32),
             depth_test: true,
@@ -63,12 +73,17 @@ impl Layer for EditorLayer {
             },
         };
         self.geometry_pass = specs.clone();
+
         specs.depth_test = false;
-        specs.color_texture_specs.tex_format = texture::TextureFormat::RGBA;
-        self.post_processing_pass = specs;
+        self.post_processing_pass = specs.clone();
+
+        specs.framebuffer_format = FramebufferFormat::SRGB;
+        specs.color_texture_specs.tex_format = texture::TextureFormat::SRGB8;
+        self.imgui_correction_pass = specs;
         
         app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("GEOMETRY".to_string(), self.geometry_pass.clone()));
         app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("POST".to_string(), self.post_processing_pass.clone()));
+        app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("IMGUI_CORRECTION".to_string(), self.imgui_correction_pass.clone()));
 
         self.camera = Camera::new(
             to_radians(45.0) as f32, 
@@ -201,49 +216,52 @@ impl Layer for EditorLayer {
         renderer.send(SendRendererCommand::DRAW_INSTANCED);
 
         // Post processing
-        renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("GEOMETRY".to_string()));
-        if let Some(geo_tex) = renderer.get_pass_color_texture_gl("GEOMETRY".to_string()) {
-            renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("POST".to_string()));
+        if self.render_post_processing {
+            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("GEOMETRY".to_string()));
+            if let Some(geo_tex) = renderer.get_pass_color_texture_gl("GEOMETRY".to_string()) {
+                renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("POST".to_string()));
 
-            renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
-                mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
-                material: UUID::from_string("assets\\materials\\post_processing_pass.lgmat")?,
-                uniforms: vec![],
-                textures: vec![TextureOption::GL_TEXTURE(geo_tex)],
-            }));
+                renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
+                    mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
+                    material: UUID::from_string("assets\\materials\\post_processing_pass.lgmat")?,
+                    uniforms: vec![],
+                    textures: vec![TextureOption::GL_TEXTURE(geo_tex)],
+                }));
+            }
+        }
+
+        // ImGui Gamma Correction
+        if self.render_imgui {
+            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("POST".to_string()));
+            if let Some(post_tex) = renderer.get_pass_color_texture_gl("POST".to_string()) {
+                renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("IMGUI_CORRECTION".to_string()));
+
+                renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
+                    mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
+                    material: UUID::from_string("assets\\materials\\IMGUI_CORRECTION.lgmat")?,
+                    uniforms: vec![],
+                    textures: vec![TextureOption::GL_TEXTURE(post_tex)],
+                }));
+            }
         }
 
         Ok(())
     }
 
     fn on_imgui(&mut self, ui: &mut imgui::Ui) {
+        if !self.render_imgui { return; }
+
         unsafe {
             imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
         }
 
-        let image = {    
-            let mut renderer = self.core().renderer.borrow_mut();
-            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("POST".to_string()));
-            renderer.get_pass_color_texture_gl("POST".to_string()).unwrap()
-        };
 
-        let _wp = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0, 0.0]));
-        ui.window("Viewport")
-            .bg_alpha(1.0)
-            .collapsible(false)
-            .draw_background(false)
-            .scrollable(false)
-            .scroll_bar(false)
-            .build(|| {
-                let window_size = ui.content_region_avail();
-                imgui::Image::new(
-                    imgui::TextureId::new(image as usize),
-                    window_size
-                )
-                .uv0([1.0, 1.0])
-                .uv1([0.0, 0.0])
-                .build(ui)
-            });
+        self.imgui_viewport_panel(ui);
+
+        // Assets
+        panels::assets_tree::imgui_assets_tree(ui);
+        
+        ui.show_demo_window(&mut true);
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {
@@ -256,6 +274,7 @@ impl Layer for EditorLayer {
                     let renderer = self.core().renderer.borrow();
                     renderer.send(SendRendererCommand::RESIZE_RENDER_PASS("GEOMETRY".to_string(), (*width as i32, *height as i32)));
                     renderer.send(SendRendererCommand::RESIZE_RENDER_PASS("POST".to_string(), (*width as i32, *height as i32)));
+                    renderer.send(SendRendererCommand::RESIZE_RENDER_PASS("IMGUI_CORRECTION".to_string(), (*width as i32, *height as i32)));
                 },
                 _ => (),
             },
@@ -302,5 +321,35 @@ impl Layer for EditorLayer {
         }
 
         false
+    }
+}
+
+// ------------------------------------ ImGui panels ------------------------------------ 
+
+impl EditorLayer {
+    fn imgui_viewport_panel(&self, ui: &mut imgui::Ui) {
+        let image = {    
+            let mut renderer = self.core().renderer.borrow_mut();
+            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("IMGUI_CORRECTION".to_string()));
+            renderer.get_pass_color_texture_gl("IMGUI_CORRECTION".to_string()).unwrap()
+        };
+
+        let _wp = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0, 0.0]));
+        ui.window("Viewport")
+            .bg_alpha(1.0)
+            .collapsible(false)
+            .draw_background(false)
+            .scrollable(false)
+            .scroll_bar(false)
+            .build(|| {
+                let window_size = ui.content_region_avail();
+                imgui::Image::new(
+                    imgui::TextureId::new(image as usize),
+                    window_size
+                )
+                .uv0([0.0, 1.0])
+                .uv1([1.0, 0.0])
+                .build(ui)
+            });
     }
 }

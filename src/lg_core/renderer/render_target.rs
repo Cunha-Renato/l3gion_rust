@@ -29,7 +29,7 @@ impl RenderTarget {
                 specs.viewport.2 as i32, 
                 specs.viewport.3 as i32, 
                 0, 
-                specs.color_texture_specs.tex_format.to_opengl(),
+                specs.color_texture_specs.tex_format.to_opengl_internal(),
                 specs.color_texture_specs.tex_type.to_opengl(), 
                 std::ptr::null()
             );
@@ -118,12 +118,28 @@ impl Drop for RenderTarget {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
+pub enum FramebufferFormat {
+    #[default]
+    RGB,
+    SRGB,
+}
+impl FramebufferFormat {
+    pub(crate) fn to_opengl(&self) -> gl::types::GLenum {
+        match self {
+            FramebufferFormat::RGB => gl::FRAMEBUFFER,
+            FramebufferFormat::SRGB => gl::FRAMEBUFFER_SRGB,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct RenderTargetSpecs {
+    pub framebuffer_format: FramebufferFormat,
     pub clear: bool,
+    pub depth_test: bool,
     pub clear_color: glm::Vec4,
     pub clear_depth: f64,
     pub viewport: (i32, i32, i32, i32),
-    pub depth_test: bool,
     pub depth_filter: TextureFilter,
     pub color_texture_specs: TextureSpecs,
 }

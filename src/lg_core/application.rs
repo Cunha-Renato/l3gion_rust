@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use nalgebra_glm as glm;
 
-use crate::{as_dyn, lg_core::{asset_manager::AssetManager, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
+use crate::{as_dyn, lg_core::{asset_manager::AssetManager, editor::editor_layer::EditorLayer, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo,  window::LgWindow};
 
 pub struct PersistentApplicationInfo {
@@ -189,7 +189,7 @@ impl Application {
 
         Ok(Self {
             core,
-            layers: Vec::new()
+            layers: vec![]
         })
     }
 
@@ -198,7 +198,9 @@ impl Application {
 
         // Singletons
         LgInput::init();
-        FrameTime::init()
+        FrameTime::init()?;
+
+        self.push_layer(EditorLayer::new())
     }
 
     fn shutdown(&mut self) -> Result<(), StdError> {
@@ -242,7 +244,6 @@ impl Application {
                     .as_mut()
                     .unwrap()
             };
-            
             for layer in &self.layers {
                 layer.borrow_mut().on_imgui(ui);
             }
@@ -255,7 +256,8 @@ impl Application {
         }
 
         let mut renderer = self.core.renderer.borrow_mut();
-        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
+        // TODO: Deal with editor / runtime builds
+        // renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_IMGUI);
         renderer.end();
 

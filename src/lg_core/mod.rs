@@ -12,9 +12,9 @@ pub mod scene;
 pub mod frame_time;
 pub mod timer;
 pub mod asset_manager;
+pub(crate) mod editor;
 
 pub mod test_scene;
-pub mod editor_layer;
 
 pub extern crate nalgebra_glm;
 pub use nalgebra_glm as glm;

@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, A
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
-use render_target::{RenderTarget, RenderTargetSpecs};
+use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
@@ -372,8 +372,6 @@ impl RendererCore {
             // Depth, Blend
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::Enable(gl::BLEND);
-            
-            gl::Disable(gl::FRAMEBUFFER_SRGB);
         }
 
         let gl_glow = unsafe {
@@ -403,6 +401,21 @@ impl RendererCore {
     }
 
     fn render_imgui(&mut self) {
+        let size = (
+            self.gl_specs.gl_surface.width().unwrap(),
+            self.gl_specs.gl_surface.height().unwrap(),
+        );
+
+        let specs = RenderTargetSpecs {
+            clear: true,
+            clear_color: glm::vec4(0.0, 0.0, 0.0, 1.0),
+            viewport: (0, 0, size.0 as i32, size.1 as i32),
+            depth_test: false,
+            ..Default::default()
+        };
+
+        unsafe { self.set_render_target(0, &specs); }
+
         let dd = self.imgui_context.render();
 
         let mut should_render = false;
@@ -607,6 +620,12 @@ impl RendererCore {
 
     unsafe fn set_render_target(&self, fb_target: gl::types::GLuint, specs: &RenderTargetSpecs) {
         let viewport = specs.viewport;
+        if specs.framebuffer_format == FramebufferFormat::SRGB {
+            gl::Enable(gl::FRAMEBUFFER_SRGB);
+        } 
+        else {
+            gl::Disable(gl::FRAMEBUFFER_SRGB);
+        }
         gl::BindFramebuffer(gl::FRAMEBUFFER, fb_target);
         gl::Viewport(viewport.0, viewport.1, viewport.2, viewport.3);
         gl::ClearColor(specs.clear_color.x, specs.clear_color.y, specs.clear_color.z, specs.clear_color.w);
@@ -804,6 +823,7 @@ extern "system" fn debug_callback(
         let message_str = unsafe { 
             std::str::from_utf8(std::ffi::CStr::from_ptr(message).to_bytes()).unwrap() 
         };
+        error!("{}", message_str);
         error!(
             "OpenGL Debug Message:\n  Source: {}\n  Type: {}\n  ID: {}\n  Severity: {}\n  Message: {}",
             source_str, gltype_str, id, severity_str, message_str

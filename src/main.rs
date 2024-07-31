@@ -1,4 +1,4 @@
-use l3gion_rust::lg_core::{application::{ApplicationCreateInfo, L3gion, PersistentApplicationInfo}, renderer::CreationWindowInfo, editor_layer::EditorLayer};
+use l3gion_rust::lg_core::{application::{ApplicationCreateInfo, L3gion, PersistentApplicationInfo}, renderer::CreationWindowInfo};
 
 fn main() {
     std::env::set_var("LOG", "4");
@@ -12,9 +12,6 @@ fn main() {
             height: 720,
         },
     }).unwrap();
-    
-    let app = legion.get_app_mut();
-    app.push_layer(EditorLayer::new()).unwrap();
     
     legion.run().unwrap();
 }

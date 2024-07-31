@@ -66,7 +66,7 @@ impl Camera {
     pub fn get_projection_matrix(&self) -> glm::Mat4 {
         let correction = glm::mat4(
             1.0,  0.0, 0.0, 0.0,
-            0.0, -1.0/self.aspect_ratio, 0.0, 0.0,
+            0.0, 1.0/self.aspect_ratio, 0.0, 0.0,
             0.0,  0.0, 1.0, 0.0,
             0.0,  0.0, 0.0, 1.0,
         );

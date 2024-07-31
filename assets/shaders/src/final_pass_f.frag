@@ -7,7 +7,7 @@ uniform sampler2D textures;
 out vec4 frag_color;
 
 void main() {
-    vec2 flipped_tex_coords = vec2(vert_tex_coord.x, vert_tex_coord.y * -1.0);
+    vec2 flipped_tex_coords = vec2(vert_tex_coord.x, vert_tex_coord.y);
 
     frag_color = texture(textures, flipped_tex_coords);
 }

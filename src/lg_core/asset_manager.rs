@@ -218,7 +218,7 @@ impl AssetManager {
                 Vertex {
                     position: glm::vec3(p[0], p[1], p[2]),
                     normal: glm::vec3(n[0], n[1], n[2]),
-                    tex_coord: glm::vec2(tc[0], tc[1]),
+                    tex_coord: glm::vec2(-tc[0], -tc[1]),
                 }
             })
             .collect::<Vec<_>>();

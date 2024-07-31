@@ -1,0 +1,21 @@
+---
+name: IMGUI_CORRECTION
+node_type: MATERIAL
+value: ""
+children:
+  - name: uuid
+    node_type: ""
+    value: "57444864968515009073417689011986437735"
+    children: []
+  - name: textures
+    node_type: ""
+    value: ""
+    children: []
+  - name: vertex_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\final_pass_v.vert"
+    children: []
+  - name: fragment_shader
+    node_type: ""
+    value: "assets\\shaders\\src\\imgui_correction_f.frag"
+    children: []

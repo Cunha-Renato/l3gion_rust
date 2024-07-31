@@ -1,10 +1,10 @@
-use crate::{lg_core::{am::AssetManager, frame_time::FrameTime, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::RenderTargetSpecs, texture::TextureSpecs, uniform::LgUniformType}, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{asset_manager::AssetManager, frame_time::FrameTime, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::RenderTargetSpecs, texture::{self, TextureSpecs}, uniform::LgUniformType}, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use super::{application::ApplicationCore, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, layer::Layer, lg_types::reference::Rfc, renderer::{render_target::RenderTarget, uniform::Uniform}, uuid::UUID};
 use crate::lg_core::renderer::vertex::LgVertex;
 use nalgebra_glm as glm;
 use sllog::info;
 
-pub struct TestLayer {
+pub struct EditorLayer {
     _debug_name: String,
 
     core: Option<ApplicationCore>,
@@ -18,10 +18,10 @@ pub struct TestLayer {
     geometry_pass: RenderTargetSpecs,
     post_processing_pass: RenderTargetSpecs,
 }
-impl TestLayer {
+impl EditorLayer {
     pub fn new() -> Self {
         Self { 
-            _debug_name: "TestLayer".to_string(),
+            _debug_name: "EditorLayer".to_string(),
             core: None, 
             camera: Camera::default(),
             entities: Vec::new(),
@@ -35,12 +35,12 @@ impl TestLayer {
     }
 }
 // Private
-impl TestLayer {
+impl EditorLayer {
     fn core(&self) -> &ApplicationCore {
         self.core.as_ref().unwrap()
     } 
 }
-impl Layer for TestLayer {
+impl Layer for EditorLayer {
     fn debug_name(&self) -> &str {
         &self._debug_name
     }
@@ -55,15 +55,16 @@ impl Layer for TestLayer {
             clear_depth: 1.0,
             viewport: (0, 0, vp.x as i32, vp.y as i32),
             depth_test: true,
-            depth_filter: crate::lg_core::renderer::texture::TextureFilter::LINEAR,
+            depth_filter: texture::TextureFilter::LINEAR,
             color_texture_specs: TextureSpecs {
-                tex_format: crate::lg_core::renderer::texture::TextureFormat::RGBA,
-                tex_type: crate::lg_core::renderer::texture::TextureType::UNSIGNED_BYTE,
-                tex_filter: crate::lg_core::renderer::texture::TextureFilter::LINEAR,
+                tex_format: texture::TextureFormat::RGBA,
+                tex_type: texture::TextureType::UNSIGNED_BYTE,
+                tex_filter: texture::TextureFilter::LINEAR,
             },
         };
         self.geometry_pass = specs.clone();
         specs.depth_test = false;
+        specs.color_texture_specs.tex_format = texture::TextureFormat::RGBA;
         self.post_processing_pass = specs;
         
         app_core.renderer.borrow().send(SendRendererCommand::CREATE_NEW_RENDER_PASS("GEOMETRY".to_string(), self.geometry_pass.clone()));
@@ -216,7 +217,33 @@ impl Layer for TestLayer {
     }
 
     fn on_imgui(&mut self, ui: &mut imgui::Ui) {
-        ui.show_demo_window(&mut true);
+        unsafe {
+            imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
+        }
+
+        let image = {    
+            let mut renderer = self.core().renderer.borrow_mut();
+            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("POST".to_string()));
+            renderer.get_pass_color_texture_gl("POST".to_string()).unwrap()
+        };
+
+        let _wp = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0, 0.0]));
+        ui.window("Viewport")
+            .bg_alpha(1.0)
+            .collapsible(false)
+            .draw_background(false)
+            .scrollable(false)
+            .scroll_bar(false)
+            .build(|| {
+                let window_size = ui.content_region_avail();
+                imgui::Image::new(
+                    imgui::TextureId::new(image as usize),
+                    window_size
+                )
+                .uv0([1.0, 1.0])
+                .uv1([0.0, 0.0])
+                .build(ui)
+            });
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {

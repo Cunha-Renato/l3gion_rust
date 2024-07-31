@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use nalgebra_glm as glm;
 
-use crate::{as_dyn, lg_core::{am::AssetManager, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
+use crate::{as_dyn, lg_core::{asset_manager::AssetManager, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo,  window::LgWindow};
 
 pub struct PersistentApplicationInfo {
@@ -232,22 +232,29 @@ impl Application {
             layer.borrow_mut().on_update()?;
         }
 
-        let mut renderer = self.core.renderer.borrow_mut();
         {
-            let mut core = renderer.core();
-            let ui = unsafe { core
-                .new_imgui_frame()
-                .as_mut()
-                .unwrap()
+            let ui = unsafe { 
+                self.core
+                    .renderer
+                    .borrow_mut()
+                    .core()
+                    .new_imgui_frame()
+                    .as_mut()
+                    .unwrap()
             };
             
             for layer in &self.layers {
                 layer.borrow_mut().on_imgui(ui);
             }
             
-            core.prepare_to_render(ui, &self.core.window.borrow().window);
+            self.core
+                .renderer
+                .borrow_mut()
+                .core()
+                .prepare_to_render(ui, &self.core.window.borrow().window);
         }
 
+        let mut renderer = self.core.renderer.borrow_mut();
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_IMGUI);
         renderer.end();

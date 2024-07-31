@@ -3,12 +3,12 @@ use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRe
 use glutin::{display::GlDisplay, surface::GlSurface};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
 use render_target::{RenderTarget, RenderTargetSpecs};
-use sllog::{error, info, warn};
+use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 use crate::{lg_core::glm, StdError};
-use super::{am::AssetManager, uuid::UUID, window::LgWindow};
+use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
 pub mod material;
@@ -146,6 +146,11 @@ impl Renderer {
             imgui_context
                 .io_mut()
                 .font_global_scale = (1.0 / imgui_winit.hidpi_factor()) as f32;
+            
+            imgui_context
+                .io_mut()
+                .config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
+            
             // - Imgui
             
             let renderer_core = Arc::new(Mutex::new(RendererCore::new(
@@ -220,11 +225,7 @@ impl Renderer {
                             
                             r_sender.send(ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_LG(texture, name)).unwrap();
                         },
-                        SendRendererCommand::GET_PASS_DEPTH_TEXTURE_LG(name) => {
-                            let target = r_core.render_passes.get(&name).unwrap();
-                            
-                            todo!();
-                        },
+                        SendRendererCommand::GET_PASS_DEPTH_TEXTURE_LG(_name) => todo!(),
                         SendRendererCommand::BEGIN_RENDER_PASS(name) => {
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_core.set_render_target(target.framebuffer, &target.specs);
@@ -371,6 +372,8 @@ impl RendererCore {
             // Depth, Blend
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::Enable(gl::BLEND);
+            
+            gl::Disable(gl::FRAMEBUFFER_SRGB);
         }
 
         let gl_glow = unsafe {
@@ -401,9 +404,19 @@ impl RendererCore {
 
     fn render_imgui(&mut self) {
         let dd = self.imgui_context.render();
-        self.imgui_renderer
-            .render(dd)
-            .unwrap();
+
+        let mut should_render = false;
+        for dl in dd.draw_lists() {
+            if !dl.vtx_buffer().is_empty() {
+                should_render = true;
+            }
+        }
+
+        if should_render {
+            self.imgui_renderer
+                .render(dd)
+                .unwrap();
+        }
     }
 
     fn set_vsync(&mut self, op: bool) {

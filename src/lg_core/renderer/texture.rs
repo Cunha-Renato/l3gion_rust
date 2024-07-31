@@ -31,6 +31,7 @@ impl TextureType {
 pub enum TextureFormat {
     RGB,
     RGBA,
+    SRGBA,
 }
 impl Default for TextureFormat {
     fn default() -> Self {
@@ -42,6 +43,7 @@ impl TextureFormat {
         match value {
             0 => Ok(Self::RGB),
             1 => Ok(Self::RGBA),
+            2 => Ok(Self::SRGBA),
             _ => Err("Failed to convert from u32! (TextureFormat)".into())
         }
     }
@@ -50,6 +52,7 @@ impl TextureFormat {
         match &self {
             TextureFormat::RGB => gl::RGB,
             TextureFormat::RGBA => gl::RGBA,
+            TextureFormat::SRGBA => gl::SRGB_ALPHA
         }
     }
 }

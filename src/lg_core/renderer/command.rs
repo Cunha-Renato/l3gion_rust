@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::lg_core::uuid::UUID;
 use super::{render_target::RenderTargetSpecs, texture::Texture, uniform::Uniform, vertex::VertexInfo};
 

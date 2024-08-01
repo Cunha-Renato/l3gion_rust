@@ -1,1 +1,1 @@
-pub(crate) mod assets_tree;
+pub(crate) mod assets;

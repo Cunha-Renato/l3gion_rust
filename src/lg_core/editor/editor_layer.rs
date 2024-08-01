@@ -2,7 +2,7 @@ use core::panic;
 
 use sllog::info;
 
-use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::imgui_config::config_imgui, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use crate::lg_core::renderer::vertex::LgVertex;
 
 use super::panels;
@@ -107,8 +107,10 @@ impl Layer for EditorLayer {
         ];
         self.entities[1].set_scale(glm::vec3(0.3, 0.3, 0.3));
 
+        config_imgui(&mut app_core.renderer.borrow_mut());
         self.core = Some(app_core);
         
+
         Ok(())
     }
     
@@ -259,8 +261,7 @@ impl Layer for EditorLayer {
         self.imgui_viewport_panel(ui);
 
         // Assets
-        panels::assets_tree::imgui_assets_tree(ui);
-        
+        panels::assets::imgui_assets_tree(ui);
         ui.show_demo_window(&mut true);
     }
 

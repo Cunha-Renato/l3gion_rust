@@ -1,14 +1,16 @@
 use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
-use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
+use imgui_config::imgui_init;
+use imgui_glow_renderer::TextureMap;
+use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::{self, GlTexture}, gl_vertex_array::GlVertexArray, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 use crate::{lg_core::glm, StdError};
-use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
+use super::{asset_manager::{self, AssetManager}, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
 pub mod material;
@@ -19,6 +21,7 @@ pub mod buffer;
 pub mod vertex;
 pub mod render_target;
 pub mod command;
+mod imgui_config;
 mod opengl;
 
 const FINAL_PASS_MESH: UUID = UUID::from_u128(252411435688744967694609164507863584779);
@@ -109,9 +112,11 @@ impl Renderer {
 impl Renderer {
     pub(crate) fn new(
         window_info: &CreationWindowInfo, 
-        asset_manager: Arc<Mutex<AssetManager>>,
-    ) -> Result<(Self, LgWindow), StdError> 
+    ) -> Result<(Self, LgWindow, Arc<Mutex<AssetManager>>), StdError> 
     {
+        let am = Arc::new(Mutex::new(AssetManager::default()));
+        let asset_manager = Arc::clone(&am);
+
         let (w_sender, w_receiver) = std::sync::mpsc::channel();
         let (core_sender, core_receiver) = std::sync::mpsc::channel();
 
@@ -120,39 +125,11 @@ impl Renderer {
 
         let (window, gl_config) = init_window(window_info)?;
         std::thread::spawn(move || {
+            asset_manager.lock().unwrap().init().unwrap();
+
             let (window, specs) = init_opengl(window, gl_config).unwrap();
 
-            // Imgui -
-            let mut imgui_context = imgui::Context::create();
-
-            // .ini file
-            imgui_context.set_ini_filename(None);
-            
-            if let Ok(ini_contents) = std::fs::read_to_string("imgui.ini") {
-                imgui_context.load_ini_settings(&ini_contents);
-            }
-
-            let mut imgui_winit = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
-            imgui_winit.attach_window(
-                imgui_context.io_mut(), 
-                &window, 
-                imgui_winit_support::HiDpiMode::Rounded
-            );
-
-            imgui_context
-                .fonts()
-                .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
-
-            imgui_context
-                .io_mut()
-                .font_global_scale = (1.0 / imgui_winit.hidpi_factor()) as f32;
-            
-            imgui_context
-                .io_mut()
-                .config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
-            
-            // - Imgui
-            
+            let (imgui_context, imgui_winit) = imgui_init(&window);
             let renderer_core = Arc::new(Mutex::new(RendererCore::new(
                 specs, 
                 Arc::clone(&asset_manager),
@@ -263,6 +240,9 @@ impl Renderer {
                             r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
                         },
                         SendRendererCommand::_DRAW_BACKBUFFER => r_core.draw_backbuffer().unwrap(),
+                        SendRendererCommand::SET_FONT(bytes, size) => {
+                            r_core.set_font_imgui(&bytes, size).unwrap();
+                        },
                     }
                 }}
             }
@@ -279,6 +259,7 @@ impl Renderer {
                 last_frame: Vec::new(),
             },
             window,
+            am,
         ))
     }
     
@@ -319,9 +300,11 @@ struct DrawData {
 }
 
 pub(crate) struct RendererCore {
+    _gl_glow_context: glow::Context,
+    _imgui_textures: imgui_glow_renderer::SimpleTextureMap,
     pub(crate) imgui_context: imgui::Context,
     pub(crate) imgui_winit: imgui_winit_support::WinitPlatform,
-    pub(crate) imgui_renderer: imgui_glow_renderer::AutoRenderer,
+    pub(crate) imgui_renderer: imgui_glow_renderer::Renderer,
 
     asset_manager: Arc<Mutex<AssetManager>>,
     gl_specs: GlSpecs,
@@ -374,13 +357,22 @@ impl RendererCore {
             gl::Enable(gl::BLEND);
         }
 
-        let gl_glow = unsafe {
+        let mut gl_glow = unsafe {
             glow::Context::from_loader_function_cstr(|s| specs.gl_display.get_proc_address(s).cast())
         };
 
-        let imgui_renderer = imgui_glow_renderer::AutoRenderer::initialize(gl_glow, &mut imgui_context)?;
+        // let imgui_renderer = imgui_glow_renderer::AutoRenderer::initialize(gl_glow, &mut imgui_context)?;
+        let mut simple_textures = imgui_glow_renderer::SimpleTextureMap {};
+        let imgui_renderer = imgui_glow_renderer::Renderer::initialize(
+            &mut gl_glow, 
+            &mut imgui_context, 
+            &mut simple_textures,
+            true
+        )?;
 
         Ok(Self {
+            _gl_glow_context: gl_glow,
+            _imgui_textures: simple_textures,
             imgui_context,
             imgui_winit,
             imgui_renderer,
@@ -427,9 +419,56 @@ impl RendererCore {
 
         if should_render {
             self.imgui_renderer
-                .render(dd)
+                .render(
+                    &self._gl_glow_context,
+                    &self._imgui_textures,
+                    dd,
+                )
                 .unwrap();
         }
+    }
+
+    unsafe fn set_font_imgui(&mut self, bytes: &[u8], pixels: f32) -> Result<(), StdError> {
+        self.imgui_context.fonts().clear();
+        let fonts = self.imgui_context.fonts();
+        fonts.add_font(&[imgui::FontSource::TtfData { 
+            data: bytes,
+            size_pixels: pixels, 
+            config: None 
+        }]);
+
+        let atlas_texture = fonts.build_rgba32_texture();
+        
+        let mut gl_texture = 0;
+        gl::GenTextures(1, &mut gl_texture);
+        gl::BindTexture(gl::TEXTURE_2D, gl_texture);
+        gl::TexParameteri(
+            gl::TEXTURE_2D,
+            gl::TEXTURE_MIN_FILTER,
+            gl::LINEAR as _,
+        );
+        gl::TexParameteri(
+            gl::TEXTURE_2D,
+            gl::TEXTURE_MAG_FILTER,
+            gl::LINEAR as _,
+        );
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::SRGB8_ALPHA8 as _,
+            atlas_texture.width as _,
+            atlas_texture.height as _,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            atlas_texture.data.as_ptr() as *const _,
+        );
+        
+        let tex = glow::NativeTexture(std::num::NonZero::new(gl_texture).unwrap());
+        fonts.tex_id = self._imgui_textures
+            .register(tex).unwrap();
+
+        Ok(())
     }
 
     fn set_vsync(&mut self, op: bool) {

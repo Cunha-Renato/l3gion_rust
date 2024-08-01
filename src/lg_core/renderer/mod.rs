@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
-use imgui_config::imgui_init;
+use imgui_config::{imgui_init, ImGuiCore};
 use imgui_glow_renderer::TextureMap;
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::{self, GlTexture}, gl_vertex_array::GlVertexArray, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
@@ -41,6 +41,10 @@ pub struct Renderer {
     last_frame: Vec<ReceiveRendererCommand>,
 }
 impl Renderer {
+    pub fn core(&self) -> MutexGuard<RendererCore> {
+        self.core.lock().unwrap()
+    }
+
     pub fn send(&self, msg: SendRendererCommand) {
         self.sender.send(msg).unwrap();
     }
@@ -219,16 +223,10 @@ impl Renderer {
                                 .unwrap();
                         },
                         SendRendererCommand::_SHUTDOWN => {
-                            r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap();
-
                             // ImGui .ini file writing.
-                            let mut ini_contents = String::new();
-                            r_core.imgui_context
-                                .save_ini_settings(&mut ini_contents);
-                            
-                            if let Err(e) = std::fs::write("imgui.ini", ini_contents) {
-                                error!("Failed to write imgui.ini: {}", e);
-                            }
+                            r_core.imgui_core.shutdown();
+
+                            r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap();
                         },
                         SendRendererCommand::_BEGIN => todo!(),
                         SendRendererCommand::_END => {
@@ -241,7 +239,7 @@ impl Renderer {
                         },
                         SendRendererCommand::_DRAW_BACKBUFFER => r_core.draw_backbuffer().unwrap(),
                         SendRendererCommand::SET_FONT(bytes, size) => {
-                            r_core.set_font_imgui(&bytes, size).unwrap();
+                            r_core.imgui_core.set_font(&bytes, size).unwrap();
                         },
                     }
                 }}
@@ -263,27 +261,21 @@ impl Renderer {
         ))
     }
     
-    pub(crate) fn core(&self) -> MutexGuard<RendererCore> {
-        self.core.lock().unwrap()
-    }
-
     pub(crate) fn update_imgui_delta_time(&self, delta: std::time::Duration) {
         let mut core = self.core.lock().unwrap();        
         
-        core.imgui_context
-            .io_mut()
-            .update_delta_time(delta);
+        core.imgui_core.update_delta_time(delta);
     }
     
     pub(crate) fn prepare_imgui_frame(&self, window: &winit::window::Window) {
         let mut core = self.core.lock().unwrap();
-        core.prepare_imgui_frame(window);
+        core.imgui_core.prepare_frame(window);
     }
     
     pub(crate) fn handle_imgui_event<T>(&self, window: &winit::window::Window, event: &winit::event::Event<T>) {
         let mut core = self.core.lock().unwrap();
         
-        core.handle_imgui_event(window, event);
+        core.imgui_core.handle_event(window, event);
     }
 }
 
@@ -300,11 +292,7 @@ struct DrawData {
 }
 
 pub(crate) struct RendererCore {
-    _gl_glow_context: glow::Context,
-    _imgui_textures: imgui_glow_renderer::SimpleTextureMap,
-    pub(crate) imgui_context: imgui::Context,
-    pub(crate) imgui_winit: imgui_winit_support::WinitPlatform,
-    pub(crate) imgui_renderer: imgui_glow_renderer::Renderer,
+    imgui_core: ImGuiCore,
 
     asset_manager: Arc<Mutex<AssetManager>>,
     gl_specs: GlSpecs,
@@ -316,22 +304,9 @@ pub(crate) struct RendererCore {
     
     vsync: bool
 }
-unsafe impl Send for RendererCore {}
-unsafe impl Sync for RendererCore {}
-
 impl RendererCore {
-    pub(crate) fn handle_imgui_event<T>(&mut self, window: &winit::window::Window, event: &winit::event::Event<T>) {
-        self.imgui_winit
-            .handle_event(self.imgui_context.io_mut(), window, event);
-    }
-
-    pub(crate) fn new_imgui_frame(&mut self) -> *mut imgui::Ui {
-        self.imgui_context.new_frame()
-    }
-    
-    pub(crate) fn prepare_to_render(&mut self, ui: &mut imgui::Ui, window: &winit::window::Window) {
-        self.imgui_winit
-            .prepare_render(ui, window);
+    pub fn imgui(&mut self) -> &mut ImGuiCore {
+        &mut self.imgui_core
     }
 }
 impl RendererCore {
@@ -370,13 +345,16 @@ impl RendererCore {
             true
         )?;
 
-        Ok(Self {
-            _gl_glow_context: gl_glow,
-            _imgui_textures: simple_textures,
+        let imgui_core = ImGuiCore::new(
+            gl_glow,
+            simple_textures,
             imgui_context,
             imgui_winit,
             imgui_renderer,
+        );
 
+        Ok(Self {
+            imgui_core,
             asset_manager,
             gl_specs: specs,
             draw_data: HashMap::new(),
@@ -384,12 +362,6 @@ impl RendererCore {
             active_pass: String::new(),
             vsync: false,
         })
-    }
-    
-    fn prepare_imgui_frame(&mut self, window: &winit::window::Window) {
-        self.imgui_winit
-            .prepare_frame(self.imgui_context.io_mut(), window)
-            .unwrap();
     }
 
     fn render_imgui(&mut self) {
@@ -408,67 +380,7 @@ impl RendererCore {
 
         unsafe { self.set_render_target(0, &specs); }
 
-        let dd = self.imgui_context.render();
-
-        let mut should_render = false;
-        for dl in dd.draw_lists() {
-            if !dl.vtx_buffer().is_empty() {
-                should_render = true;
-            }
-        }
-
-        if should_render {
-            self.imgui_renderer
-                .render(
-                    &self._gl_glow_context,
-                    &self._imgui_textures,
-                    dd,
-                )
-                .unwrap();
-        }
-    }
-
-    unsafe fn set_font_imgui(&mut self, bytes: &[u8], pixels: f32) -> Result<(), StdError> {
-        self.imgui_context.fonts().clear();
-        let fonts = self.imgui_context.fonts();
-        fonts.add_font(&[imgui::FontSource::TtfData { 
-            data: bytes,
-            size_pixels: pixels, 
-            config: None 
-        }]);
-
-        let atlas_texture = fonts.build_rgba32_texture();
-        
-        let mut gl_texture = 0;
-        gl::GenTextures(1, &mut gl_texture);
-        gl::BindTexture(gl::TEXTURE_2D, gl_texture);
-        gl::TexParameteri(
-            gl::TEXTURE_2D,
-            gl::TEXTURE_MIN_FILTER,
-            gl::LINEAR as _,
-        );
-        gl::TexParameteri(
-            gl::TEXTURE_2D,
-            gl::TEXTURE_MAG_FILTER,
-            gl::LINEAR as _,
-        );
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::SRGB8_ALPHA8 as _,
-            atlas_texture.width as _,
-            atlas_texture.height as _,
-            0,
-            gl::RGBA,
-            gl::UNSIGNED_BYTE,
-            atlas_texture.data.as_ptr() as *const _,
-        );
-        
-        let tex = glow::NativeTexture(std::num::NonZero::new(gl_texture).unwrap());
-        fonts.tex_id = self._imgui_textures
-            .register(tex).unwrap();
-
-        Ok(())
+        self.imgui_core.render_imgui();        
     }
 
     fn set_vsync(&mut self, op: bool) {
@@ -818,6 +730,8 @@ impl Drop for RendererCore {
         }
     }
 }
+unsafe impl Send for RendererCore {}
+unsafe impl Sync for RendererCore {}
 
 extern "system" fn debug_callback(
     source: gl::types::GLenum,

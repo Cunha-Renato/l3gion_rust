@@ -1,9 +1,10 @@
 use super::lg_types::units_of_time::{AsLgTime, LgTime};
 
-pub struct Timer {
+#[derive(Debug, Clone)]
+pub struct LgTimer {
     begin: std::time::Instant,
 }
-impl Timer {
+impl LgTimer {
     pub fn new() -> Self {
         Self {
             begin: std::time::Instant::now(),

@@ -226,6 +226,7 @@ impl Application {
     
     fn on_update(&mut self) -> Result<(), StdError> {
         profile_function!();
+        FrameTime::end()?;
         FrameTime::start()?;
         
         for layer in &self.layers {
@@ -238,10 +239,12 @@ impl Application {
                     .renderer
                     .borrow_mut()
                     .core()
-                    .new_imgui_frame()
+                    .imgui()
+                    .new_frame()
                     .as_mut()
                     .unwrap()
             };
+
             for layer in &self.layers {
                 layer.borrow_mut().on_imgui(ui);
             }
@@ -250,6 +253,7 @@ impl Application {
                 .renderer
                 .borrow_mut()
                 .core()
+                .imgui()
                 .prepare_to_render(ui, &self.core.window.borrow().window);
         }
 
@@ -258,8 +262,6 @@ impl Application {
         // renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_IMGUI);
         renderer.end();
-
-        FrameTime::end()?;
 
         Ok(())
     }

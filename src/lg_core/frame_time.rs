@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use crate::{profile_function, StdError};
-use super::{lg_types::units_of_time::{AsLgTime, LgTime}, timer::Timer};
+use super::{lg_types::units_of_time::{AsLgTime, LgTime}, timer::LgTimer};
 
 static FRAME_TIME: OnceLock<Arc<Mutex<FrameTime>>> = OnceLock::new();
 
 /// Time is stored in SECONDS.
 pub struct FrameTime {
     current: LgTime,
-    timer: Timer
+    timer: LgTimer
 }
 // Public
 impl FrameTime {
@@ -20,7 +20,7 @@ impl FrameTime {
     pub(crate) fn init() -> Result<(), StdError> {
         match FRAME_TIME.set(Arc::new(Mutex::new(FrameTime {
             current: 16.6.ms(),
-            timer: Timer::new(),
+            timer: LgTimer::new(),
         }))) {
             Err(_) => Err("Failed to create FrameTime!".into()),
             _ => Ok(())

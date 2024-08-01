@@ -4,7 +4,7 @@ pub(super) fn config_imgui(renderer: &Renderer) {
     renderer.send(crate::lg_core::renderer::command::SendRendererCommand::SET_FONT(include_bytes!("resources/fonts/roboto/Roboto-Regular.ttf").to_vec(), 17.0));
 
     let mut core = renderer.core();
-    let imgui_context = &mut core.imgui_context;
+    let imgui_context = core.imgui().context();
 
     imgui_context.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE
         | imgui::ConfigFlags::VIEWPORTS_ENABLE;

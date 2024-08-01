@@ -2,10 +2,10 @@ use core::panic;
 
 use sllog::info;
 
-use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::imgui_config::config_imgui, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::AsLgTime, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::{imgui_config::config_imgui, panels::status}, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::{AsLgTime, LgTime}, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, timer::LgTimer, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use crate::lg_core::renderer::vertex::LgVertex;
 
-use super::panels;
+use super::panels::{self, assets::ImGuiAssetsPanel};
 
 pub(crate) struct EditorLayer {
     _debug_name: String,
@@ -23,6 +23,9 @@ pub(crate) struct EditorLayer {
     geometry_pass: RenderTargetSpecs,
     post_processing_pass: RenderTargetSpecs,
     imgui_correction_pass: RenderTargetSpecs,
+    
+    // Panels
+    imgui_assets_panel: ImGuiAssetsPanel,
 }
 impl EditorLayer {
     pub(crate) fn new() -> Self {
@@ -40,6 +43,8 @@ impl EditorLayer {
             geometry_pass: RenderTargetSpecs::default(),
             post_processing_pass: RenderTargetSpecs::default(),
             imgui_correction_pass: RenderTargetSpecs::default(),
+            
+            imgui_assets_panel: ImGuiAssetsPanel::new(),
         }
     }
 }
@@ -257,12 +262,11 @@ impl Layer for EditorLayer {
             imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
         }
 
-
         self.imgui_viewport_panel(ui);
+        panels::status::imgui_status_panel(ui);
+        self.imgui_assets_panel.imgui_assets_panel(ui);
 
-        // Assets
-        panels::assets::imgui_assets_tree(ui);
-        ui.show_demo_window(&mut true);
+        // ui.show_demo_window(&mut true);
     }
 
     fn on_event(&mut self, event: &LgEvent) -> bool {
@@ -337,6 +341,7 @@ impl EditorLayer {
 
         let _wp = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0, 0.0]));
         ui.window("Viewport")
+            .size([200.0, 200.0], imgui::Condition::FirstUseEver)
             .bg_alpha(1.0)
             .collapsible(false)
             .draw_background(false)

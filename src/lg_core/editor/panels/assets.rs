@@ -39,6 +39,8 @@ impl ImGuiAssetsPanel {
 
             let flags = if path.is_dir() {
                 imgui::TreeNodeFlags::SPAN_AVAIL_WIDTH
+                | imgui::TreeNodeFlags::OPEN_ON_ARROW
+                | imgui::TreeNodeFlags::OPEN_ON_DOUBLE_CLICK
                 | imgui::TreeNodeFlags::SELECTED
             }
             else {
@@ -64,11 +66,30 @@ impl ImGuiAssetsPanel {
     }
 
     fn imgui_assets_browser_panel(&mut self, ui: &imgui::Ui) {
-        if let Some(table) = ui.begin_table_with_flags("Table", 1, imgui::TableFlags::BORDERS) {
+        if let Some(table) = ui.begin_table_with_flags(
+            "Parent Table", 
+            1, 
+            imgui::TableFlags::empty()
+        ) {
             // Top row
             ui.table_next_row();
             ui.table_next_column();
-            if ui.button("<--") {
+            if &self.selected_dir != ASSETS_DIR {
+                let back_btn_content = std::path::Path::new(&self.selected_dir)
+                    .parent()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+                
+                if ui.button(&back_btn_content) {
+                    self.selected_dir = back_btn_content;
+                    self.selected_asset.clear();
+                }
+            }
+            else {
+                ui.button("../");
+            }
+           /*  if ui.button("<--") {
                 if &self.selected_dir != ASSETS_DIR {
                     let path = std::path::Path::new(&self.selected_dir);
                     
@@ -78,7 +99,7 @@ impl ImGuiAssetsPanel {
                     }
                 }
                 
-            }
+            } */
             ui.same_line();
             ui.text(std::format!("{}", self.selected_dir));
             ui.same_line();
@@ -91,10 +112,14 @@ impl ImGuiAssetsPanel {
             let cell_size = self.assets_browser_thumbnail_size + self.assets_browser_padding;
             let panel_width = ui.current_column_width();
             let mut column_count = (panel_width / cell_size) as usize;
-            
             if column_count < 1 { column_count = 1; }
             
-            if let Some(table2) = ui.begin_table_with_flags("Assets Browser", column_count, imgui::TableFlags::SCROLL_Y) {
+            // Thumbnail Table
+            if let Some(table2) = ui.begin_table_with_flags(
+                "Assets Browser", 
+                column_count, 
+                imgui::TableFlags::SCROLL_Y
+            ) {
                 ui.table_next_column();
 
                 let entries = if let Ok(selected) = std::fs::read_dir(&self.selected_dir) {

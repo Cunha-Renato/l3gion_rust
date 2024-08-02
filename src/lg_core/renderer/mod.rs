@@ -142,39 +142,40 @@ impl Renderer {
             ).unwrap()));
 
             let r_core = Arc::clone(&renderer_core);
-
             core_sender.send(renderer_core).unwrap();
             w_sender.send(window).unwrap();
 
             loop {
                 while let Ok(msg) = s_receiver.recv() {
-                    let mut r_core = r_core.lock().unwrap();
                     unsafe { match msg {
-                        SendRendererCommand::SET_VSYNC(val) => r_core.set_vsync(val),
-                        SendRendererCommand::GET_VSYNC => r_sender.send(ReceiveRendererCommand::VSYNC(r_core.vsync)).unwrap(),
+                        SendRendererCommand::SET_VSYNC(val) => r_core.lock().unwrap().set_vsync(val),
+                        SendRendererCommand::GET_VSYNC => r_sender.send(ReceiveRendererCommand::VSYNC(r_core.lock().unwrap().vsync)).unwrap(),
                         SendRendererCommand::SET_SIZE(new_size) => {
-                            r_core.resize(new_size);
+                            r_core.lock().unwrap().resize(new_size);
                             r_sender.send(ReceiveRendererCommand::_RESIZE_DONE).unwrap();
                         },
 
                         SendRendererCommand::CREATE_NEW_RENDER_PASS(name, specs) => {
                             let target = RenderTarget::new(specs);
-                            r_core.render_passes.insert(name, target);
+                            r_core.lock().unwrap().render_passes.insert(name, target);
                         },
                         SendRendererCommand::RESIZE_RENDER_PASS(name, new_size) => {
-                            let mut specs = r_core.render_passes.get_mut(&name).unwrap().specs.clone();
+                            let mut specs = r_core.lock().unwrap().render_passes.get_mut(&name).unwrap().specs.clone();
                             specs.viewport = (0, 0, new_size.0, new_size.1);
-                            r_core.render_passes.insert(name.clone(), RenderTarget::new(specs));
+                            r_core.lock().unwrap().render_passes.insert(name.clone(), RenderTarget::new(specs));
                         },
                         SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL(name) => {
+                            let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_sender.send(ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_GL(target.color_texture, name)).unwrap();
                         },
                         SendRendererCommand::GET_PASS_DEPTH_TEXTURE_GL(name) => {
+                            let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_sender.send(ReceiveRendererCommand::RENDER_TARGET_DEPTH_TEXTURE_GL(target.depth_texture.unwrap(), name)).unwrap();
                         },
                         SendRendererCommand::GET_PASS_COLOR_TEXTURE_LG(name) => {
+                            let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             let specs = &target.specs.color_texture_specs;
                             gl::BindTexture(gl::TEXTURE_2D, target.color_texture);
@@ -208,14 +209,15 @@ impl Renderer {
                         },
                         SendRendererCommand::GET_PASS_DEPTH_TEXTURE_LG(_name) => todo!(),
                         SendRendererCommand::BEGIN_RENDER_PASS(name) => {
+                            let mut r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_core.set_render_target(target.framebuffer, &target.specs);
                             r_core.active_pass = name;
                         },
 
-                        SendRendererCommand::SEND_INSTANCE_DATA(dd) => r_core.send_data(dd).unwrap(),
-                        SendRendererCommand::DRAW_INSTANCED => r_core.draw_instanced().unwrap(),
-                        SendRendererCommand::SEND_DRAW_DATA(dd) => r_core.draw(dd).unwrap(),
+                        SendRendererCommand::SEND_INSTANCE_DATA(dd) => r_core.lock().unwrap().send_data(dd).unwrap(),
+                        SendRendererCommand::DRAW_INSTANCED => r_core.lock().unwrap().draw_instanced().unwrap(),
+                        SendRendererCommand::SEND_DRAW_DATA(dd) => r_core.lock().unwrap().draw(dd).unwrap(),
                         SendRendererCommand::_INIT => {
                             asset_manager.lock()
                                 .unwrap()
@@ -224,22 +226,22 @@ impl Renderer {
                         },
                         SendRendererCommand::_SHUTDOWN => {
                             // ImGui .ini file writing.
-                            r_core.imgui_core.shutdown();
+                            r_core.lock().unwrap().imgui_core.shutdown();
 
                             r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap();
                         },
                         SendRendererCommand::_BEGIN => todo!(),
                         SendRendererCommand::_END => {
+                            r_core.lock().unwrap().swap_buffers().unwrap();
                             r_sender.send(ReceiveRendererCommand::_END_DONE).unwrap();
-                            r_core.swap_buffers().unwrap();
                         },
                         SendRendererCommand::_DRAW_IMGUI => {
-                            r_core.render_imgui();
+                            r_core.lock().unwrap().render_imgui();
                             r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
                         },
-                        SendRendererCommand::_DRAW_BACKBUFFER => r_core.draw_backbuffer().unwrap(),
+                        SendRendererCommand::_DRAW_BACKBUFFER => r_core.lock().unwrap().draw_backbuffer().unwrap(),
                         SendRendererCommand::SET_FONT(bytes, size) => {
-                            r_core.imgui_core.set_font(&bytes, size).unwrap();
+                            r_core.lock().unwrap().imgui_core.set_font(&bytes, size).unwrap();
                             asset_manager
                                 .lock()
                                 .unwrap()
@@ -286,10 +288,9 @@ impl Renderer {
 #[derive(Debug)]
 struct DrawData {
     uniforms: Vec<GlBuffer>,
-    textures: Vec<GlTexture>,
+    textures: Vec<UUID>,
     instance_data: (u32, VertexInfo, Vec<u8>),
 
-    program: GlProgram,
     indices_len: usize,
     first_location: u32,
 }
@@ -395,32 +396,6 @@ impl RendererCore {
         } 
     }
 
-    unsafe fn set_program(&self, material: UUID) -> Result<GlProgram, StdError> {
-        let mut am = self.asset_manager.lock().unwrap();
-        let shaders = am.get_material(&material)?
-            .as_ref()
-            .unwrap()
-            .shaders()
-            .to_vec();
-
-        let shaders = vec![
-            am.get_shader(&shaders[0])?.as_ref().unwrap(),
-            am.get_shader(&shaders[1])?.as_ref().unwrap(),
-        ];
-        
-        let gl_shaders = vec![
-            GlShader::new(shaders[0].src_code(), shaders[0].stage().to_gl_stage())?,
-            GlShader::new(shaders[1].src_code(), shaders[1].stage().to_gl_stage())?,
-        ];
-
-        let mut program = GlProgram::new()?;
-        program.set_shaders(gl_shaders)?;
-        program.link()?;
-        program.use_prog()?;
-        
-        Ok(program)
-    }
-
     unsafe fn set_uniforms(&self, uniforms: &[Uniform]) -> Result<Vec<GlBuffer>, StdError> {
         let mut gl_ubos = Vec::with_capacity(uniforms.len());
 
@@ -442,46 +417,35 @@ impl RendererCore {
         Ok(gl_ubos)
     }
 
-    unsafe fn set_textures(&self, textures: &[UUID]) -> Result<Vec<GlTexture>, StdError> {
-        let mut am = self.asset_manager.lock().unwrap();
-        let mut gl_textures = Vec::with_capacity(textures.len());
-
-        for tex in textures.iter().enumerate() {
-            let texture = am.get_texture(tex.1)?.as_ref().unwrap();
-            let gl_tex = GlTexture::new()?;
-            gl_tex.bind(tex.0 as u32)?;
-            gl_tex.load(&texture)?;
-            
-            gl::Uniform1i(tex.0 as i32, tex.0 as i32);
-            gl_tex.unbind()?;
-            
-            gl_textures.push(gl_tex);
-        }
-
-        Ok(gl_textures)
-    }
-
     unsafe fn draw(&self, dd: SendDrawData) -> Result<(), StdError> {
-        let mesh = self.asset_manager
+        let mut am = self.asset_manager
             .lock()
-            .unwrap()
+            .unwrap();
+
+        let mesh = am
             .get_mesh(&dd.mesh)?
             .as_ref()
             .unwrap();
 
-        self.asset_manager
-            .lock()
-            .unwrap()
-            .init_opengl()?;
+        let material = am
+            .get_material(&dd.material)?
+            .as_ref()
+            .unwrap();
         
-        let program = self.set_program(dd.material.clone())?;
-        let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
-        let ubos = self.set_uniforms(&dd.uniforms)?;
-        
+        // Program
+        am.init_gl_program()?;
+        let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
+        program.link()?;
         program.use_prog()?;
+
+        // VAO
+        am.init_gl_vao()?;
+        let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;
         vao.index_buffer().bind()?;
+
+        let ubos = self.set_uniforms(&dd.uniforms)?;
         
         for ubo in &ubos {
             ubo.bind()?;
@@ -511,21 +475,35 @@ impl RendererCore {
     unsafe fn draw_instanced(&mut self) -> Result<(), StdError> {
         let mut am = self.asset_manager.lock().unwrap();
 
-        for (_, dd) in &self.draw_data {
+        for (material_uuid, dd) in &self.draw_data {
             let instance_vbo = GlBuffer::new(gl::ARRAY_BUFFER)?;
             for (mesh_uui, d) in dd {
-                let vao = am.get_mesh(mesh_uui)?
+                let mesh = am.get_mesh(mesh_uui)?
                     .as_ref()
-                    .unwrap()
-                    .gl_vao
+                    .unwrap();
+                let material = am.get_material(material_uuid)?
                     .as_ref()
-                    .ok_or("Couldn't find GlVertexArray in Mesh!")?;
+                    .unwrap();
+                let textures = d.textures.iter()
+                    .map(|uuid| am.get_texture(uuid).unwrap() )
+                    .collect::<Vec<_>>();
 
-                d.program.use_prog()?;
+                // Program
+                am.init_gl_program()?;
+                let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
+                program.link()?;
+                program.use_prog()?;
+
+                // VAO
+                am.init_gl_vao()?;
+                let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
                 vao.bind()?;
                 vao.vertex_buffer().bind()?;
                 vao.index_buffer().bind()?;
                 
+                // Textures
+                am.init_gl_texture()?;
+
                 let last_location = d.first_location;
                 instance_vbo.bind()?;
                 instance_vbo.set_data(&d.instance_data.2, gl::STATIC_DRAW)?;
@@ -540,8 +518,16 @@ impl RendererCore {
                 for ubo in &d.uniforms {
                     ubo.bind()?;
                 }
-                for tex in d.textures.iter().enumerate() {
-                    tex.1.bind(tex.0 as u32)?;
+
+                for tex in textures.iter().enumerate() {
+                    let gl_texture = tex.1
+                        .as_ref()
+                        .unwrap()
+                        .gl_texture
+                        .as_ref()
+                        .ok_or("Couldn't find GlTexture in Texture!")?;
+
+                    gl_texture.bind(tex.0 as u32)?;
                 }
                 
                 gl::DrawElementsInstanced(
@@ -554,7 +540,7 @@ impl RendererCore {
                 
                 vao.unbind_buffers()?;
                 vao.unbind()?;
-                d.program.unuse()?;
+                program.unuse()?;
             }
             
             instance_vbo.unbind()?;
@@ -604,36 +590,45 @@ impl RendererCore {
         }
 
         if new_data {
-            let program = self.set_program(dd.material.clone())?;
-            
-            let textures = self.asset_manager
+            let mut am = self.asset_manager
                 .lock()
-                .unwrap()
+                .unwrap();
+
+            let textures = am
                 .get_material(&dd.material)?
                 .as_ref().unwrap()
                 .texture()
                 .to_vec();
 
-            let textures = self.set_textures(&textures)?;
-            let uniforms = self.set_uniforms(&dd.uniforms)?;
             let instance_data = (
                 1,
                 dd.instance_data.0,
                 dd.instance_data.1,
             );
-            let mut am = self.asset_manager
-                .lock()
+
+            let material = am.get_material(&dd.material)?
+                .as_ref()
                 .unwrap();
+
             let mesh = am.get_mesh(&dd.mesh)?
                 .as_ref()
                 .unwrap();
-            am.init_opengl()?;
+
+            // Program
+            am.init_gl_program()?;
+            let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
+            program.link()?;
+            program.use_prog()?;
+
+            // VAO
+            am.init_gl_vao()?;
+
+            let uniforms = self.set_uniforms(&dd.uniforms)?;
 
             let draw_data = DrawData {
                 uniforms,
                 textures,
                 instance_data,
-                program,
                 indices_len: mesh.indices().len(),
                 first_location: mesh.vertices()[0].vertex_info().gl_info.last().unwrap().0,
             };            
@@ -671,23 +666,31 @@ impl RendererCore {
         };
 
         self.set_render_target(0, &specs);
-        let program = self.set_program(FINAL_PASS_MATERIAL.clone())?;
 
         let mut am = self.asset_manager.lock().unwrap();
+
+        // Program
+        let material = am.get_material(&FINAL_PASS_MATERIAL)?
+            .as_ref()
+            .unwrap();
+        am.init_gl_program()?;
+
+        let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
+        program.link()?;
+        program.use_prog()?;
+
+        // VAO
         let mesh = am.get_mesh(&FINAL_PASS_MESH)?
             .as_ref()
             .unwrap();
+        am.init_gl_vao()?;
+
         let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
-
-
-
-        program.use_prog()?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;
         vao.index_buffer().bind()?;
         
         let last_pas = self.render_passes.get(&self.active_pass).unwrap();
-
         gl::ActiveTexture(gl::TEXTURE0);
         gl::BindTexture(gl::TEXTURE_2D, last_pas.color_texture);
         

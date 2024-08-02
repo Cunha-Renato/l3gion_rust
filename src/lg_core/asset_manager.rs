@@ -142,32 +142,50 @@ impl AssetManager {
     }
 
     /// Only call this function from the render thread
-    pub(crate) fn init_opengl(&mut self) -> Result<(), StdError> {
-        let textures = std::mem::take(&mut self.to_init_gl.textures);
-        let meshes = std::mem::take(&mut self.to_init_gl.meshes);
+    pub(crate) fn init_gl_program(&mut self) -> Result<(), StdError> {
         let materials = std::mem::take(&mut self.to_init_gl.materials);
 
-        for texture_uui in textures {
-            let texture = self.textures.get_mut(&texture_uui).unwrap();
-            texture.init_opengl()?;
-        }
+        for mat_uui in materials { unsafe {
+            let shaders = {
+                let mat = self.get_material(&mat_uui)?
+                    .as_ref()
+                    .unwrap();
+                let shaders = mat.shaders();
+
+                [
+                    self.get_shader(&shaders[0])?.as_ref().unwrap(),
+                    self.get_shader(&shaders[1])?.as_ref().unwrap(),
+                ]
+            };
+
+            let mat = self.materials.get_mut(&mat_uui).unwrap();
+            mat.init_opengl(&shaders)?;
+        }}
+        
+        Ok(())
+    }
+    
+    /// Only call this function from the render thread
+    pub(crate) fn init_gl_vao(&mut self) -> Result<(), StdError> {
+        let meshes = std::mem::take(&mut self.to_init_gl.meshes);
 
         for mesh_uui in meshes {
             let mesh = self.meshes.get_mut(&mesh_uui).unwrap();
             mesh.init_opengl()?;
         }
+        
+        Ok(())
+    }
 
-        for mat_uui in materials {
-            let mat = self.materials.get_mut(&mat_uui).unwrap();
-            let shaders = mat.shaders();
-            let shaders = [
-                self.shaders.get(&shaders[0]).unwrap(),
-                self.shaders.get(&shaders[1]).unwrap(),
-            ];
+    /// Only call this function from the render thread
+    pub(crate) fn init_gl_texture(&mut self) -> Result<(), StdError> {
+        let textures = std::mem::take(&mut self.to_init_gl.textures);
 
-            mat.init_opengl(&shaders)?;
+        for texture_uui in textures {
+            let texture = self.textures.get_mut(&texture_uui).unwrap();
+            texture.init_opengl()?;
         }
-
+        
         Ok(())
     }
 

@@ -239,8 +239,9 @@ impl Layer for EditorLayer {
 
         // ImGui Gamma Correction
         if self.render_imgui {
-            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("POST".to_string()));
-            if let Some(post_tex) = renderer.get_pass_color_texture_gl("POST".to_string()) {
+            let pass = if self.render_post_processing { "POST".to_string() } else { "GEOMETRY".to_string() };
+            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL(pass.clone()));
+            if let Some(post_tex) = renderer.get_pass_color_texture_gl(pass) {
                 renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("IMGUI_CORRECTION".to_string()));
 
                 renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {

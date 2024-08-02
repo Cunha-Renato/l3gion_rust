@@ -2,15 +2,14 @@ use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, A
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use imgui_config::{imgui_init, ImGuiCore};
-use imgui_glow_renderer::TextureMap;
-use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::{self, GlTexture}, gl_vertex_array::GlVertexArray, GlSpecs};
+use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 use crate::{lg_core::glm, StdError};
-use super::{asset_manager::{self, AssetManager}, uuid::UUID, window::LgWindow};
+use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
 pub mod material;
@@ -35,6 +34,7 @@ pub struct CreationWindowInfo<'a> {
 }
 
 pub struct Renderer {
+    asset_manager: Arc<Mutex<AssetManager>>,
     core: Arc<Mutex<RendererCore>>,
     sender: Sender<SendRendererCommand>,
     receiver: Receiver<ReceiveRendererCommand>,
@@ -116,7 +116,7 @@ impl Renderer {
 impl Renderer {
     pub(crate) fn new(
         window_info: &CreationWindowInfo, 
-    ) -> Result<(Self, LgWindow, Arc<Mutex<AssetManager>>), StdError> 
+    ) -> Result<(Self, LgWindow), StdError> 
     {
         let am = Arc::new(Mutex::new(AssetManager::default()));
         let asset_manager = Arc::clone(&am);
@@ -240,6 +240,10 @@ impl Renderer {
                         SendRendererCommand::_DRAW_BACKBUFFER => r_core.draw_backbuffer().unwrap(),
                         SendRendererCommand::SET_FONT(bytes, size) => {
                             r_core.imgui_core.set_font(&bytes, size).unwrap();
+                            asset_manager
+                                .lock()
+                                .unwrap()
+                                .to_destroy();
                         },
                     }
                 }}
@@ -251,13 +255,13 @@ impl Renderer {
 
         Ok((
             Self {
+                asset_manager: am,
                 core,
                 sender: s_sender,
                 receiver: r_receiver,
                 last_frame: Vec::new(),
             },
             window,
-            am,
         ))
     }
     
@@ -286,12 +290,11 @@ struct DrawData {
     instance_data: (u32, VertexInfo, Vec<u8>),
 
     program: GlProgram,
-    vao: GlVertexArray,
     indices_len: usize,
     first_location: u32,
 }
 
-pub(crate) struct RendererCore {
+pub struct RendererCore {
     imgui_core: ImGuiCore,
 
     asset_manager: Arc<Mutex<AssetManager>>,
@@ -418,29 +421,6 @@ impl RendererCore {
         Ok(program)
     }
 
-    unsafe fn set_vao(&self, mesh: UUID) -> Result<GlVertexArray, StdError> {
-        let mut am = self.asset_manager.lock().unwrap();
-        let mesh = am.get_mesh(&mesh)?.as_ref().unwrap();
-
-        let vao = GlVertexArray::new()?;
-        vao.bind()?;
-
-        // Vertices
-        let vertex_info = mesh.vertices()[0].vertex_info();
-        vao.vertex_buffer().bind()?;
-        vao.vertex_buffer().set_data(mesh.vertices(), gl::STATIC_DRAW)?;
-        for info in &vertex_info.gl_info {
-            vao.set_attribute(info.0, info.1, vertex_info.stride, info.2)?;
-        }
-        
-        // Indices
-        vao.index_buffer().bind()?;
-        vao.index_buffer().set_data(mesh.indices(), gl::STATIC_DRAW)?;
-        vao.unbind_buffers()?;
-
-        Ok(vao)
-    }
-
     unsafe fn set_uniforms(&self, uniforms: &[Uniform]) -> Result<Vec<GlBuffer>, StdError> {
         let mut gl_ubos = Vec::with_capacity(uniforms.len());
 
@@ -485,10 +465,17 @@ impl RendererCore {
         let mesh = self.asset_manager
             .lock()
             .unwrap()
-            .get_mesh(&dd.mesh)?;
+            .get_mesh(&dd.mesh)?
+            .as_ref()
+            .unwrap();
+
+        self.asset_manager
+            .lock()
+            .unwrap()
+            .init_opengl()?;
         
         let program = self.set_program(dd.material.clone())?;
-        let vao = self.set_vao(dd.mesh.clone())?;
+        let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
         let ubos = self.set_uniforms(&dd.uniforms)?;
         
         program.use_prog()?;
@@ -512,7 +499,7 @@ impl RendererCore {
             }
         }
         
-        gl::DrawElements(gl::TRIANGLES, mesh.as_ref().unwrap().indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+        gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
         
         vao.unbind_buffers()?;
         vao.unbind()?;
@@ -522,13 +509,22 @@ impl RendererCore {
     }
 
     unsafe fn draw_instanced(&mut self) -> Result<(), StdError> {
+        let mut am = self.asset_manager.lock().unwrap();
+
         for (_, dd) in &self.draw_data {
             let instance_vbo = GlBuffer::new(gl::ARRAY_BUFFER)?;
-            for (_, d) in dd {
+            for (mesh_uui, d) in dd {
+                let vao = am.get_mesh(mesh_uui)?
+                    .as_ref()
+                    .unwrap()
+                    .gl_vao
+                    .as_ref()
+                    .ok_or("Couldn't find GlVertexArray in Mesh!")?;
+
                 d.program.use_prog()?;
-                d.vao.bind()?;
-                d.vao.vertex_buffer().bind()?;
-                d.vao.index_buffer().bind()?;
+                vao.bind()?;
+                vao.vertex_buffer().bind()?;
+                vao.index_buffer().bind()?;
                 
                 let last_location = d.first_location;
                 instance_vbo.bind()?;
@@ -536,7 +532,7 @@ impl RendererCore {
                 
                 for info in &d.instance_data.1.gl_info {
                     let location = info.0 + last_location + 1;
-                    d.vao.set_attribute(location, info.1, d.instance_data.1.stride, info.2)?;
+                    vao.set_attribute(location, info.1, d.instance_data.1.stride, info.2)?;
                     
                     gl::VertexAttribDivisor(location, 1);
                 }
@@ -556,8 +552,8 @@ impl RendererCore {
                     d.instance_data.0 as i32
                 );
                 
-                d.vao.unbind_buffers()?;
-                d.vao.unbind()?;
+                vao.unbind_buffers()?;
+                vao.unbind()?;
                 d.program.unuse()?;
             }
             
@@ -609,7 +605,6 @@ impl RendererCore {
 
         if new_data {
             let program = self.set_program(dd.material.clone())?;
-            let vao = self.set_vao(dd.mesh.clone())?;
             
             let textures = self.asset_manager
                 .lock()
@@ -632,13 +627,13 @@ impl RendererCore {
             let mesh = am.get_mesh(&dd.mesh)?
                 .as_ref()
                 .unwrap();
+            am.init_opengl()?;
 
             let draw_data = DrawData {
                 uniforms,
                 textures,
                 instance_data,
                 program,
-                vao,
                 indices_len: mesh.indices().len(),
                 first_location: mesh.vertices()[0].vertex_info().gl_info.last().unwrap().0,
             };            
@@ -677,7 +672,15 @@ impl RendererCore {
 
         self.set_render_target(0, &specs);
         let program = self.set_program(FINAL_PASS_MATERIAL.clone())?;
-        let vao = self.set_vao(FINAL_PASS_MESH.clone())?;
+
+        let mut am = self.asset_manager.lock().unwrap();
+        let mesh = am.get_mesh(&FINAL_PASS_MESH)?
+            .as_ref()
+            .unwrap();
+        let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
+
+
+
         program.use_prog()?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;
@@ -688,14 +691,7 @@ impl RendererCore {
         gl::ActiveTexture(gl::TEXTURE0);
         gl::BindTexture(gl::TEXTURE_2D, last_pas.color_texture);
         
-        {
-            let mut am = self.asset_manager.lock().unwrap();
-            let mesh = am.get_mesh(&FINAL_PASS_MESH)?
-                .as_ref()
-                .unwrap();
-
-            gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
-        }
+        gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
 
         vao.unbind_buffers()?;
         vao.unbind()?;

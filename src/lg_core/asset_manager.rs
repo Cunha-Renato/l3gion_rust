@@ -17,8 +17,18 @@ struct AssetsPath {
 }
 
 #[derive(Default)]
+struct AssetStorage {
+    textures: Vec<UUID>,
+    meshes: Vec<UUID>,
+    materials: Vec<UUID>,
+}
+
+#[derive(Default)]
 pub struct AssetManager {
     assets_path: AssetsPath,
+    to_destroy: AssetStorage,
+    to_init_gl: AssetStorage,
+
     textures: HashMap<UUID, Texture>,
     meshes: HashMap<UUID, Mesh>,
     shaders: HashMap<UUID, Shader>,
@@ -130,6 +140,55 @@ impl AssetManager {
     pub(crate) fn init(&mut self) -> Result<(), StdError> {
         self.read_dir(ASSETS_DIR)
     }
+
+    /// Only call this function from the render thread
+    pub(crate) fn init_opengl(&mut self) -> Result<(), StdError> {
+        let textures = std::mem::take(&mut self.to_init_gl.textures);
+        let meshes = std::mem::take(&mut self.to_init_gl.meshes);
+        let materials = std::mem::take(&mut self.to_init_gl.materials);
+
+        for texture_uui in textures {
+            let texture = self.textures.get_mut(&texture_uui).unwrap();
+            texture.init_opengl()?;
+        }
+
+        for mesh_uui in meshes {
+            let mesh = self.meshes.get_mut(&mesh_uui).unwrap();
+            mesh.init_opengl()?;
+        }
+
+        for mat_uui in materials {
+            let mat = self.materials.get_mut(&mat_uui).unwrap();
+            let shaders = mat.shaders();
+            let shaders = [
+                self.shaders.get(&shaders[0]).unwrap(),
+                self.shaders.get(&shaders[1]).unwrap(),
+            ];
+
+            mat.init_opengl(&shaders)?;
+        }
+
+        Ok(())
+    }
+
+    /// Only call this function from the render thread
+    pub(crate) fn to_destroy(&mut self) {
+        let textures = std::mem::take(&mut self.to_destroy.textures);
+        let meshes = std::mem::take(&mut self.to_destroy.meshes);
+        let materials = std::mem::take(&mut self.to_destroy.materials);
+
+        for tex_uui in textures {
+            let _ = self.textures.remove(&tex_uui);
+        }
+
+        for mesh_uui in meshes {
+            let _ = self.meshes.remove(&mesh_uui);
+        }
+
+        for mat_uui in materials {
+            let _ = self.materials.remove(&mat_uui);
+        }
+    }
 }
 
 // Private
@@ -198,6 +257,7 @@ impl AssetManager {
             tex_specs,
         )?;
         
+        self.to_init_gl.textures.push(texture.uuid().clone());
         Ok(self.textures.entry(texture.uuid().clone()).or_insert(texture))
     }
     
@@ -229,6 +289,8 @@ impl AssetManager {
             vertices, 
             indices
         );
+        
+        self.to_init_gl.meshes.push(uuid.clone());
 
         Ok(self.meshes.entry(uuid).or_insert(mesh))
     }
@@ -295,6 +357,8 @@ impl AssetManager {
             textures, 
             vec![]
         );
+
+        self.to_init_gl.materials.push(UUID::from_u128(uuid));
 
         Ok(self.materials.entry(UUID::from_u128(uuid)).or_insert(material))
     }

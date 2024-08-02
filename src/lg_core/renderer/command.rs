@@ -9,7 +9,7 @@ pub struct SendInstanceDrawData {
     pub uniforms: Vec<Uniform>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SendDrawData {
     pub mesh: UUID,
     pub material: UUID,
@@ -17,14 +17,14 @@ pub struct SendDrawData {
     pub textures: Vec<TextureOption>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TextureOption {
     UUID(UUID),
     LG_TEXTURE(Texture),
     GL_TEXTURE(gl::types::GLuint),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum SendRendererCommand {
     SET_VSYNC(bool),
     GET_VSYNC,
@@ -55,7 +55,7 @@ pub enum SendRendererCommand {
     _SHUTDOWN,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ReceiveRendererCommand {
     VSYNC(bool),
     RENDER_TARGET_COLOR_TEXTURE_LG(Texture, String),

@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use crate::{gl_check, StdError};
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct GlShader {
     id: gl::types::GLuint,
 }

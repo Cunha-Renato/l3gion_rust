@@ -89,7 +89,7 @@ pub struct TextureSpecs {
     pub tex_filter: TextureFilter,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Texture {
     uuid: UUID,
     width: u32,
@@ -99,10 +99,12 @@ pub struct Texture {
     specs: TextureSpecs,
     name: String, // TODO: Placeholder
     bytes: Vec<u8>,
+    
+    pub(crate) gl_texture: Option<GlTexture>,
 }
 impl Texture {
     pub fn new(name: &str, path: &str, specs: TextureSpecs) -> Result<Self, StdError> {
-        let image = image::io::Reader::open(path)?.decode()?;
+        let image = image::ImageReader::open(path)?.decode()?;
 
         let width = image.width();
         let height = image.height();
@@ -119,6 +121,7 @@ impl Texture {
             size,
             mip_level,
             specs,
+            gl_texture: None,
         })
     }
     
@@ -174,9 +177,26 @@ impl Texture {
             specs,
             name: name.to_string(),
             bytes,
+            gl_texture: None
         }
     }
 }
+
+// Public(crate)
+impl Texture {
+    pub(crate) fn init_opengl(&mut self) -> Result<(), StdError> {
+        if self.gl_texture.is_some() { return Ok(()); }
+
+        let gl_tex = GlTexture::new()?;
+        gl_tex.bind(0)?;
+        gl_tex.load(&self)?;
+
+        self.gl_texture = Some(gl_tex);
+
+        Ok(())
+    }
+}
+
 impl Hash for Texture {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.uuid.hash(state);

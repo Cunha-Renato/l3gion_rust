@@ -2,7 +2,7 @@ use crate::{gl_check, lg_core::renderer::texture::Texture, };
 
 use super::GlError;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub(crate) struct GlTexture {
     pub(crate) id: gl::types::GLuint,
 }

@@ -3,7 +3,7 @@ use sllog::error;
 
 use crate::StdError;
 
-pub(crate) struct ImGuiCore {
+pub struct ImGuiCore {
     _gl_glow_context: glow::Context,
     _imgui_texture_map: imgui_glow_renderer::SimpleTextureMap,
     imgui_context: imgui::Context,

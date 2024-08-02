@@ -3,7 +3,7 @@ use l3gion_rust::lg_core::{application::{ApplicationCreateInfo, L3gion, Persiste
 fn main() {
     std::env::set_var("LOG", "4");
 
-    let mut legion = L3gion::new(ApplicationCreateInfo {
+    let legion = L3gion::new(ApplicationCreateInfo {
         persistant_info: PersistentApplicationInfo { v_sync: false },
         window_info: CreationWindowInfo {
             event_loop: None,

@@ -4,7 +4,7 @@ use crate::{gl_check, StdError};
 
 use super::{gl_shader::GlShader, GlError};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct GlProgram {
     id: gl::types::GLuint,
     pub shaders: Vec<GlShader>,

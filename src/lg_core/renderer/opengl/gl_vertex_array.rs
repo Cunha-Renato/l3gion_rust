@@ -3,7 +3,7 @@ use sllog::warn;
 use crate::gl_check;
 use super::{gl_buffer::GlBuffer, GlError};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct GlVertexArray {
     id: gl::types::GLuint,
     vertex_buffer: GlBuffer,

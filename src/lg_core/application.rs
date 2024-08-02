@@ -175,7 +175,7 @@ impl Application {
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
-        let (renderer, window, asset_manager) = Renderer::new(&info.window_info)?;
+        let (renderer, window) = Renderer::new(&info.window_info)?;
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_INIT);
         let renderer = Rfc::new(renderer);
         let window = Rfc::new(window);

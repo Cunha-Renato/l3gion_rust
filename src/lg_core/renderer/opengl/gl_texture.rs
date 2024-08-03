@@ -13,9 +13,11 @@ impl GlTexture {
         
         Ok(Self { id })
     }
-    pub(crate) fn bind(&self, location: u32) -> Result<(), GlError> {
-        gl_check!(gl::ActiveTexture(gl::TEXTURE0 + location), "Failed to activate texture! (binding)")?;
+    pub(crate) fn bind(&self) -> Result<(), GlError> {
         gl_check!(gl::BindTexture(gl::TEXTURE_2D, self.id), "Failed to bind texture! (binding)")
+    }
+    pub(crate) fn activate(&self, location: u32) -> Result<(), GlError> {
+        gl_check!(gl::ActiveTexture(gl::TEXTURE0 + location), "Failed to activate texture! (binding)")
     }
     pub(crate) fn unbind(&self) -> Result<(), GlError> {
         gl_check!(gl::BindTexture(gl::TEXTURE_2D, 0), "Failed to unbind texture!")
@@ -29,7 +31,7 @@ impl GlTexture {
                 texture.width() as i32, 
                 texture.height() as i32, 
                 0, 
-                gl::RGB,
+                texture.specs().tex_format.to_opengl_internal(),
                 texture.specs().tex_type.to_opengl(), 
                 texture.bytes().as_ptr() as *const _,
             ),

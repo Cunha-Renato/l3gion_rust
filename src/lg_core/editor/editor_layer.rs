@@ -9,6 +9,7 @@ use super::panels::{self, assets::ImGuiAssetsPanel};
 
 pub(crate) struct EditorLayer {
     _debug_name: String,
+    viewport: [f32; 2],
 
     core: Option<ApplicationCore>,
     camera: Camera,
@@ -20,6 +21,8 @@ pub(crate) struct EditorLayer {
     
     render_imgui: bool,
     render_post_processing: bool,
+    
+    // Render Passes
     geometry_pass: RenderTargetSpecs,
     post_processing_pass: RenderTargetSpecs,
     imgui_correction_pass: RenderTargetSpecs,
@@ -31,6 +34,7 @@ impl EditorLayer {
     pub(crate) fn new() -> Self {
         Self { 
             _debug_name: "EditorLayer".to_string(),
+            viewport: [1080.0, 720.0],
             core: None, 
             camera: Camera::default(),
             entities: Vec::new(),
@@ -61,14 +65,14 @@ impl Layer for EditorLayer {
 
     fn on_attach(&mut self, app_core: ApplicationCore) -> Result<(), StdError> {
         profile_function!();
-        let vp = app_core.window.borrow().size();
-        
+        self.imgui_assets_panel.init(app_core.renderer.borrow().asset_manager());
+
         let mut specs = RenderTargetSpecs {
             framebuffer_format: FramebufferFormat::RGB,
             clear: true,
             clear_color: glm::vec4(0.2, 0.2, 0.2, 1.0),
             clear_depth: 1.0,
-            viewport: (0, 0, vp.x as i32, vp.y as i32),
+            viewport: (0, 0, self.viewport[0] as i32, self.viewport[1] as i32),
             depth_test: true,
             depth_filter: texture::TextureFilter::LINEAR,
             color_texture_specs: TextureSpecs {
@@ -92,8 +96,8 @@ impl Layer for EditorLayer {
 
         self.camera = Camera::new(
             to_radians(45.0) as f32, 
-            vp.x,
-            vp.y,
+            self.viewport[0],
+            self.viewport[1],
             0.1, 
             1000.0
         );
@@ -333,7 +337,7 @@ impl Layer for EditorLayer {
 // ------------------------------------ ImGui panels ------------------------------------ 
 
 impl EditorLayer {
-    fn imgui_viewport_panel(&self, ui: &mut imgui::Ui) {
+    fn imgui_viewport_panel(&mut self, ui: &mut imgui::Ui) {
         let image = {    
             let mut renderer = self.core().renderer.borrow_mut();
             renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("IMGUI_CORRECTION".to_string()));
@@ -344,15 +348,17 @@ impl EditorLayer {
         ui.window("Viewport")
             .size([200.0, 200.0], imgui::Condition::FirstUseEver)
             .bg_alpha(1.0)
+            .title_bar(false)
             .collapsible(false)
             .draw_background(false)
             .scrollable(false)
             .scroll_bar(false)
             .build(|| {
-                let window_size = ui.content_region_avail();
+                self.viewport = ui.content_region_avail();
+
                 imgui::Image::new(
                     imgui::TextureId::new(image as usize),
-                    window_size
+                    self.viewport.clone()
                 )
                 .uv0([0.0, 1.0])
                 .uv1([1.0, 0.0])

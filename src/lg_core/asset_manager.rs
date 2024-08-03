@@ -133,6 +133,13 @@ impl AssetManager {
         self.assets_path.materials.entry(uuid.clone()).or_insert(path);
         self.get_material(&uuid)        
     }
+
+    pub fn create_texture(&mut self, name: &str, path: &str, specs: TextureSpecs) -> Result<*const Texture, StdError> {
+        let texture = Texture::new(name, path, specs)?;
+
+        self.assets_path.textures.entry(texture.uuid().clone()).or_insert(path.to_string());
+        self.get_texture(texture.uuid())
+    }
 }
 
 // Public(crate)

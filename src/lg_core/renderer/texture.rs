@@ -125,6 +125,14 @@ impl Texture {
         })
     }
     
+    pub fn gl_id(&self) -> Option<gl::types::GLuint> {
+        if let Some(gl_tex) = &self.gl_texture {
+            return Some(gl_tex.id);
+        }
+
+        None
+    }
+    
     pub fn uuid(&self) -> &UUID {
         &self.uuid
     }
@@ -188,8 +196,9 @@ impl Texture {
         if self.gl_texture.is_some() { return Ok(()); }
 
         let gl_tex = GlTexture::new()?;
-        gl_tex.bind(0)?;
+        gl_tex.bind()?;
         gl_tex.load(&self)?;
+        gl_tex.unbind()?;
 
         self.gl_texture = Some(gl_tex);
 

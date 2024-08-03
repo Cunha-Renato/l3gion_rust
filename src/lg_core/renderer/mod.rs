@@ -41,6 +41,10 @@ pub struct Renderer {
     last_frame: Vec<ReceiveRendererCommand>,
 }
 impl Renderer {
+    pub fn asset_manager(&self) -> Arc<Mutex<AssetManager>> {
+        Arc::clone(&self.asset_manager)
+    }
+
     pub fn core(&self) -> MutexGuard<RendererCore> {
         self.core.lock().unwrap()
     }
@@ -527,7 +531,8 @@ impl RendererCore {
                         .as_ref()
                         .ok_or("Couldn't find GlTexture in Texture!")?;
 
-                    gl_texture.bind(tex.0 as u32)?;
+                    gl_texture.activate(tex.0 as u32)?;
+                    gl_texture.bind()?;
                 }
                 
                 gl::DrawElementsInstanced(

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use nalgebra_glm as glm;
 
-use crate::{as_dyn, lg_core::{asset_manager::AssetManager, editor::editor_layer::EditorLayer, frame_time::FrameTime, renderer::Renderer}, profile_function, StdError};
+use crate::{as_dyn, lg_core::{asset_manager::AssetManager, editor::editor_layer::EditorLayer, frame_time::FrameTime, renderer::Renderer}, profile_function, profile_scope, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo,  window::LgWindow};
 
 pub struct PersistentApplicationInfo {
@@ -234,6 +234,7 @@ impl Application {
         }
 
         {
+            profile_scope!("ImGui");
             let ui = unsafe { 
                 self.core
                     .renderer

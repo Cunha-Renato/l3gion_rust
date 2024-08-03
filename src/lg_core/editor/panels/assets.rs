@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::lg_core::{asset_manager::AssetManager, renderer::texture::TextureSpecs, uuid::UUID};
 
 const ASSETS_DIR: &str = "assets";
-const RESOURCES_DIR: &str = "src/lg_core/editor/resources/";
+const RESOURCES_DIR: &str = "src/lg_core/editor/resources/"; // TODO: This needs to change when on different project
 
 pub(crate) struct ImGuiAssetsPanel {
     pub(crate) selected_dir: String,

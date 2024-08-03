@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::{lg_core::glm, StdError};
+use crate::{lg_core::glm, profile_function, StdError};
 use super::{renderer::{material::Material, mesh::Mesh, shader::{Shader, ShaderStage}, texture::{Texture, TextureFilter, TextureFormat, TextureSpecs, TextureType}, vertex::Vertex}, uuid::UUID};
 
 const ASSETS_DIR: &str = "assets";
@@ -37,6 +37,8 @@ pub struct AssetManager {
 // Public
 impl AssetManager {
     pub fn get_texture(&mut self, uuid: &UUID) -> Result<*const Texture, StdError> {
+        profile_function!();
+
         match self.textures.get(uuid) {
             Some(tex) => return Ok(tex as *const Texture),
             None => ()
@@ -51,6 +53,8 @@ impl AssetManager {
     }
 
     pub fn get_mesh(&mut self, uuid: &UUID) -> Result<*const Mesh, StdError> {
+        profile_function!();
+
         match self.meshes.get(uuid) {
             Some(mesh) => return Ok(mesh),
             None => ()
@@ -65,6 +69,8 @@ impl AssetManager {
     }
     
     pub fn get_shader(&mut self, uuid: &UUID) -> Result<*const Shader, StdError> {
+        profile_function!();
+
         match self.shaders.get(uuid) {
             Some(shader) => return Ok(shader),
             None => ()
@@ -79,6 +85,8 @@ impl AssetManager {
     }
 
     pub fn get_material(&mut self, uuid: &UUID) -> Result<*const Material, StdError> {
+        profile_function!();
+
         match self.materials.get(uuid) {
             Some(material) => return Ok(material),
             None => ()
@@ -93,6 +101,8 @@ impl AssetManager {
     }
     
     pub fn create_material(&mut self, name: &str, textures: Vec<String>, shaders: Vec<String>) -> Result<*const Material, StdError> {
+        profile_function!();
+
         let path = std::format!("{ASSETS_DIR}\\{MATERIALS_DIR}\\{name}.lgmat");
 
         let mut mat_node = serializer::YamlNode {
@@ -135,6 +145,8 @@ impl AssetManager {
     }
 
     pub fn create_texture(&mut self, name: &str, path: &str, specs: TextureSpecs) -> Result<*const Texture, StdError> {
+        profile_function!();
+
         let texture = Texture::new(name, path, specs)?;
 
         self.assets_path.textures.entry(texture.uuid().clone()).or_insert(path.to_string());
@@ -150,6 +162,8 @@ impl AssetManager {
 
     /// Only call this function from the render thread
     pub(crate) fn init_gl_program(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         let materials = std::mem::take(&mut self.to_init_gl.materials);
 
         for mat_uui in materials { unsafe {
@@ -174,6 +188,8 @@ impl AssetManager {
     
     /// Only call this function from the render thread
     pub(crate) fn init_gl_vao(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         let meshes = std::mem::take(&mut self.to_init_gl.meshes);
 
         for mesh_uui in meshes {
@@ -186,6 +202,8 @@ impl AssetManager {
 
     /// Only call this function from the render thread
     pub(crate) fn init_gl_texture(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         let textures = std::mem::take(&mut self.to_init_gl.textures);
 
         for texture_uui in textures {
@@ -198,6 +216,8 @@ impl AssetManager {
 
     /// Only call this function from the render thread
     pub(crate) fn to_destroy(&mut self) {
+        profile_function!();
+
         let textures = std::mem::take(&mut self.to_destroy.textures);
         let meshes = std::mem::take(&mut self.to_destroy.meshes);
         let materials = std::mem::take(&mut self.to_destroy.materials);

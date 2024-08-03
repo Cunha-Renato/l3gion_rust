@@ -8,7 +8,7 @@ use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
-use crate::{lg_core::glm, StdError};
+use crate::{lg_core::glm, profile_function, profile_scope, StdError};
 use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
@@ -50,11 +50,13 @@ impl Renderer {
     }
 
     pub fn send(&self, msg: SendRendererCommand) {
+        profile_function!();
         self.sender.send(msg).unwrap();
     }
     
     /// Will block until the receiver is empty.
     pub fn send_and_wait(&mut self, msg: SendRendererCommand) {
+        profile_function!();
         self.send(msg);
         
         while let Ok(msg) = self.receiver.try_recv() {
@@ -64,6 +66,7 @@ impl Renderer {
     
     // Will always wait(block)
     pub fn get_pass_color_texture_gl(&mut self, name: String) -> Option<gl::types::GLuint> {
+        profile_function!();
         while let Ok(msg) = self.receiver.recv() {
             match &msg {
                 ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_GL(tex, tex_name) => {
@@ -82,6 +85,7 @@ impl Renderer {
 
     /// Will always wait(block).
     pub fn resize(&mut self, new_size: (u32, u32)) {
+        profile_function!();
         self.send(SendRendererCommand::SET_SIZE(new_size));
 
         while let Ok(msg) = self.receiver.recv() {
@@ -94,6 +98,7 @@ impl Renderer {
 
     /// Will always wait(block).
     pub fn end(&mut self) {
+        profile_function!();
         self.send(SendRendererCommand::_END);
         self.last_frame.clear();
 
@@ -122,6 +127,8 @@ impl Renderer {
         window_info: &CreationWindowInfo, 
     ) -> Result<(Self, LgWindow), StdError> 
     {
+        profile_function!();
+
         let am = Arc::new(Mutex::new(AssetManager::default()));
         let asset_manager = Arc::clone(&am);
 
@@ -133,6 +140,8 @@ impl Renderer {
 
         let (window, gl_config) = init_window(window_info)?;
         std::thread::spawn(move || {
+            optick::register_thread("render_thread");
+
             asset_manager.lock().unwrap().init().unwrap();
 
             let (window, specs) = init_opengl(window, gl_config).unwrap();
@@ -169,16 +178,20 @@ impl Renderer {
                             r_core.lock().unwrap().render_passes.insert(name.clone(), RenderTarget::new(specs));
                         },
                         SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL(name) => {
+                            profile_scope!("GET_PASS_COLOR_GL");
+
                             let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_sender.send(ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_GL(target.color_texture, name)).unwrap();
                         },
                         SendRendererCommand::GET_PASS_DEPTH_TEXTURE_GL(name) => {
+                            profile_scope!("GET_PASS_DEPTH_GL");
                             let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_sender.send(ReceiveRendererCommand::RENDER_TARGET_DEPTH_TEXTURE_GL(target.depth_texture.unwrap(), name)).unwrap();
                         },
                         SendRendererCommand::GET_PASS_COLOR_TEXTURE_LG(name) => {
+                            profile_scope!("GET_PASS_COLOR_LG");
                             let r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             let specs = &target.specs.color_texture_specs;
@@ -213,6 +226,8 @@ impl Renderer {
                         },
                         SendRendererCommand::GET_PASS_DEPTH_TEXTURE_LG(_name) => todo!(),
                         SendRendererCommand::BEGIN_RENDER_PASS(name) => {
+                            profile_scope!("BEGIN_RENDER_PASS");
+
                             let mut r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_core.set_render_target(target.framebuffer, &target.specs);
@@ -272,17 +287,21 @@ impl Renderer {
     }
     
     pub(crate) fn update_imgui_delta_time(&self, delta: std::time::Duration) {
+        profile_function!();
         let mut core = self.core.lock().unwrap();        
         
         core.imgui_core.update_delta_time(delta);
     }
     
     pub(crate) fn prepare_imgui_frame(&self, window: &winit::window::Window) {
+        profile_function!();
+
         let mut core = self.core.lock().unwrap();
         core.imgui_core.prepare_frame(window);
     }
     
     pub(crate) fn handle_imgui_event<T>(&self, window: &winit::window::Window, event: &winit::event::Event<T>) {
+        profile_function!();
         let mut core = self.core.lock().unwrap();
         
         core.imgui_core.handle_event(window, event);
@@ -373,6 +392,8 @@ impl RendererCore {
     }
 
     fn render_imgui(&mut self) {
+        profile_function!();
+
         let size = (
             self.gl_specs.gl_surface.width().unwrap(),
             self.gl_specs.gl_surface.height().unwrap(),
@@ -392,6 +413,8 @@ impl RendererCore {
     }
 
     fn set_vsync(&mut self, op: bool) {
+        profile_function!();
+
         self.vsync = op;
         if op {
             self.gl_specs.gl_surface.set_swap_interval(&self.gl_specs.gl_context, glutin::surface::SwapInterval::Wait(std::num::NonZeroU32::new(1).unwrap())).unwrap();
@@ -401,6 +424,8 @@ impl RendererCore {
     }
 
     unsafe fn set_uniforms(&self, uniforms: &[Uniform]) -> Result<Vec<GlBuffer>, StdError> {
+        profile_function!();
+
         let mut gl_ubos = Vec::with_capacity(uniforms.len());
 
         for u in uniforms {
@@ -422,6 +447,8 @@ impl RendererCore {
     }
 
     unsafe fn draw(&self, dd: SendDrawData) -> Result<(), StdError> {
+        profile_function!();
+
         let mut am = self.asset_manager
             .lock()
             .unwrap();
@@ -477,6 +504,8 @@ impl RendererCore {
     }
 
     unsafe fn draw_instanced(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         let mut am = self.asset_manager.lock().unwrap();
 
         for (material_uuid, dd) in &self.draw_data {
@@ -557,6 +586,8 @@ impl RendererCore {
     }
 
     unsafe fn set_render_target(&self, fb_target: gl::types::GLuint, specs: &RenderTargetSpecs) {
+        profile_function!();
+
         let viewport = specs.viewport;
         if specs.framebuffer_format == FramebufferFormat::SRGB {
             gl::Enable(gl::FRAMEBUFFER_SRGB);
@@ -583,6 +614,8 @@ impl RendererCore {
     }
     
     unsafe fn send_data(&mut self, mut dd: SendInstanceDrawData) -> Result<(), StdError> {
+        profile_function!();
+
         let new_data;
         match self.draw_data.entry(dd.material) {
             std::collections::hash_map::Entry::Occupied(val) => {
@@ -657,6 +690,8 @@ impl RendererCore {
     }
 
     unsafe fn draw_backbuffer(&mut self) -> Result<(), StdError> {
+        profile_function!();
+
         let size = (
             self.gl_specs.gl_surface.width().unwrap(),
             self.gl_specs.gl_surface.height().unwrap(),
@@ -709,12 +744,14 @@ impl RendererCore {
     }
 
     unsafe fn swap_buffers(&mut self) -> Result<(), StdError> {
+        profile_function!();
         self.gl_specs.gl_surface.swap_buffers(&self.gl_specs.gl_context)?;
         
         Ok(())
     }
     
     unsafe fn resize(&self, new_size: (u32, u32)) {
+        profile_function!();
         self.gl_specs.gl_surface.resize(
             &self.gl_specs.gl_context, 
             std::num::NonZeroU32::new(new_size.0).unwrap(), 

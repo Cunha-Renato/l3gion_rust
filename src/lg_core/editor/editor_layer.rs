@@ -1,7 +1,6 @@
-use core::panic;
+// TODO: Move to it's own project
 
 use sllog::info;
-
 use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::{imgui_config::config_imgui, panels::status}, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::{AsLgTime, LgTime}, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, timer::LgTimer, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use crate::lg_core::renderer::vertex::LgVertex;
 
@@ -261,6 +260,8 @@ impl Layer for EditorLayer {
     }
 
     fn on_imgui(&mut self, ui: &mut imgui::Ui) {
+        profile_function!();
+
         if !self.render_imgui { return; }
 
         unsafe {
@@ -268,6 +269,7 @@ impl Layer for EditorLayer {
         }
 
         self.imgui_viewport_panel(ui);
+        self.imgui_settings_panel(ui);
         panels::status::imgui_status_panel(ui);
         self.imgui_assets_panel.imgui_assets_panel(ui);
 
@@ -296,17 +298,11 @@ impl Layer for EditorLayer {
                     LgKeyCode::D => self.light_position.x += 1.0,
                     LgKeyCode::Q => self.light_position.z += 1.0,
                     LgKeyCode::E => self.light_position.z -= 1.0,
-                    LgKeyCode::P => match self.profile {
-                        true => {
-                            info!("Ending Profile!");
-                            self.profile = false;
-                            profiler_end!("profiles/test_layer");
-                        },
-                        false => {
-                            info!("Begining Profile!");
-                            self.profile = true;
-                            profiler_begin!();
-                        },
+                    LgKeyCode::P => {
+                        if self.profile { profiler_end!("profiles/editor_layer"); }
+                        else { profiler_begin!(); }
+
+                        self.profile = !self.profile;
                     },
                     LgKeyCode::K => for i in 0..2_000u128 {
                         let mut entity = LgEntity::new(
@@ -363,6 +359,13 @@ impl EditorLayer {
                 .uv0([0.0, 1.0])
                 .uv1([1.0, 0.0])
                 .build(ui)
+            });
+    }
+    
+    fn imgui_settings_panel(&self, ui: &mut imgui::Ui) {
+        ui.window("Settings")
+            .build(|| {
+                ui.text(std::format!("Profiling: {}", self.profile));
             });
     }
 }

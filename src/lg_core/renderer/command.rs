@@ -22,6 +22,7 @@ pub enum TextureOption {
     UUID(UUID),
     LG_TEXTURE(Texture),
     GL_TEXTURE(gl::types::GLuint),
+    PREVIOUS_PASS,
 }
 
 #[derive(Debug)]

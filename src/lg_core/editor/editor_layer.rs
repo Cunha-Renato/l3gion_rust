@@ -1,6 +1,5 @@
 // TODO: Move to it's own project
 
-use sllog::info;
 use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::{imgui_config::config_imgui, panels::status}, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::{AsLgTime, LgTime}, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, timer::LgTimer, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
 use crate::lg_core::renderer::vertex::LgVertex;
 
@@ -227,33 +226,26 @@ impl Layer for EditorLayer {
 
         // Post processing
         if self.render_post_processing {
-            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("GEOMETRY".to_string()));
-            if let Some(geo_tex) = renderer.get_pass_color_texture_gl("GEOMETRY".to_string()) {
-                renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("POST".to_string()));
+            renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("POST".to_string()));
 
-                renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
-                    mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
-                    material: UUID::from_string("assets\\materials\\post_processing_pass.lgmat")?,
-                    uniforms: vec![],
-                    textures: vec![TextureOption::GL_TEXTURE(geo_tex)],
-                }));
-            }
+            renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
+                mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
+                material: UUID::from_string("assets\\materials\\post_processing_pass.lgmat")?,
+                uniforms: vec![],
+                textures: vec![TextureOption::PREVIOUS_PASS],
+            }));
         }
 
         // ImGui Gamma Correction
         if self.render_imgui {
-            let pass = if self.render_post_processing { "POST".to_string() } else { "GEOMETRY".to_string() };
-            renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL(pass.clone()));
-            if let Some(post_tex) = renderer.get_pass_color_texture_gl(pass) {
-                renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("IMGUI_CORRECTION".to_string()));
+            renderer.send(SendRendererCommand::BEGIN_RENDER_PASS("IMGUI_CORRECTION".to_string()));
 
-                renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
-                    mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
-                    material: UUID::from_string("assets\\materials\\IMGUI_CORRECTION.lgmat")?,
-                    uniforms: vec![],
-                    textures: vec![TextureOption::GL_TEXTURE(post_tex)],
-                }));
-            }
+            renderer.send(SendRendererCommand::SEND_DRAW_DATA(SendDrawData {
+                mesh: UUID::from_string("assets\\objects\\ui_screen.obj")?,
+                material: UUID::from_string("assets\\materials\\IMGUI_CORRECTION.lgmat")?,
+                uniforms: vec![],
+                textures: vec![TextureOption::PREVIOUS_PASS],
+            }));
         }
 
         Ok(())
@@ -268,10 +260,10 @@ impl Layer for EditorLayer {
             imgui::sys::igDockSpaceOverViewport(imgui::sys::igGetMainViewport(), 0, std::ptr::null());
         }
 
-        self.imgui_viewport_panel(ui);
         self.imgui_settings_panel(ui);
         panels::status::imgui_status_panel(ui);
         self.imgui_assets_panel.imgui_assets_panel(ui);
+        self.imgui_viewport_panel(ui);
 
         // ui.show_demo_window(&mut true);
     }

@@ -3,6 +3,7 @@ use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRe
 use glutin::{display::GlDisplay, surface::GlSurface};
 use imgui_config::{imgui_init, ImGuiCore};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
 use texture::Texture;
@@ -231,6 +232,11 @@ impl Renderer {
                             let mut r_core = r_core.lock().unwrap();
                             let target = r_core.render_passes.get(&name).unwrap();
                             r_core.set_render_target(target.framebuffer, &target.specs);
+
+                            if !r_core.active_pass.is_empty() {
+                                let active_pass = std::mem::take(&mut r_core.active_pass);
+                                r_core.render_pipeline.push(active_pass);
+                            }
                             r_core.active_pass = name;
                         },
 
@@ -251,7 +257,9 @@ impl Renderer {
                         },
                         SendRendererCommand::_BEGIN => todo!(),
                         SendRendererCommand::_END => {
-                            r_core.lock().unwrap().swap_buffers().unwrap();
+                            let mut r_core = r_core.lock().unwrap();
+                            r_core.render_pipeline.clear();
+                            r_core.swap_buffers().unwrap();
                             r_sender.send(ReceiveRendererCommand::_END_DONE).unwrap();
                         },
                         SendRendererCommand::_DRAW_IMGUI => {
@@ -326,6 +334,8 @@ pub struct RendererCore {
 
     // Material, Mesh, Data
     draw_data: HashMap<UUID, HashMap<UUID, DrawData>>,
+    // Order of Render Passes
+    render_pipeline: Vec<String>,
     render_passes: HashMap<String, RenderTarget>,
     active_pass: String,
     
@@ -384,9 +394,12 @@ impl RendererCore {
             imgui_core,
             asset_manager,
             gl_specs: specs,
-            draw_data: HashMap::new(),
-            render_passes: HashMap::new(),
-            active_pass: String::new(),
+            draw_data: HashMap::default(),
+
+            render_pipeline: Vec::default(),
+            render_passes: HashMap::default(),
+            active_pass: String::default(),
+
             vsync: false,
         })
     }
@@ -466,7 +479,6 @@ impl RendererCore {
         // Program
         am.init_gl_program()?;
         let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
-        program.link()?;
         program.use_prog()?;
 
         // VAO
@@ -482,19 +494,31 @@ impl RendererCore {
             ubo.bind()?;
         }
 
-        for (_location, tex_op) in dd.textures.iter().enumerate() {
+        for (location, tex_op) in dd.textures.iter().enumerate() {
             match tex_op {
                 command::TextureOption::UUID(_) => todo!(),
                 command::TextureOption::LG_TEXTURE(_) => todo!(),
                 command::TextureOption::GL_TEXTURE(tex) => {
-                    gl::ActiveTexture(gl::TEXTURE0);
+                    gl::ActiveTexture(gl::TEXTURE0 + location as u32);
                     gl::BindTexture(gl::TEXTURE_2D, *tex);
-                    gl::Uniform1i(0, 0);
+                    gl::Uniform1i(location as i32, location as i32);
+                },
+                command::TextureOption::PREVIOUS_PASS => {
+                    let pass = self.render_pipeline.last().unwrap();
+                    let tex = self.render_passes.get(pass).unwrap()
+                        .color_texture;
+                    
+                    gl::ActiveTexture(gl::TEXTURE0 + location as u32);
+                    gl::BindTexture(gl::TEXTURE_2D, tex);
+                    gl::Uniform1i(location as i32, location as i32);
                 },
             }
         }
         
-        gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+        {
+            profile_scope!("DrawElements");
+            gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+        }
         
         vao.unbind_buffers()?;
         vao.unbind()?;
@@ -509,12 +533,13 @@ impl RendererCore {
         let mut am = self.asset_manager.lock().unwrap();
 
         for (material_uuid, dd) in &self.draw_data {
-            let instance_vbo = GlBuffer::new(gl::ARRAY_BUFFER)?;
-            for (mesh_uui, d) in dd {
-                let mesh = am.get_mesh(mesh_uui)?
+            let material = am.get_material(material_uuid)?
                     .as_ref()
                     .unwrap();
-                let material = am.get_material(material_uuid)?
+            let instance_vbo = GlBuffer::new(gl::ARRAY_BUFFER)?;
+
+            for (mesh_uui, d) in dd {
+                let mesh = am.get_mesh(mesh_uui)?
                     .as_ref()
                     .unwrap();
                 let textures = d.textures.iter()
@@ -522,13 +547,10 @@ impl RendererCore {
                     .collect::<Vec<_>>();
 
                 // Program
-                am.init_gl_program()?;
                 let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
-                program.link()?;
                 program.use_prog()?;
 
                 // VAO
-                am.init_gl_vao()?;
                 let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
                 vao.bind()?;
                 vao.vertex_buffer().bind()?;
@@ -564,13 +586,16 @@ impl RendererCore {
                     gl_texture.bind()?;
                 }
                 
-                gl::DrawElementsInstanced(
-                    gl::TRIANGLES, 
-                    d.indices_len as i32, 
-                    gl::UNSIGNED_INT, 
-                    std::ptr::null(), 
-                    d.instance_data.0 as i32
-                );
+                {
+                    profile_scope!("DrawElementsInstanced");
+                    gl::DrawElementsInstanced(
+                        gl::TRIANGLES, 
+                        d.indices_len as i32, 
+                        gl::UNSIGNED_INT, 
+                        std::ptr::null(), 
+                        d.instance_data.0 as i32
+                    );
+                }
                 
                 vao.unbind_buffers()?;
                 vao.unbind()?;
@@ -628,13 +653,28 @@ impl RendererCore {
         }
 
         if new_data {
+            profile_scope!("new_data");
             let mut am = self.asset_manager
                 .lock()
                 .unwrap();
 
-            let textures = am
-                .get_material(&dd.material)?
-                .as_ref().unwrap()
+            let material = am.get_material(&dd.material)?
+                .as_ref()
+                .unwrap();
+            
+            // Program
+            am.init_gl_program()?;
+            let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
+            program.use_prog()?;
+
+            let mesh = am.get_mesh(&dd.mesh)?
+                .as_ref()
+                .unwrap();
+
+            // VAO
+            am.init_gl_vao()?;
+
+            let textures = material
                 .texture()
                 .to_vec();
 
@@ -643,23 +683,6 @@ impl RendererCore {
                 dd.instance_data.0,
                 dd.instance_data.1,
             );
-
-            let material = am.get_material(&dd.material)?
-                .as_ref()
-                .unwrap();
-
-            let mesh = am.get_mesh(&dd.mesh)?
-                .as_ref()
-                .unwrap();
-
-            // Program
-            am.init_gl_program()?;
-            let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
-            program.link()?;
-            program.use_prog()?;
-
-            // VAO
-            am.init_gl_vao()?;
 
             let uniforms = self.set_uniforms(&dd.uniforms)?;
 
@@ -675,6 +698,8 @@ impl RendererCore {
             mat_map.insert(dd.mesh, draw_data);
         }
         else {
+            profile_scope!("old_data");
+
             let mat_map = self.draw_data.get_mut(&dd.material).unwrap();
             match mat_map.entry(dd.mesh) {
                 std::collections::hash_map::Entry::Occupied(val) => {
@@ -713,18 +738,17 @@ impl RendererCore {
         let material = am.get_material(&FINAL_PASS_MATERIAL)?
             .as_ref()
             .unwrap();
-        am.init_gl_program()?;
 
+        am.init_gl_program()?;
         let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
-        program.link()?;
         program.use_prog()?;
 
         // VAO
         let mesh = am.get_mesh(&FINAL_PASS_MESH)?
             .as_ref()
             .unwrap();
-        am.init_gl_vao()?;
 
+        am.init_gl_vao()?;
         let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;

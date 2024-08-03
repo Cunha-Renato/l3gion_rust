@@ -1,6 +1,6 @@
 use sllog::warn;
 
-use crate::gl_check;
+use crate::{gl_check, profile_function};
 use super::{gl_buffer::GlBuffer, GlError};
 
 #[derive(Debug, Default)]
@@ -11,6 +11,8 @@ pub struct GlVertexArray {
 }
 impl GlVertexArray {
     pub(crate) fn new() -> Result<Self, GlError> {
+        profile_function!();
+
         let mut id = 0;
         gl_check!(gl::GenVertexArrays(1, &mut id), "Failed to generate vertex array!")?;
         

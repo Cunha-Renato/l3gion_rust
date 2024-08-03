@@ -55,6 +55,7 @@ impl Material {
 
         let mut gl_program = GlProgram::new()?;
         gl_program.set_shaders(gl_shaders)?;
+        gl_program.link()?;
 
         self.gl_program = Some(gl_program);
 

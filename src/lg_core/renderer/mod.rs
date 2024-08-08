@@ -64,6 +64,14 @@ impl Renderer {
             self.last_frame.push(msg);
         }
     }
+
+    pub fn get_prev_frame_color_tex_gl(&self, name: &str) -> Option<gl::types::GLuint> {
+        if let Some(tex) = self.core().render_passes.get(name) {
+            return Some(tex.color_texture);
+        }
+
+        None
+    }
     
     // Will always wait(block)
     pub fn get_pass_color_texture_gl(&mut self, name: String) -> Option<gl::types::GLuint> {

@@ -8,6 +8,7 @@ pub struct LgEntity {
     pub mesh: UUID,
     pub material: UUID,
 
+    name: String,
     uuid: UUID,
     position: glm::Vec3,
     scale: glm::Vec3,
@@ -17,8 +18,9 @@ pub struct LgEntity {
     model_matrix: glm::Mat4,
 }
 impl LgEntity {
-    pub fn new(mesh: UUID, material: UUID, position: glm::Vec3) -> Self {
+    pub fn new(name: &str, mesh: UUID, material: UUID, position: glm::Vec3) -> Self {
         let mut result = Self {
+            name: name.to_string(),
             uuid: UUID::generate(),
             uniforms: Vec::new(),
             mesh,
@@ -32,6 +34,10 @@ impl LgEntity {
         result.set_model();
         
         result
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn set_position(&mut self, new_pos: glm::Vec3) {

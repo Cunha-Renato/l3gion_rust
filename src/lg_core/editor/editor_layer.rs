@@ -13,8 +13,10 @@ pub(crate) struct EditorLayer {
     camera: Camera,
     entities: Vec<LgEntity>,
 
-    // Misc / Testing
+    // Settings
     profile: bool,
+    v_sync: bool,
+
     light_position: glm::Vec3,
     
     render_imgui: bool,
@@ -38,6 +40,7 @@ impl EditorLayer {
             entities: Vec::new(),
 
             profile: false,
+            v_sync: false,
             light_position: glm::vec3(-1.0, 0.0, 3.0),
             
             render_imgui: true,
@@ -102,11 +105,13 @@ impl Layer for EditorLayer {
 
         self.entities = vec![
             LgEntity::new(
+                "blue_ball",
                 UUID::from_string("assets\\objects\\sphere.obj")?,
                 UUID::from_string("assets\\materials\\BP_BRDF.lgmat")?,
                 glm::vec3(0.0, 0.0, 0.0)
             ),
             LgEntity::new(
+                "light",
                 UUID::from_string("assets\\objects\\sphere.obj")?,
                 UUID::from_string("assets\\materials\\BP_BRDF.lgmat")?,
                 glm::vec3(0.0, 0.0, 0.0)
@@ -261,8 +266,10 @@ impl Layer for EditorLayer {
         }
 
         self.imgui_settings_panel(ui);
-        panels::status::imgui_status_panel(ui);
         self.imgui_assets_panel.imgui_assets_panel(ui);
+        panels::scene::imgui_scene_panel(ui, &self.entities);
+        panels::status::imgui_status_panel(ui);
+
         self.imgui_viewport_panel(ui);
 
         // ui.show_demo_window(&mut true);
@@ -298,6 +305,7 @@ impl Layer for EditorLayer {
                     },
                     LgKeyCode::K => for i in 0..2_000u128 {
                         let mut entity = LgEntity::new(
+                            &std::format!("cube_{}", i),
                             UUID::from_string("assets\\objects\\cube.obj").unwrap(),
                             UUID::from_string("assets\\materials\\BP_BRDF.lgmat").unwrap(),
                             glm::vec3((i * 2) as f32, 0.0, 0.0)
@@ -306,11 +314,8 @@ impl Layer for EditorLayer {
                         self.entities.push(entity);
                     },
                     LgKeyCode::V => {
-                        static mut V_SYNC: bool = false;
-                        unsafe { 
-                            V_SYNC = !V_SYNC; 
-                            self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(V_SYNC));
-                        }
+                        self.v_sync = !self.v_sync; 
+                        self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(self.v_sync));
                     },
                     _ => (),
                 };
@@ -326,10 +331,15 @@ impl Layer for EditorLayer {
 
 impl EditorLayer {
     fn imgui_viewport_panel(&mut self, ui: &mut imgui::Ui) {
-        let image = {    
+        /* let image = {    
             let mut renderer = self.core().renderer.borrow_mut();
             renderer.send(SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL("IMGUI_CORRECTION".to_string()));
             renderer.get_pass_color_texture_gl("IMGUI_CORRECTION".to_string()).unwrap()
+        }; */
+        
+        let image = {
+            let renderer = self.core().renderer.borrow_mut();
+            renderer.get_prev_frame_color_tex_gl("IMGUI_CORRECTION")
         };
 
         let _wp = ui.push_style_var(imgui::StyleVar::WindowPadding([0.0, 0.0]));
@@ -344,20 +354,28 @@ impl EditorLayer {
             .build(|| {
                 self.viewport = ui.content_region_avail();
 
-                imgui::Image::new(
-                    imgui::TextureId::new(image as usize),
-                    self.viewport.clone()
-                )
-                .uv0([0.0, 1.0])
-                .uv1([1.0, 0.0])
-                .build(ui)
+                if let Some(image) = image {
+                    imgui::Image::new(
+                        imgui::TextureId::new(image as usize),
+                        self.viewport.clone()
+                    )
+                    .uv0([0.0, 1.0])
+                    .uv1([1.0, 0.0])
+                    .build(ui)
+                }
             });
     }
     
-    fn imgui_settings_panel(&self, ui: &mut imgui::Ui) {
+    fn imgui_settings_panel(&mut self, ui: &mut imgui::Ui) {
         ui.window("Settings")
             .build(|| {
-                ui.text(std::format!("Profiling: {}", self.profile));
+                if ui.checkbox("Profiling", &mut self.profile) {
+                    if self.profile { profiler_end!("profiles/editor_layer"); }
+                    else { profiler_begin!(); }
+                }
+                if ui.checkbox("vsync", &mut self.v_sync) {
+                    self.core().renderer.borrow().send(SendRendererCommand::SET_VSYNC(self.v_sync));
+                }
             });
     }
 }

@@ -1,6 +1,34 @@
 // TODO: Move to it's own project
 
-use crate::{lg_core::{application::ApplicationCore, asset_manager::AssetManager, camera::Camera, editor::{imgui_config::config_imgui, panels::status}, entity::LgEntity, event::{LgEvent, LgKeyCode}, frame_time::FrameTime, glm, layer::Layer, lg_types::units_of_time::{AsLgTime, LgTime}, renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, render_target::{FramebufferFormat, RenderTargetSpecs}, texture::{self, TextureSpecs}, uniform::{LgUniformType, Uniform}}, timer::LgTimer, uuid::UUID, window::LgWindow}, lg_vertex, profile_function, profile_scope, profiler_begin, profiler_end, utils::tools::to_radians, StdError};
+use crate::{
+    lg_core::{
+        application::ApplicationCore,
+        asset_manager::AssetManager,
+        camera::Camera, 
+        editor::{
+            imgui_config::config_imgui, 
+            panels::status
+        }, 
+        entity::LgEntity, 
+        event::{LgEvent, LgKeyCode}, 
+        frame_time::FrameTime, 
+        glm, layer::Layer, 
+        lg_types::units_of_time::{AsLgTime, LgTime}, 
+        renderer::{command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand, TextureOption}, 
+        render_target::{FramebufferFormat, RenderTargetSpecs}, 
+        texture::{self, TextureSpecs}, 
+        uniform::{LgUniformType, Uniform}}, 
+        timer::LgTimer, 
+        uuid::UUID, window::LgWindow
+    },
+    lg_vertex, 
+    profile_function, 
+    profile_scope, 
+    profiler_begin,
+    profiler_end, 
+    utils::tools::to_radians, 
+    StdError
+};
 use crate::lg_core::renderer::vertex::LgVertex;
 
 use super::panels::{self, assets::ImGuiAssetsPanel};

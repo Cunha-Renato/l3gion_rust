@@ -62,7 +62,7 @@ pub(crate) fn imgui_status_panel(ui: &mut imgui::Ui) {
 
 fn imgui_frame_time(ui: &imgui::Ui) {
     let frame_time = FrameTime::value().unwrap();
-    let ft = frame_time.ms().convert();
+    let ft = frame_time.ms().value();
     let a_ft;
     let h_ft;
 

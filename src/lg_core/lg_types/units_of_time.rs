@@ -1,10 +1,10 @@
 use std::{fmt::Debug, ops::{Add, Div, Mul, Sub}};
 
-const HOUR_IN_SECOND:   f64 = MIN_IN_SECOND / 60.0;
-const MIN_IN_SECOND:    f64 = 1.0 / 60.0;
-const MILLIS_IN_SECOND:  f64 = 1_000.0;
-const MICRO_IN_SECOND:  f64 = 1_000_000.0;
-const NANO_IN_SECOND:   f64 = 1_000_000_000.0;
+pub const HOUR_IN_SECOND:   f64 = MIN_IN_SECOND / 60.0;
+pub const MIN_IN_SECOND:    f64 = 1.0 / 60.0;
+pub const MILLIS_IN_SECOND: f64 = 1_000.0;
+pub const MICRO_IN_SECOND:  f64 = 1_000_000.0;
+pub const NANO_IN_SECOND:   f64 = 1_000_000_000.0;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TIME_UNIT {
@@ -24,13 +24,17 @@ pub struct LgTime {
     value: f64,
 }
 impl LgTime {
+    pub fn unit(&self) -> TIME_UNIT {
+        self.unit
+    }
+
     /// Returns the seconds regardles of TIME_UNIT
-    pub fn value(&self) -> f64 {
+    pub fn seconds(&self) -> f64 {
         self.value
     }
 
     /// Converts the value (SEC) into the specified TIME_UNIT
-    pub fn convert(&self) -> f64 {
+    pub fn value(&self) -> f64 {
         match self.unit {
             TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,
             TIME_UNIT::MIN => self.value * MIN_IN_SECOND,
@@ -58,6 +62,30 @@ impl LgTime {
         }
     }
     
+    pub fn as_hour(&mut self) {
+        self.unit = TIME_UNIT::HOUR;
+    }
+
+    pub fn as_minutes(&mut self) {
+        self.unit = TIME_UNIT::MIN;
+    }
+    
+    pub fn as_sec(&mut self) {
+        self.unit = TIME_UNIT::SEC;
+    }
+    
+    pub fn as_milis(&mut self) {
+        self.unit = TIME_UNIT::MILLIS;
+    }
+    
+    pub fn as_micro(&mut self) {
+        self.unit = TIME_UNIT::MICRO;
+    }
+    
+    pub fn as_nano(&mut self) {
+        self.unit = TIME_UNIT::MICRO;
+    }
+
     pub fn h(&self) -> Self {
         Self {
             unit: TIME_UNIT::HOUR,

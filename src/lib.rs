@@ -6,3 +6,8 @@ pub mod lg_core;
 
 pub use optick;
 pub use imgui;
+pub use lg_core::lg_types::{
+    no_check_option::*,
+    reference::*,
+    no_check_option::*
+};

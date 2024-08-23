@@ -28,4 +28,4 @@ imgui-glow-renderer = "0.12.0"
 glow = "0.13.1"
 
 serializer = { path = "serializer" }
-sllog = { path = "../../sllog" }
+sllog = { path = "sllog" }

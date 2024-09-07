@@ -148,15 +148,23 @@ pub struct Application {
 }
 // Public
 impl Application {
-    pub fn push_layer<F>(&mut self, func: F) -> Result<(), StdError> 
-        where F: FnOnce(ApplicationCore) -> Rfc<dyn Layer>
-    {
-        let layer = func(self.core.clone());
+    pub fn core(&self) -> ApplicationCore {
+        self.core.clone()
+    }
+
+    pub fn push_layer(&mut self, layer: Rfc<dyn Layer>) -> Result<(), StdError> {
         layer.borrow_mut().on_attach()?;
 
         self.layers.push(layer);
-
+        
         Ok(())
+    }
+
+    pub fn push_new_layer<F>(&mut self, func: F) -> Result<(), StdError> 
+        where F: FnOnce(ApplicationCore) -> Rfc<dyn Layer>
+    {
+        let layer = func(self.core.clone());
+        self.push_layer(layer)
     }
     
     pub fn pop_layer(&mut self) -> Result<(), StdError> {

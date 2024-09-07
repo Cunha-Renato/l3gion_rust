@@ -10,6 +10,10 @@ macro_rules! profiler_begin {
 macro_rules! profiler_end {
     ($_path:tt) => {
         // #[cfg(debug_assertions)]
+        let __path = std::path::Path::new($_path);
+        if let Some(dir) = __path.parent() {
+            std::fs::create_dir_all(dir);
+        }
         optick::stop_capture($_path);
     };
 }

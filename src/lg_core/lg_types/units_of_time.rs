@@ -24,29 +24,8 @@ pub struct LgTime {
     value: f64,
 }
 impl LgTime {
-    pub fn unit(&self) -> TIME_UNIT {
-        self.unit
-    }
-
-    /// Returns the seconds regardles of TIME_UNIT
-    pub fn seconds(&self) -> f64 {
-        self.value
-    }
-
-    /// Converts the value (SEC) into the specified TIME_UNIT
-    pub fn value(&self) -> f64 {
-        match self.unit {
-            TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,
-            TIME_UNIT::MIN => self.value * MIN_IN_SECOND,
-            TIME_UNIT::SEC => self.value,
-            TIME_UNIT::MILLIS => self.value * MILLIS_IN_SECOND,
-            TIME_UNIT::MICRO => self.value * MICRO_IN_SECOND,
-            TIME_UNIT::NANO => self.value * NANO_IN_SECOND,
-        }
-    }
-
-    /// If the value is too big and the unit is too small, losses may occur
-    pub fn from(unit: TIME_UNIT, value: f64) -> Self {
+    /// If the value is too big and the unit is too small, losses may occur, the oposite is also true.
+    pub fn new(unit: TIME_UNIT, value: f64) -> Self {
         let value = match unit {
             TIME_UNIT::HOUR => value / HOUR_IN_SECOND,
             TIME_UNIT::MIN => value / MIN_IN_SECOND,
@@ -61,31 +40,29 @@ impl LgTime {
             value,
         }
     }
-    
-    pub fn as_hour(&mut self) {
-        self.unit = TIME_UNIT::HOUR;
+
+    pub fn unit(&self) -> TIME_UNIT {
+        self.unit
     }
 
-    pub fn as_minutes(&mut self) {
-        self.unit = TIME_UNIT::MIN;
-    }
-    
-    pub fn as_sec(&mut self) {
-        self.unit = TIME_UNIT::SEC;
-    }
-    
-    pub fn as_milis(&mut self) {
-        self.unit = TIME_UNIT::MILLIS;
-    }
-    
-    pub fn as_micro(&mut self) {
-        self.unit = TIME_UNIT::MICRO;
-    }
-    
-    pub fn as_nano(&mut self) {
-        self.unit = TIME_UNIT::MICRO;
+    /// Returns the seconds regardles of TIME_UNIT. No conversions or overhead.
+    pub fn get_seconds(&self) -> f64 {
+        self.value
     }
 
+    /// Converts the value (SEC) into the specified TIME_UNIT, this function can overflow the f64 type, for example if you are working with a very high number of hours and try to convert to nanos.
+    pub fn get_unit_value(&self) -> f64 {
+        match self.unit {
+            TIME_UNIT::HOUR => self.value * HOUR_IN_SECOND,
+            TIME_UNIT::MIN => self.value * MIN_IN_SECOND,
+            TIME_UNIT::SEC => self.value,
+            TIME_UNIT::MILLIS => self.value * MILLIS_IN_SECOND,
+            TIME_UNIT::MICRO => self.value * MICRO_IN_SECOND,
+            TIME_UNIT::NANO => self.value * NANO_IN_SECOND,
+        }
+    }
+
+    /// Simply returns a new LgTime with the same value but the unit changed to HOUR.
     pub fn h(&self) -> Self {
         Self {
             unit: TIME_UNIT::HOUR,
@@ -93,6 +70,7 @@ impl LgTime {
         }
     }
     
+    /// Simply returns a new LgTime with the same value but the unit changed to MIN.
     pub fn mi(&self) -> Self {
         Self {
             unit: TIME_UNIT::MIN,
@@ -100,31 +78,32 @@ impl LgTime {
         }
     }
    
+    /// Simply returns a new LgTime with the same value but the unit changed to SEC.
     pub fn s(&self) -> Self {
-        Self {
-            unit: TIME_UNIT::SEC,
-            value: self.value,
-        }
+        *self
     }
     
+    /// Simply returns a new LgTime with the same value but the unit changed to MILLIS.
     pub fn ms(&self) -> Self {
         Self {
             unit: TIME_UNIT::MILLIS,
-            value: self.value,
+            value: self.value
         }
     }
     
+    /// Simply returns a new LgTime with the same value but the unit changed to MICRO.
     pub fn us(&self) -> Self {
         Self {
             unit: TIME_UNIT::MICRO,
-            value: self.value,
+            value: self.value
         }
     }
     
+    /// Simply returns a new LgTime with the same value but the unit changed to NANO.
     pub fn ns(&self) -> Self {
         Self {
             unit: TIME_UNIT::NANO,
-            value: self.value,
+            value: self.value
         }
     }
 }
@@ -132,7 +111,8 @@ impl Debug for LgTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LgTime")
             .field("unit", &self.unit)
-            .field("in seconds", &self.value)
+            .field("seconds", &self.value)
+            .field("converted", &self.get_unit_value())
             .finish()
     }
 }
@@ -146,7 +126,12 @@ impl Default for LgTime {
 }
 impl PartialEq for LgTime {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+        (self.value - other.value).abs() < f64::EPSILON
+    }
+}
+impl From<std::time::Duration> for LgTime {
+    fn from(value: std::time::Duration) -> Self {
+        todo!()
     }
 }
 
@@ -174,26 +159,26 @@ impl Sub for LgTime {
         }
     }
 }
-impl Mul for LgTime {
+impl Mul<f64> for LgTime {
     type Output = LgTime;
 
-    fn mul(self, rhs: Self) -> Self::Output {
-        let value = self.value * rhs.value;
+    fn mul(self, rhs: f64) -> Self::Output {
+        let value = self.value * rhs;
         
         Self::Output {
-            unit: TIME_UNIT::SEC,
+            unit: self.unit,
             value,
         }
     }
 }
-impl Div for LgTime {
+impl Div<f64> for LgTime {
     type Output = LgTime;
 
-    fn div(self, rhs: Self) -> Self::Output {
-        let value = self.value / rhs.value;
+    fn div(self, rhs: f64) -> Self::Output {
+        let value = self.value / rhs;
         
         Self::Output {
-            unit: TIME_UNIT::SEC,
+            unit: self.unit,
             value,
         }
     }
@@ -212,22 +197,42 @@ macro_rules! impl_aslgtime {
     ($p_type:tt) => {
         impl AsLgTime for $p_type {
             fn h(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::HOUR, *self as f64)
+                LgTime::new(TIME_UNIT::HOUR, *self as f64)
             }
             fn mi(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::MIN, *self as f64)
+                LgTime::new(TIME_UNIT::MIN, *self as f64)
             }
             fn s(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::SEC, *self as f64)
+                LgTime::new(TIME_UNIT::SEC, *self as f64)
             }
             fn ms(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::MILLIS, *self as f64)
+                LgTime::new(TIME_UNIT::MILLIS, *self as f64)
             }
             fn us(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::MICRO, *self as f64)
+                LgTime::new(TIME_UNIT::MICRO, *self as f64)
             }
             fn ns(&self) -> LgTime {
-                LgTime::from(TIME_UNIT::NANO, *self as f64)
+                LgTime::new(TIME_UNIT::NANO, *self as f64)
+            }
+        }
+    };
+}
+
+macro_rules! impl_mul_div_lgtime{
+    ($p_type:tt) => {
+        impl Mul<LgTime> for $p_type {
+            type Output = $p_type;
+            
+            fn mul(self, rhs: LgTime) -> Self::Output {
+                self * rhs.get_seconds() as $p_type
+            }
+        }
+        
+        impl Div<LgTime> for $p_type {
+            type Output = $p_type;
+            
+            fn div(self, rhs: LgTime) -> Self::Output {
+                self / rhs.get_seconds() as $p_type
             }
         }
     };
@@ -245,3 +250,16 @@ impl_aslgtime!(i16);
 impl_aslgtime!(i32);
 impl_aslgtime!(i64);
 impl_aslgtime!(i128);
+
+impl_mul_div_lgtime!(f32);
+impl_mul_div_lgtime!(f64);
+impl_mul_div_lgtime!(u8);
+impl_mul_div_lgtime!(u16);
+impl_mul_div_lgtime!(u32);
+impl_mul_div_lgtime!(u64);
+impl_mul_div_lgtime!(u128);
+impl_mul_div_lgtime!(i8);
+impl_mul_div_lgtime!(i16);
+impl_mul_div_lgtime!(i32);
+impl_mul_div_lgtime!(i64);
+impl_mul_div_lgtime!(i128);

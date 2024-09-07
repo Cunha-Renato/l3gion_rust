@@ -12,6 +12,3 @@ pub mod scene;
 pub mod frame_time;
 pub mod timer;
 pub mod asset_manager;
-
-pub extern crate nalgebra_glm;
-pub use nalgebra_glm as glm;

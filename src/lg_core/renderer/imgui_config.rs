@@ -75,21 +75,14 @@ impl ImGuiCore {
     pub(super) fn render_imgui(&mut self) {
         let dd = self.imgui_context.render();
 
-        let mut should_render = false;
-        for dl in dd.draw_lists() {
-            if !dl.vtx_buffer().is_empty() {
-                should_render = true;
-            }
-        }
-
-        if should_render {
+        if dd.total_vtx_count > 0 {
             self.imgui_renderer
                 .render(
                     &self._gl_glow_context,
                     &self._imgui_texture_map,
                     dd,
                 )
-                .unwrap();
+                .unwrap(); 
         }
     }
     

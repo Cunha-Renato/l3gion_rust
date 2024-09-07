@@ -1,4 +1,4 @@
-use crate::lg_core::{glm, renderer::texture::{TextureFilter, TextureSpecs}};
+use crate::{glm, lg_core::renderer::texture::{TextureFilter, TextureSpecs}};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct RenderTarget {

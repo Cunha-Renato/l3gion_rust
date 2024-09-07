@@ -1,4 +1,4 @@
-use crate::lg_core::glm;
+use crate::glm;
 
 #[derive(Debug)]
 pub struct LgWindow {

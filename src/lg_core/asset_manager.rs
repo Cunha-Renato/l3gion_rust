@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::{lg_core::glm, profile_function, StdError};
+use crate::{glm, profile_function, StdError};
 use super::{renderer::{material::Material, mesh::Mesh, shader::{Shader, ShaderStage}, texture::{Texture, TextureFilter, TextureFormat, TextureSpecs, TextureType}, vertex::Vertex}, uuid::UUID};
 
 const ASSETS_DIR: &str = "assets";

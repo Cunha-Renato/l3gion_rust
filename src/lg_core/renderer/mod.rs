@@ -2,14 +2,14 @@ use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, A
 use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use imgui_config::{imgui_init, ImGuiCore};
-use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, gl_program::GlProgram, gl_shader::GlShader, gl_texture::GlTexture, gl_vertex_array::GlVertexArray, GlSpecs};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
 use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
-use crate::{lg_core::glm, profile_function, profile_scope, StdError};
+
+use crate::{glm, profile_function, profile_scope, StdError};
 use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
@@ -46,6 +46,7 @@ impl Renderer {
         Arc::clone(&self.asset_manager)
     }
 
+    /// Locks the core mutex
     pub fn core(&self) -> MutexGuard<RendererCore> {
         self.core.lock().unwrap()
     }

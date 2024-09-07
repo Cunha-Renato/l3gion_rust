@@ -3,8 +3,6 @@ pub(crate) mod utils;
 use std::hash::Hash;
 use crate::{lg_core::uuid::UUID, StdError};
 
-use super::opengl::gl_shader::GlShader;
-
 #[derive(Debug, Clone, Copy)]
 pub enum ShaderStage {
     VERTEX,

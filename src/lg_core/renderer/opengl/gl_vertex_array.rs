@@ -1,5 +1,3 @@
-use sllog::warn;
-
 use crate::{gl_check, profile_function};
 use super::{gl_buffer::GlBuffer, GlError};
 

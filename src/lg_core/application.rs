@@ -1,12 +1,7 @@
 use crate::{glm, lg_core::{frame_time::FrameTime, renderer::Renderer}, profile_function, profile_scope, StdError};
 use super::{event::{KeyEvent, LgEvent, MouseButton, MouseButtonEvent, MouseEvent, MouseMoveEvent, MouseScrollEvent}, input::LgInput, layer::Layer, lg_types::reference::Rfc, renderer::CreationWindowInfo,  window::LgWindow};
 
-pub struct PersistentApplicationInfo {
-    pub v_sync: bool,
-}
-
 pub struct ApplicationCreateInfo<'a> {
-    pub persistant_info: PersistentApplicationInfo,
     pub window_info: CreationWindowInfo<'a>,
 }
 
@@ -181,7 +176,7 @@ impl Application {
 impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
-        let (renderer, window) = Renderer::new(&info.window_info)?;
+        let (renderer, window) = Renderer::new(info.window_info)?;
         renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_INIT);
         let renderer = Rfc::new(renderer);
         let window = Rfc::new(window);

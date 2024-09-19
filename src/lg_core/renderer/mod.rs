@@ -32,6 +32,7 @@ pub struct CreationWindowInfo<'a> {
     pub title: String,
     pub width: u32,
     pub height: u32,
+    pub vsync: bool,
 }
 
 pub struct Renderer {
@@ -134,7 +135,7 @@ impl Renderer {
 }
 impl Renderer {
     pub(crate) fn new(
-        window_info: &CreationWindowInfo, 
+        window_info: CreationWindowInfo, 
     ) -> Result<(Self, LgWindow), StdError> 
     {
         profile_function!();
@@ -148,7 +149,7 @@ impl Renderer {
         let (s_sender, s_receiver) = std::sync::mpsc::channel();
         let (r_sender, r_receiver) = std::sync::mpsc::channel();
 
-        let (window, gl_config) = init_window(window_info)?;
+        let (window, gl_config) = init_window(&window_info)?;
         std::thread::spawn(move || {
             optick::register_thread("render_thread");
 
@@ -165,6 +166,11 @@ impl Renderer {
             ).unwrap()));
 
             let r_core = Arc::clone(&renderer_core);
+            if window_info.vsync {
+                r_core.lock().unwrap().set_vsync(true);
+            }
+
+            // Sending outside this thread.
             core_sender.send(renderer_core).unwrap();
             w_sender.send(window).unwrap();
 

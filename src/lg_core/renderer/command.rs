@@ -32,7 +32,7 @@ pub enum SendRendererCommand {
 
     SET_SIZE((u32, u32)),
     
-    SET_FONT(Vec<u8>, f32),
+    SET_FONTS(),
 
     CREATE_NEW_RENDER_PASS(String, RenderTargetSpecs),
     RESIZE_RENDER_PASS(String, (i32, i32)),

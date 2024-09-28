@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use imgui_glow_renderer::TextureMap;
 use sllog::error;
 
@@ -9,11 +11,28 @@ pub struct ImGuiCore {
     imgui_context: imgui::Context,
     imgui_winit: imgui_winit_support::WinitPlatform,
     imgui_renderer: imgui_glow_renderer::Renderer,
+    fonts: HashMap<String, imgui::FontId>,
 }
 // Public
 impl ImGuiCore {
     pub fn context(&mut self) -> &mut imgui::Context {
         &mut self.imgui_context
+    }
+
+    pub fn insert_font_id(&mut self, fonts: Vec<(String, imgui::FontSource)>) {
+        for (font_name, font_source) in fonts {
+            let font_id = self.imgui_context.fonts().add_font(&[font_source]);
+
+            self.fonts.insert(font_name, font_id);
+        }
+    }
+
+    pub fn get_font_id(&self, font_name: &str) -> Option<imgui::FontId> {
+        if let Some(font_id) = self.fonts.get(font_name) {
+            return Some(*font_id);
+        }
+        
+        None
     }
 }
 
@@ -48,6 +67,7 @@ impl ImGuiCore {
             imgui_context,
             imgui_winit,
             imgui_renderer,
+            fonts: HashMap::default(),
         }
     }
 
@@ -86,46 +106,35 @@ impl ImGuiCore {
         }
     }
     
-    pub(super) unsafe fn set_font(&mut self, bytes: &[u8], pixels: f32) -> Result<(), StdError> {
-        self.imgui_context.fonts().clear();
+    pub(super) unsafe fn set_fonts(&mut self) -> Result<(), StdError> {
         let fonts = self.imgui_context.fonts();
-        fonts.add_font(&[imgui::FontSource::TtfData { 
-            data: bytes,
-            size_pixels: pixels, 
-            config: None 
-        }]);
-
         let atlas_texture = fonts.build_rgba32_texture();
-        
+
         let mut gl_texture = 0;
-        gl::GenTextures(1, &mut gl_texture);
-        gl::BindTexture(gl::TEXTURE_2D, gl_texture);
-        gl::TexParameteri(
-            gl::TEXTURE_2D,
-            gl::TEXTURE_MIN_FILTER,
-            gl::LINEAR as _,
-        );
-        gl::TexParameteri(
-            gl::TEXTURE_2D,
-            gl::TEXTURE_MAG_FILTER,
-            gl::LINEAR as _,
-        );
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::SRGB8_ALPHA8 as _,
-            atlas_texture.width as _,
-            atlas_texture.height as _,
-            0,
-            gl::RGBA,
-            gl::UNSIGNED_BYTE,
-            atlas_texture.data.as_ptr() as *const _,
-        );
-        
-        let tex = glow::NativeTexture(std::num::NonZero::new(gl_texture).unwrap());
+        unsafe {
+            gl::GenTextures(1, &mut gl_texture);
+            gl::BindTexture(gl::TEXTURE_2D, gl_texture);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::SRGB8_ALPHA8 as _,
+                atlas_texture.width as _,
+                atlas_texture.height as _,
+                0,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                atlas_texture.data.as_ptr() as *const _,
+            );
+        }
+
+        let tex = glow::NativeTexture(std::num::NonZeroU32::new(gl_texture).unwrap());
+
         fonts.tex_id = self._imgui_texture_map
             .register(tex)
-            .unwrap();
+            .ok_or_else(|| format!("Failed to register texture"))?;
 
         Ok(())
     }

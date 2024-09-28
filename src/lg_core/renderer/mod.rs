@@ -40,7 +40,6 @@ pub struct Renderer {
     core: Arc<Mutex<RendererCore>>,
     sender: Sender<SendRendererCommand>,
     receiver: Receiver<ReceiveRendererCommand>,
-    last_frame: Vec<ReceiveRendererCommand>,
 }
 impl Renderer {
     pub fn asset_manager(&self) -> Arc<Mutex<AssetManager>> {
@@ -57,13 +56,13 @@ impl Renderer {
         self.sender.send(msg).unwrap();
     }
     
-    /// Will block until the receiver is empty.
-    pub fn send_and_wait(&mut self, msg: SendRendererCommand) {
+    /// Will block until the time specified.
+    pub fn send_and_wait(&self, msg: SendRendererCommand, duration: std::time::Duration) {
         profile_function!();
         self.send(msg);
         
-        while let Ok(msg) = self.receiver.try_recv() {
-            self.last_frame.push(msg);
+        if let Err(e) = self.receiver.recv_timeout(duration) {
+            error!("In Renderer::send_and_wait: {e}");
         }
     }
 
@@ -84,10 +83,8 @@ impl Renderer {
                     if name == *tex_name {
                         return Some(*tex);
                     }
-                    
-                    self.last_frame.push(msg);
                 }
-                _ => self.last_frame.push(msg),
+                _ => (),
             }
         }
         
@@ -102,7 +99,7 @@ impl Renderer {
         while let Ok(msg) = self.receiver.recv() {
             match msg {
                 ReceiveRendererCommand::_RESIZE_DONE => break,
-                _ => self.last_frame.push(msg),
+                _ => (),
             }
         }
     }
@@ -111,12 +108,11 @@ impl Renderer {
     pub fn end(&mut self) {
         profile_function!();
         self.send(SendRendererCommand::_END);
-        self.last_frame.clear();
 
         while let Ok(msg) = self.receiver.recv() {
             match msg {
                 ReceiveRendererCommand::_END_DONE => break,
-                _ => self.last_frame.push(msg),
+                _ => ()
             }
         }
     }
@@ -282,8 +278,9 @@ impl Renderer {
                             r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
                         },
                         SendRendererCommand::_DRAW_BACKBUFFER => r_core.lock().unwrap().draw_backbuffer().unwrap(),
-                        SendRendererCommand::SET_FONT(bytes, size) => {
-                            r_core.lock().unwrap().imgui_core.set_font(&bytes, size).unwrap();
+                        SendRendererCommand::SET_FONTS() => {
+                            r_core.lock().unwrap().imgui_core.set_fonts().unwrap();
+
                             asset_manager
                                 .lock()
                                 .unwrap()
@@ -303,7 +300,6 @@ impl Renderer {
                 core,
                 sender: s_sender,
                 receiver: r_receiver,
-                last_frame: Vec::new(),
             },
             window,
         ))

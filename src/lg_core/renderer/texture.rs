@@ -68,6 +68,7 @@ impl TextureFormat {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TextureFilter {
     LINEAR,
+    NEAREST,
 }
 impl Default for TextureFilter {
     fn default() -> Self {
@@ -78,6 +79,7 @@ impl TextureFilter {
     pub fn to_opengl(&self) -> gl::types::GLenum{
         match &self {
             TextureFilter::LINEAR => gl::LINEAR,
+            TextureFilter::NEAREST => gl::NEAREST,
         }
     }
 }

@@ -269,6 +269,15 @@ impl Renderer {
                         SendRendererCommand::_BEGIN => todo!(),
                         SendRendererCommand::_END => {
                             let mut r_core = r_core.lock().unwrap();
+
+                            {
+                                //TODO: This could be dangerous.
+                                let mut am = r_core.asset_manager.lock().unwrap();
+                                am.init_gl_program().unwrap();
+                                am.init_gl_vao().unwrap();                                
+                                am.init_gl_texture().unwrap();                                
+                            }
+
                             r_core.render_pipeline.clear();
                             r_core.swap_buffers().unwrap();
                             r_sender.send(ReceiveRendererCommand::_END_DONE).unwrap();
@@ -278,7 +287,7 @@ impl Renderer {
                             r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
                         },
                         SendRendererCommand::_DRAW_BACKBUFFER => r_core.lock().unwrap().draw_backbuffer().unwrap(),
-                        SendRendererCommand::SET_FONTS() => {
+                        SendRendererCommand::SET_FONTS => {
                             r_core.lock().unwrap().imgui_core.set_fonts().unwrap();
 
                             asset_manager
@@ -286,6 +295,7 @@ impl Renderer {
                                 .unwrap()
                                 .to_destroy();
                         },
+                        SendRendererCommand::CLEAR_FONTS => r_core.lock().unwrap().imgui_core.clear_fonts(),
                     }
                 }}
             }

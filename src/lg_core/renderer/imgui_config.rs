@@ -138,6 +138,11 @@ impl ImGuiCore {
 
         Ok(())
     }
+    
+    pub(super) fn clear_fonts(&mut self) {
+        self.imgui_context.fonts().clear();
+        self.fonts.clear();
+    }
 }
 
 pub(super) fn imgui_init(window: &winit::window::Window) -> (imgui::Context, imgui_winit_support::WinitPlatform) {

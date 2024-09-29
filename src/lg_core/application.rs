@@ -177,8 +177,6 @@ impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let (renderer, window) = Renderer::new(info.window_info)?;
-        // TODO: Move the renderer.init() to self.init()
-        renderer.init();
         let renderer = Rfc::new(renderer);
         let window = Rfc::new(window);
 
@@ -200,6 +198,8 @@ impl Application {
         LgInput::init();
         FrameTime::init()?;
         
+        self.core.renderer.borrow().init();
+
         Ok(())
     }
 

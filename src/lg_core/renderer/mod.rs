@@ -1,11 +1,10 @@
 use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
-use command::{ReceiveRendererCommand, SendDrawData, SendInstanceDrawData, SendRendererCommand};
+use command::{RendererCommand, SendDrawData, SendInstanceDrawData};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use imgui_config::{imgui_init, ImGuiCore};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use sllog::error;
-use texture::Texture;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 
@@ -24,6 +23,8 @@ pub mod command;
 mod imgui_config;
 mod opengl;
 
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
 const FINAL_PASS_MESH: UUID = UUID::from_u128(252411435688744967694609164507863584779);
 const FINAL_PASS_MATERIAL: UUID = UUID::from_u128(315299335240398778209169027697428014904);
 
@@ -38,9 +39,11 @@ pub struct CreationWindowInfo<'a> {
 pub struct Renderer {
     asset_manager: Arc<Mutex<AssetManager>>,
     core: Arc<Mutex<RendererCore>>,
-    sender: Sender<SendRendererCommand>,
-    receiver: Receiver<ReceiveRendererCommand>,
+    job_sender: Sender<Job>,
+    message_sender: Sender<RendererCommand>,
+    receiver: Receiver<RendererCommand>,
 }
+// Public
 impl Renderer {
     pub fn asset_manager(&self) -> Arc<Mutex<AssetManager>> {
         Arc::clone(&self.asset_manager)
@@ -51,21 +54,6 @@ impl Renderer {
         self.core.lock().unwrap()
     }
 
-    pub fn send(&self, msg: SendRendererCommand) {
-        profile_function!();
-        self.sender.send(msg).unwrap();
-    }
-    
-    /// Will block until the time specified.
-    pub fn send_and_wait(&self, msg: SendRendererCommand, duration: std::time::Duration) {
-        profile_function!();
-        self.send(msg);
-        
-        if let Err(e) = self.receiver.recv_timeout(duration) {
-            error!("In Renderer::send_and_wait: {e}");
-        }
-    }
-
     pub fn get_prev_frame_color_tex_gl(&self, name: &str) -> Option<gl::types::GLuint> {
         if let Some(tex) = self.core().render_passes.get(name) {
             return Some(tex.color_texture);
@@ -74,61 +62,122 @@ impl Renderer {
         None
     }
     
-    // Will always wait(block)
-    pub fn get_pass_color_texture_gl(&mut self, name: String) -> Option<gl::types::GLuint> {
-        profile_function!();
-        while let Ok(msg) = self.receiver.recv() {
-            match &msg {
-                ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_GL(tex, tex_name) => {
-                    if name == *tex_name {
-                        return Some(*tex);
-                    }
-                }
-                _ => (),
-            }
-        }
-        
-        None
-    }    
+    pub fn set_vsync(&self, val: bool) {
+        let (r_core, _) = self.get_coms_data();
 
-    /// Will always wait(block).
-    pub fn resize(&mut self, new_size: (u32, u32)) {
-        profile_function!();
-        self.send(SendRendererCommand::SET_SIZE(new_size));
-
-        while let Ok(msg) = self.receiver.recv() {
-            match msg {
-                ReceiveRendererCommand::_RESIZE_DONE => break,
-                _ => (),
-            }
-        }
+        self.job_sender.send(Box::new(move || r_core.lock().unwrap().set_vsync(val))).unwrap();
     }
 
-    /// Will always wait(block).
-    pub fn end(&mut self) {
-        profile_function!();
-        self.send(SendRendererCommand::_END);
-
-        while let Ok(msg) = self.receiver.recv() {
-            match msg {
-                ReceiveRendererCommand::_END_DONE => break,
-                _ => ()
-            }
-        }
+    /// Can block.
+    pub fn get_vsync(&self) -> bool {
+        self.core.lock().unwrap().vsync
     }
-    
-    /// Will always wait(block).
-    pub fn shutdown(&mut self) {
-        self.send(SendRendererCommand::_SHUTDOWN);
+
+    pub fn set_size(&self, new_size: (u32, u32)) {
+        profile_function!();
+        let (r_core, _) = self.get_coms_data();
+
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().resize(new_size);
+        }))
+        .unwrap();
+    }
+
+    pub fn create_render_pass(&self, name: String, specs: RenderTargetSpecs) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            r_core.lock().unwrap().render_passes.insert(name, RenderTarget::new(specs));
+        })).unwrap();
+    }
+
+    pub fn set_render_pass_size(&self, name: String, new_size: (i32, i32)) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            let mut r_core = r_core.lock().unwrap();
+
+            let mut specs = r_core.render_passes.get_mut(&name).unwrap().specs.clone();
+            specs.viewport = (0, 0, new_size.0, new_size.1);
+            r_core.render_passes.insert(name, RenderTarget::new(specs));
+        }))
+        .unwrap();
+    }
+
+    pub fn begin_render_pass(&self, name: String) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            let mut r_core = r_core.lock().unwrap();
+            let target = r_core.render_passes.get(&name).unwrap();
+            
+            r_core.set_render_target(target.framebuffer, &target.specs);
+
+            if !r_core.active_pass.is_empty() {
+                let active_pass = std::mem::take(&mut r_core.active_pass);
+                r_core.render_pipeline.push(active_pass);
+            }
+            
+            r_core.active_pass = name;
+        }))
+        .unwrap();
+    }
+
+    pub fn send_instance_data(&self, instance_data: SendInstanceDrawData) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().send_data(instance_data).unwrap()
+        }))
+        .unwrap()
+    }
+
+    pub fn draw_instanced(&self) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().draw_instanced().unwrap(); 
+        }))
+        .unwrap();
+    }
+
+    pub fn draw(&self, draw_data: SendDrawData) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().draw(draw_data).unwrap();
+        }))
+        .unwrap();
+    }
+
+    pub fn set_fonts(&self) {
+        let (r_core, _) = self.get_coms_data();
+
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().imgui_core.set_fonts().unwrap();
+        }))
+        .unwrap();
+    }
+
+    /// Will always block.
+    pub fn shutdown(&self) {
+        let (r_core, message_sender) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            r_core.lock().unwrap().imgui_core.shutdown();
+            
+            message_sender.send(RendererCommand::_SHUTDOWN_DONE).unwrap();
+        })).unwrap();
         
         while let Ok(msg) = self.receiver.recv() {
             match msg {
-                ReceiveRendererCommand::_SHUTDOWN_DONE => break,
+                RendererCommand::_SHUTDOWN_DONE => break,
                 _ => (),
             }
         }
     }
 }
+// Public(crate)
 impl Renderer {
     pub(crate) fn new(
         window_info: CreationWindowInfo, 
@@ -142,11 +191,11 @@ impl Renderer {
         let (w_sender, w_receiver) = std::sync::mpsc::channel();
         let (core_sender, core_receiver) = std::sync::mpsc::channel();
 
-        let (s_sender, s_receiver) = std::sync::mpsc::channel();
+        let (s_sender, s_receiver) = std::sync::mpsc::channel::<Job>();
         let (r_sender, r_receiver) = std::sync::mpsc::channel();
 
         let (window, gl_config) = init_window(&window_info)?;
-        std::thread::spawn(move || {
+        let _ = std::thread::spawn(move || {
             optick::register_thread("render_thread");
 
             asset_manager.lock().unwrap().init().unwrap();
@@ -161,143 +210,12 @@ impl Renderer {
                 imgui_winit,
             ).unwrap()));
 
-            let r_core = Arc::clone(&renderer_core);
-            if window_info.vsync {
-                r_core.lock().unwrap().set_vsync(true);
-            }
-
             // Sending outside this thread.
             core_sender.send(renderer_core).unwrap();
             w_sender.send(window).unwrap();
 
-            loop {
-                while let Ok(msg) = s_receiver.recv() {
-                    unsafe { match msg {
-                        SendRendererCommand::SET_VSYNC(val) => r_core.lock().unwrap().set_vsync(val),
-                        SendRendererCommand::GET_VSYNC => r_sender.send(ReceiveRendererCommand::VSYNC(r_core.lock().unwrap().vsync)).unwrap(),
-                        SendRendererCommand::SET_SIZE(new_size) => {
-                            r_core.lock().unwrap().resize(new_size);
-                            r_sender.send(ReceiveRendererCommand::_RESIZE_DONE).unwrap();
-                        },
-
-                        SendRendererCommand::CREATE_NEW_RENDER_PASS(name, specs) => {
-                            let target = RenderTarget::new(specs);
-                            r_core.lock().unwrap().render_passes.insert(name, target);
-                        },
-                        SendRendererCommand::RESIZE_RENDER_PASS(name, new_size) => {
-                            let mut specs = r_core.lock().unwrap().render_passes.get_mut(&name).unwrap().specs.clone();
-                            specs.viewport = (0, 0, new_size.0, new_size.1);
-                            r_core.lock().unwrap().render_passes.insert(name.clone(), RenderTarget::new(specs));
-                        },
-                        SendRendererCommand::GET_PASS_COLOR_TEXTURE_GL(name) => {
-                            profile_scope!("GET_PASS_COLOR_GL");
-
-                            let r_core = r_core.lock().unwrap();
-                            let target = r_core.render_passes.get(&name).unwrap();
-                            r_sender.send(ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_GL(target.color_texture, name)).unwrap();
-                        },
-                        SendRendererCommand::GET_PASS_DEPTH_TEXTURE_GL(name) => {
-                            profile_scope!("GET_PASS_DEPTH_GL");
-                            let r_core = r_core.lock().unwrap();
-                            let target = r_core.render_passes.get(&name).unwrap();
-                            r_sender.send(ReceiveRendererCommand::RENDER_TARGET_DEPTH_TEXTURE_GL(target.depth_texture.unwrap(), name)).unwrap();
-                        },
-                        SendRendererCommand::GET_PASS_COLOR_TEXTURE_LG(name) => {
-                            profile_scope!("GET_PASS_COLOR_LG");
-                            let r_core = r_core.lock().unwrap();
-                            let target = r_core.render_passes.get(&name).unwrap();
-                            let specs = &target.specs.color_texture_specs;
-                            gl::BindTexture(gl::TEXTURE_2D, target.color_texture);
-                            
-                            let (mut width, mut height) = (0, 0);
-                            gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_WIDTH, &mut width);
-                            gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_WIDTH, &mut height);
-
-                            let mut pixels = vec![0u8; (width * height) as usize];
-                            gl::GetTexImage(
-                                gl::TEXTURE_2D, 
-                                0, 
-                                specs.tex_format.to_opengl(),
-                                specs.tex_type.to_opengl(),
-                                pixels.as_mut_ptr() as *mut gl::types::GLvoid
-                            );
-                            let size = (pixels.len() * std::mem::size_of::<u8>()) as u64;
-
-                            let texture = Texture::construct(
-                                UUID::generate(), 
-                                &std::format!("{}_color_texture", name), 
-                                width as u32, 
-                                height as u32, 
-                                pixels, 
-                                size, 
-                                0, 
-                                specs.clone()
-                            );
-                            
-                            r_sender.send(ReceiveRendererCommand::RENDER_TARGET_COLOR_TEXTURE_LG(texture, name)).unwrap();
-                        },
-                        SendRendererCommand::GET_PASS_DEPTH_TEXTURE_LG(_name) => todo!(),
-                        SendRendererCommand::BEGIN_RENDER_PASS(name) => {
-                            profile_scope!("BEGIN_RENDER_PASS");
-
-                            let mut r_core = r_core.lock().unwrap();
-                            let target = r_core.render_passes.get(&name).unwrap();
-                            r_core.set_render_target(target.framebuffer, &target.specs);
-
-                            if !r_core.active_pass.is_empty() {
-                                let active_pass = std::mem::take(&mut r_core.active_pass);
-                                r_core.render_pipeline.push(active_pass);
-                            }
-                            r_core.active_pass = name;
-                        },
-
-                        SendRendererCommand::SEND_INSTANCE_DATA(dd) => r_core.lock().unwrap().send_data(dd).unwrap(),
-                        SendRendererCommand::DRAW_INSTANCED => r_core.lock().unwrap().draw_instanced().unwrap(),
-                        SendRendererCommand::SEND_DRAW_DATA(dd) => r_core.lock().unwrap().draw(dd).unwrap(),
-                        SendRendererCommand::_INIT => {
-                            asset_manager.lock()
-                                .unwrap()
-                                .init()
-                                .unwrap();
-                        },
-                        SendRendererCommand::_SHUTDOWN => {
-                            // ImGui .ini file writing.
-                            r_core.lock().unwrap().imgui_core.shutdown();
-
-                            r_sender.send(ReceiveRendererCommand::_SHUTDOWN_DONE).unwrap();
-                        },
-                        SendRendererCommand::_BEGIN => todo!(),
-                        SendRendererCommand::_END => {
-                            let mut r_core = r_core.lock().unwrap();
-
-                            {
-                                //TODO: This could be dangerous.
-                                let mut am = r_core.asset_manager.lock().unwrap();
-                                am.init_gl_program().unwrap();
-                                am.init_gl_vao().unwrap();                                
-                                am.init_gl_texture().unwrap();                                
-                            }
-
-                            r_core.render_pipeline.clear();
-                            r_core.swap_buffers().unwrap();
-                            r_sender.send(ReceiveRendererCommand::_END_DONE).unwrap();
-                        },
-                        SendRendererCommand::_DRAW_IMGUI => {
-                            r_core.lock().unwrap().render_imgui();
-                            r_sender.send(ReceiveRendererCommand::_IMGUI_DONE).unwrap();
-                        },
-                        SendRendererCommand::_DRAW_BACKBUFFER => r_core.lock().unwrap().draw_backbuffer().unwrap(),
-                        SendRendererCommand::SET_FONTS => {
-                            r_core.lock().unwrap().imgui_core.set_fonts().unwrap();
-
-                            asset_manager
-                                .lock()
-                                .unwrap()
-                                .to_destroy();
-                        },
-                        SendRendererCommand::CLEAR_FONTS => r_core.lock().unwrap().imgui_core.clear_fonts(),
-                    }
-                }}
+            while let Ok(job) = s_receiver.recv() {
+                job();
             }
         });
         
@@ -308,13 +226,78 @@ impl Renderer {
             Self {
                 asset_manager: am,
                 core,
-                sender: s_sender,
+                job_sender: s_sender,
+                message_sender: r_sender,
                 receiver: r_receiver,
             },
             window,
         ))
     }
     
+    pub(crate) fn init(&self) {
+        let am = Arc::clone(&self.asset_manager);
+        
+        self.job_sender.send(Box::new(move || am.lock().unwrap().init().unwrap())).unwrap();
+    }
+
+    pub(crate) fn begin(&self) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            let r_core = r_core.lock().unwrap();
+
+            // TODO: Maybe don't do this
+            let mut am = r_core.asset_manager.lock().unwrap();
+            am.init_gl_program().unwrap();
+            am.init_gl_vao().unwrap();                                
+            am.init_gl_texture().unwrap();                                
+        }))
+        .unwrap();
+    }
+
+    /// Will always wait(block).
+    pub(crate) fn end(&self) {
+        profile_function!();
+        let (r_core, message_sender) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            let mut r_core = r_core.lock().unwrap();
+
+            r_core.render_pipeline.clear();
+            r_core.swap_buffers().unwrap();
+
+            r_core.asset_manager.lock().unwrap().to_destroy();
+
+            message_sender.send(RendererCommand::_END_DONE).unwrap();
+        }))
+        .unwrap();
+
+        while let Ok(msg) = self.receiver.recv() {
+            match msg {
+                RendererCommand::_END_DONE => break,
+                _ => ()
+            }
+        }
+    }
+
+    pub(crate) fn draw_imgui(&self) {
+        let (r_core, message_sender) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            r_core.lock().unwrap().render_imgui();
+            message_sender.send(RendererCommand::_IMGUI_DONE).unwrap();
+        }))
+        .unwrap();
+    }
+
+    pub(crate) fn draw_backbuffer(&self) {
+        let (r_core, _) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || unsafe {
+            r_core.lock().unwrap().draw_backbuffer().unwrap();
+        })).unwrap();
+    }
+
     pub(crate) fn update_imgui_delta_time(&self, delta: std::time::Duration) {
         profile_function!();
         let mut core = self.core.lock().unwrap();        
@@ -336,6 +319,12 @@ impl Renderer {
         core.imgui_core.handle_event(window, event);
     }
 }
+// Private
+impl Renderer {
+    fn get_coms_data(&self) -> (Arc<Mutex<RendererCore>>, Sender<RendererCommand>) {
+        (Arc::clone(&self.core), self.message_sender.clone())
+    }
+}
 
 #[derive(Debug)]
 struct DrawData {
@@ -346,7 +335,6 @@ struct DrawData {
     indices_len: usize,
     first_location: u32,
 }
-
 pub struct RendererCore {
     imgui_core: ImGuiCore,
 

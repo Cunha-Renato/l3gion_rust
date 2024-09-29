@@ -12,7 +12,7 @@ macro_rules! profiler_end {
         // #[cfg(debug_assertions)]
         let __path = std::path::Path::new($_path);
         if let Some(dir) = __path.parent() {
-            std::fs::create_dir_all(dir);
+            std::fs::create_dir_all(dir).unwrap();
         }
         optick::stop_capture($_path);
     };

@@ -1,5 +1,5 @@
 use crate::lg_core::uuid::UUID;
-use super::{render_target::RenderTargetSpecs, texture::Texture, uniform::Uniform, vertex::VertexInfo};
+use super::{texture::Texture, uniform::Uniform, vertex::VertexInfo};
 
 #[derive(Debug, Clone)]
 pub struct SendInstanceDrawData {
@@ -25,47 +25,8 @@ pub enum TextureOption {
     PREVIOUS_PASS,
 }
 
-#[derive(Debug)]
-pub enum SendRendererCommand {
-    SET_VSYNC(bool),
-    GET_VSYNC,
-
-    SET_SIZE((u32, u32)),
-    
-    SET_FONTS,
-    CLEAR_FONTS,
-
-    CREATE_NEW_RENDER_PASS(String, RenderTargetSpecs),
-    RESIZE_RENDER_PASS(String, (i32, i32)),
-    GET_PASS_COLOR_TEXTURE_GL(String),
-    GET_PASS_DEPTH_TEXTURE_GL(String),
-    GET_PASS_COLOR_TEXTURE_LG(String),
-    GET_PASS_DEPTH_TEXTURE_LG(String),
-    BEGIN_RENDER_PASS(String),
-
-    SEND_INSTANCE_DATA(SendInstanceDrawData),
-    DRAW_INSTANCED,
-    SEND_DRAW_DATA(SendDrawData),
-    
-//========================== INTERNAL ====================================== 
-    _DRAW_IMGUI,
-    _DRAW_BACKBUFFER,
-
-    _INIT,
-    _BEGIN,
-    _END,
-    _SHUTDOWN,
-}
-
 #[derive(Debug, PartialEq)]
-pub enum ReceiveRendererCommand {
-    VSYNC(bool),
-    RENDER_TARGET_COLOR_TEXTURE_LG(Texture, String),
-    RENDER_TARGET_DEPTH_TEXTURE_LG(Texture, String),
-    RENDER_TARGET_COLOR_TEXTURE_GL(gl::types::GLuint, String),
-    RENDER_TARGET_DEPTH_TEXTURE_GL(gl::types::GLuint, String),
-
-//========================== INTERNAL ====================================== 
+pub(super) enum RendererCommand {
     _IMGUI_DONE,
     _RESIZE_DONE,
     _SHUTDOWN_DONE,

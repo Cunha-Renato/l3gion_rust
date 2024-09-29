@@ -177,7 +177,8 @@ impl Application {
     fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let (renderer, window) = Renderer::new(info.window_info)?;
-        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_INIT);
+        // TODO: Move the renderer.init() to self.init()
+        renderer.init();
         let renderer = Rfc::new(renderer);
         let window = Rfc::new(window);
 
@@ -209,7 +210,7 @@ impl Application {
             layer.borrow_mut().on_detach()?;
         }
 
-        self.core.renderer.borrow_mut().shutdown();
+        self.core.renderer.borrow().shutdown();
         
         Ok(())
     }
@@ -229,6 +230,8 @@ impl Application {
         profile_function!();
         FrameTime::end()?;
         FrameTime::start()?;
+
+        self.core.renderer.borrow().begin();
         
         for layer in &self.layers {
             layer.borrow_mut().on_update()?;
@@ -239,7 +242,7 @@ impl Application {
             let ui = unsafe { 
                 self.core
                     .renderer
-                    .borrow_mut()
+                    .borrow()
                     .core()
                     .imgui()
                     .new_frame()
@@ -253,16 +256,16 @@ impl Application {
             
             self.core
                 .renderer
-                .borrow_mut()
+                .borrow()
                 .core()
                 .imgui()
                 .prepare_to_render(ui, &self.core.window.borrow().window);
         }
 
-        let mut renderer = self.core.renderer.borrow_mut();
+        let renderer = self.core.renderer.borrow_mut();
         // TODO: Deal with editor / runtime builds
         // renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_BACKBUFFER);
-        renderer.send(crate::lg_core::renderer::command::SendRendererCommand::_DRAW_IMGUI);
+        renderer.draw_imgui();
         renderer.end();
 
         Ok(())
@@ -270,7 +273,7 @@ impl Application {
 
     fn resize(&self, new_size: (u32, u32)) -> Result<(), StdError> {
         profile_function!();
-        self.core.renderer.borrow_mut().resize(new_size);
+        self.core.renderer.borrow().set_size(new_size);
         
         Ok(())
     }

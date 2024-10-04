@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 /// 
 /// This type was created because I don't like calling .as_ref().unwrap() or as_mut().unwrap() on an Option.
 /// I know it goes against the Rust mindset, but honestly I will leave it here.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum NCOption<T> {
     Some(T),
     #[default]

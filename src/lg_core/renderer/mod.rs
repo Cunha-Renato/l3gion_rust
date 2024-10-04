@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
+use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}, thread::JoinHandle};
 use command::{RendererCommand, SendDrawData, SendInstanceDrawData};
 use glutin::{display::GlDisplay, surface::GlSurface};
 use imgui_config::{imgui_init, ImGuiCore};
@@ -12,7 +12,7 @@ use texture::{Texture, TextureSpecs};
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 
-use crate::{gl_check, gl_check_and_print, glm, profile_function, profile_scope, StdError};
+use crate::{gl_check, gl_check_and_print, glm, lg_types::no_check_option::NCOption, profile_function, profile_scope, StdError};
 use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
@@ -27,7 +27,7 @@ pub mod command;
 mod imgui_config;
 mod opengl;
 
-type Job = Box<dyn FnOnce() + Send + 'static>;
+type Job = Box<dyn FnOnce() -> bool + Send + 'static>;
 
 const FINAL_PASS_MESH: UUID = UUID::from_u128(252411435688744967694609164507863584779);
 const FINAL_PASS_MATERIAL: UUID = UUID::from_u128(315299335240398778209169027697428014904);
@@ -41,10 +41,11 @@ pub struct CreationWindowInfo<'a> {
 }
 
 pub struct Renderer {
-    core: Arc<Mutex<RendererCore>>,
+    core: NCOption<Arc<Mutex<RendererCore>>>,
     job_sender: Sender<Job>,
     message_sender: Sender<RendererCommand>,
     receiver: Receiver<RendererCommand>,
+    thread: JoinHandle<()>,
 }
 // Public
 impl Renderer {
@@ -118,7 +119,11 @@ impl Renderer {
     pub fn set_vsync(&self, val: bool) {
         let (r_core, _) = self.get_coms_data();
 
-        self.job_sender.send(Box::new(move || r_core.lock().unwrap().set_vsync(val))).unwrap();
+        self.job_sender.send(Box::new(move || {
+            r_core.lock().unwrap().set_vsync(val);
+
+            false
+        })).unwrap();
     }
 
     /// Can block.
@@ -132,6 +137,8 @@ impl Renderer {
 
         self.job_sender.send(Box::new(move || unsafe {
             r_core.lock().unwrap().resize(new_size);
+            
+            false
         }))
         .unwrap();
     }
@@ -141,6 +148,8 @@ impl Renderer {
         
         self.job_sender.send(Box::new(move || {
             r_core.lock().unwrap().render_passes.insert(name, RenderTarget::new(specs));
+            
+            false
         })).unwrap();
     }
 
@@ -153,6 +162,8 @@ impl Renderer {
             let mut specs = r_core.render_passes.get_mut(&name).unwrap().specs.clone();
             specs.viewport = (0, 0, new_size.0, new_size.1);
             r_core.render_passes.insert(name, RenderTarget::new(specs));
+            
+            false
         }))
         .unwrap();
     }
@@ -172,6 +183,8 @@ impl Renderer {
             }
             
             r_core.active_pass = name;
+            
+            false
         }))
         .unwrap();
     }
@@ -180,7 +193,9 @@ impl Renderer {
         let (r_core, _) = self.get_coms_data();
         
         self.job_sender.send(Box::new(move || unsafe {
-            r_core.lock().unwrap().send_data(instance_data).unwrap()
+            r_core.lock().unwrap().send_data(instance_data).unwrap();
+                
+            false
         }))
         .unwrap()
     }
@@ -190,6 +205,8 @@ impl Renderer {
         
         self.job_sender.send(Box::new(move || unsafe {
             r_core.lock().unwrap().draw_instanced().unwrap(); 
+            
+            false
         }))
         .unwrap();
     }
@@ -199,6 +216,8 @@ impl Renderer {
         
         self.job_sender.send(Box::new(move || unsafe {
             r_core.lock().unwrap().draw(draw_data).unwrap();
+            
+            false
         }))
         .unwrap();
     }
@@ -208,6 +227,8 @@ impl Renderer {
 
         self.job_sender.send(Box::new(move || unsafe {
             r_core.lock().unwrap().imgui_core.set_fonts().unwrap();
+            
+            false
         }))
         .unwrap();
     }
@@ -227,7 +248,7 @@ impl Renderer {
         let (r_sender, r_receiver) = std::sync::mpsc::channel();
 
         let (window, gl_config) = init_window(&window_info)?;
-        let _ = std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             optick::register_thread("render_thread");
 
             let (window, specs) = init_opengl(window, gl_config).unwrap();
@@ -245,12 +266,14 @@ impl Renderer {
             w_sender.send(window).unwrap();
 
             while let Ok(job) = s_receiver.recv() {
-                job();
+                if job() {
+                    break; 
+                }
             }
         });
         
         let window = LgWindow::new(w_receiver.recv()?);
-        let core = core_receiver.recv()?;
+        let core = NCOption::Some(core_receiver.recv()?);
 
         Ok((
             Self {
@@ -258,6 +281,7 @@ impl Renderer {
                 job_sender: s_sender,
                 message_sender: r_sender,
                 receiver: r_receiver,
+                thread,
             },
             window,
         ))
@@ -273,6 +297,8 @@ impl Renderer {
             r_core.asset_manager.init_gl_program().unwrap();
             r_core.asset_manager.init_gl_vao().unwrap();                                
             r_core.asset_manager.init_gl_texture().unwrap();                                
+            
+            false
         }))
         .unwrap();
     }
@@ -291,6 +317,8 @@ impl Renderer {
             r_core.asset_manager.to_destroy();
 
             message_sender.send(RendererCommand::_END_DONE).unwrap();
+            
+            false
         }))
         .unwrap();
 
@@ -308,6 +336,8 @@ impl Renderer {
         self.job_sender.send(Box::new(move || {
             r_core.lock().unwrap().render_imgui();
             message_sender.send(RendererCommand::_IMGUI_DONE).unwrap();
+            
+            false
         }))
         .unwrap();
     }
@@ -317,6 +347,8 @@ impl Renderer {
         
         self.job_sender.send(Box::new(move || unsafe {
             r_core.lock().unwrap().draw_backbuffer().unwrap();
+            
+            false
         })).unwrap();
     }
 
@@ -340,15 +372,24 @@ impl Renderer {
         
         core.imgui_core.handle_event(window, event);
     }
-
+}
+// Private
+impl Renderer {
+    fn get_coms_data(&self) -> (Arc<Mutex<RendererCore>>, Sender<RendererCommand>) {
+        (Arc::clone(&self.core), self.message_sender.clone())
+    }
+    
     /// Will always block.
-    pub(crate) fn shutdown(&self) {
-        let (r_core, message_sender) = self.get_coms_data();
+    fn shutdown(&mut self) {
+        let (_, message_sender) = self.get_coms_data();
+        let r_core = std::mem::take(&mut self.core);
         
         self.job_sender.send(Box::new(move || {
             r_core.lock().unwrap().imgui_core.shutdown();
             
             message_sender.send(RendererCommand::_SHUTDOWN_DONE).unwrap();
+            
+            true
         })).unwrap();
         
         while let Ok(msg) = self.receiver.recv() {
@@ -359,10 +400,11 @@ impl Renderer {
         }
     }
 }
-// Private
-impl Renderer {
-    fn get_coms_data(&self) -> (Arc<Mutex<RendererCore>>, Sender<RendererCommand>) {
-        (Arc::clone(&self.core), self.message_sender.clone())
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.shutdown();
+        while !self.thread.is_finished() {}
     }
 }
 

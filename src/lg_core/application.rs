@@ -208,8 +208,6 @@ impl Application {
             layer.borrow_mut().on_detach()?;
         }
 
-        self.core.renderer.borrow().shutdown();
-        
         Ok(())
     }
     

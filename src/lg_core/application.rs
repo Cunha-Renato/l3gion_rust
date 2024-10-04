@@ -198,8 +198,6 @@ impl Application {
         LgInput::init();
         FrameTime::init()?;
         
-        self.core.renderer.borrow().init();
-
         Ok(())
     }
 

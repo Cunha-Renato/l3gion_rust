@@ -1,11 +1,14 @@
 use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
 use command::{RendererCommand, SendDrawData, SendInstanceDrawData};
 use glutin::{display::GlDisplay, surface::GlSurface};
-use imgui::sys::ImGuiButtonFlags_PressedOnDragDropHold;
 use imgui_config::{imgui_init, ImGuiCore};
+use material::Material;
+use mesh::Mesh;
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
+use shader::Shader;
 use sllog::error;
+use texture::{Texture, TextureSpecs};
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 
@@ -38,7 +41,6 @@ pub struct CreationWindowInfo<'a> {
 }
 
 pub struct Renderer {
-    asset_manager: Arc<Mutex<AssetManager>>,
     core: Arc<Mutex<RendererCore>>,
     job_sender: Sender<Job>,
     message_sender: Sender<RendererCommand>,
@@ -46,8 +48,58 @@ pub struct Renderer {
 }
 // Public
 impl Renderer {
-    pub fn asset_manager(&self) -> Arc<Mutex<AssetManager>> {
-        Arc::clone(&self.asset_manager)
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn get_texture(&self, uuid: &UUID) -> Result<*const Texture, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .get_texture(uuid)
+    }
+    
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn get_mesh(&self, uuid: &UUID) -> Result<*const Mesh, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .get_mesh(uuid)
+    }
+    
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn get_shader(&self, uuid: &UUID) -> Result<*const Shader, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .get_shader(uuid)
+    }
+    
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn get_material(&self, uuid: &UUID) -> Result<*const Material, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .get_material(uuid)
+    }
+    
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn create_material(&self, uuid: &UUID, name: &str, textures: Vec<String>, shaders: Vec<String>) -> Result<*const Material, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .create_material(name, textures, shaders)
+    }
+    
+    /// Don't store this pointer, it points to a HashMap!
+    pub fn create_texture(&self, name: &str, path: &str, specs: TextureSpecs) -> Result<*const Texture, StdError> {
+        self.core
+            .lock()
+            .unwrap()
+            .asset_manager
+            .create_texture(name, path, specs)
     }
 
     /// Locks the core mutex
@@ -159,24 +211,6 @@ impl Renderer {
         }))
         .unwrap();
     }
-
-    /// Will always block.
-    pub fn shutdown(&self) {
-        let (r_core, message_sender) = self.get_coms_data();
-        
-        self.job_sender.send(Box::new(move || {
-            r_core.lock().unwrap().imgui_core.shutdown();
-            
-            message_sender.send(RendererCommand::_SHUTDOWN_DONE).unwrap();
-        })).unwrap();
-        
-        while let Ok(msg) = self.receiver.recv() {
-            match msg {
-                RendererCommand::_SHUTDOWN_DONE => break,
-                _ => (),
-            }
-        }
-    }
 }
 // Public(crate)
 impl Renderer {
@@ -185,9 +219,6 @@ impl Renderer {
     ) -> Result<(Self, LgWindow), StdError> 
     {
         profile_function!();
-
-        let am = Arc::new(Mutex::new(AssetManager::default()));
-        let asset_manager = Arc::clone(&am);
 
         let (w_sender, w_receiver) = std::sync::mpsc::channel();
         let (core_sender, core_receiver) = std::sync::mpsc::channel();
@@ -199,14 +230,12 @@ impl Renderer {
         let _ = std::thread::spawn(move || {
             optick::register_thread("render_thread");
 
-            asset_manager.lock().unwrap().init().unwrap();
-
             let (window, specs) = init_opengl(window, gl_config).unwrap();
 
             let (imgui_context, imgui_winit) = imgui_init(&window);
             let renderer_core = Arc::new(Mutex::new(RendererCore::new(
                 specs, 
-                Arc::clone(&asset_manager),
+                AssetManager::default(),
                 imgui_context,
                 imgui_winit,
             ).unwrap()));
@@ -225,7 +254,6 @@ impl Renderer {
 
         Ok((
             Self {
-                asset_manager: am,
                 core,
                 job_sender: s_sender,
                 message_sender: r_sender,
@@ -235,23 +263,16 @@ impl Renderer {
         ))
     }
     
-    pub(crate) fn init(&self) {
-        let am = Arc::clone(&self.asset_manager);
-        
-        self.job_sender.send(Box::new(move || am.lock().unwrap().init().unwrap())).unwrap();
-    }
-
     pub(crate) fn begin(&self) {
         let (r_core, _) = self.get_coms_data();
         
         self.job_sender.send(Box::new(move || {
-            let r_core = r_core.lock().unwrap();
+            let mut r_core = r_core.lock().unwrap();
 
             // TODO: Maybe don't do this
-            let mut am = r_core.asset_manager.lock().unwrap();
-            am.init_gl_program().unwrap();
-            am.init_gl_vao().unwrap();                                
-            am.init_gl_texture().unwrap();                                
+            r_core.asset_manager.init_gl_program().unwrap();
+            r_core.asset_manager.init_gl_vao().unwrap();                                
+            r_core.asset_manager.init_gl_texture().unwrap();                                
         }))
         .unwrap();
     }
@@ -267,7 +288,7 @@ impl Renderer {
             r_core.render_pipeline.clear();
             r_core.swap_buffers().unwrap();
 
-            r_core.asset_manager.lock().unwrap().to_destroy();
+            r_core.asset_manager.to_destroy();
 
             message_sender.send(RendererCommand::_END_DONE).unwrap();
         }))
@@ -319,6 +340,24 @@ impl Renderer {
         
         core.imgui_core.handle_event(window, event);
     }
+
+    /// Will always block.
+    pub(crate) fn shutdown(&self) {
+        let (r_core, message_sender) = self.get_coms_data();
+        
+        self.job_sender.send(Box::new(move || {
+            r_core.lock().unwrap().imgui_core.shutdown();
+            
+            message_sender.send(RendererCommand::_SHUTDOWN_DONE).unwrap();
+        })).unwrap();
+        
+        while let Ok(msg) = self.receiver.recv() {
+            match msg {
+                RendererCommand::_SHUTDOWN_DONE => break,
+                _ => (),
+            }
+        }
+    }
 }
 // Private
 impl Renderer {
@@ -339,7 +378,7 @@ struct DrawData {
 pub struct RendererCore {
     imgui_core: ImGuiCore,
 
-    asset_manager: Arc<Mutex<AssetManager>>,
+    asset_manager:AssetManager,
     gl_specs: GlSpecs,
 
     // Material, Mesh, Data
@@ -359,7 +398,7 @@ impl RendererCore {
 impl RendererCore {
     fn new(
         specs: GlSpecs, 
-        asset_manager: Arc<Mutex<AssetManager>>,
+        mut asset_manager: AssetManager,
         mut imgui_context: imgui::Context,
         imgui_winit: imgui_winit_support::WinitPlatform,
     ) -> Result<Self, StdError> 
@@ -381,7 +420,6 @@ impl RendererCore {
             glow::Context::from_loader_function_cstr(|s| specs.gl_display.get_proc_address(s).cast())
         };
 
-        // let imgui_renderer = imgui_glow_renderer::AutoRenderer::initialize(gl_glow, &mut imgui_context)?;
         let mut simple_textures = imgui_glow_renderer::SimpleTextureMap {};
         let imgui_renderer = imgui_glow_renderer::Renderer::initialize(
             &mut gl_glow, 
@@ -397,6 +435,8 @@ impl RendererCore {
             imgui_winit,
             imgui_renderer,
         );
+
+        asset_manager.init().unwrap();
 
         Ok(Self {
             imgui_core,
@@ -467,30 +507,26 @@ impl RendererCore {
         Ok(gl_ubos)
     }
 
-    unsafe fn draw(&self, dd: SendDrawData) -> Result<(), StdError> {
+    unsafe fn draw(&mut self, dd: SendDrawData) -> Result<(), StdError> {
         profile_function!();
 
-        let mut am = self.asset_manager
-            .lock()
-            .unwrap();
-
-        let mesh = am
+        let mesh = self.asset_manager
             .get_mesh(&dd.mesh)?
             .as_ref()
             .unwrap();
 
-        let material = am
+        let material = self.asset_manager
             .get_material(&dd.material)?
             .as_ref()
             .unwrap();
         
         // Program
-        am.init_gl_program()?;
+        self.asset_manager.init_gl_program()?;
         let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
         program.use_prog()?;
 
         // VAO
-        am.init_gl_vao()?;
+        self.asset_manager.init_gl_vao()?;
         let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;
@@ -538,20 +574,18 @@ impl RendererCore {
     unsafe fn draw_instanced(&mut self) -> Result<(), StdError> {
         profile_function!();
 
-        let mut am = self.asset_manager.lock().unwrap();
-
         for (material_uuid, dd) in &self.draw_data {
-            let material = am.get_material(material_uuid)?
+            let material = self.asset_manager.get_material(material_uuid)?
                     .as_ref()
                     .unwrap();
             let instance_vbo = GlBuffer::new(gl::ARRAY_BUFFER)?;
 
             for (mesh_uui, d) in dd {
-                let mesh = am.get_mesh(mesh_uui)?
+                let mesh = self.asset_manager.get_mesh(mesh_uui)?
                     .as_ref()
                     .unwrap();
                 let textures = d.textures.iter()
-                    .map(|uuid| am.get_texture(uuid).unwrap() )
+                    .map(|uuid| self.asset_manager.get_texture(uuid).unwrap() )
                     .collect::<Vec<_>>();
 
                 // Program
@@ -565,7 +599,7 @@ impl RendererCore {
                 vao.index_buffer().bind()?;
                 
                 // Textures
-                am.init_gl_texture()?;
+                self.asset_manager.init_gl_texture()?;
 
                 let last_location = d.first_location;
                 instance_vbo.bind()?;
@@ -663,25 +697,22 @@ impl RendererCore {
 
         if new_data {
             profile_scope!("new_data");
-            let mut am = self.asset_manager
-                .lock()
-                .unwrap();
 
-            let material = am.get_material(&dd.material)?
+            let material = self.asset_manager.get_material(&dd.material)?
                 .as_ref()
                 .unwrap();
             
             // Program
-            am.init_gl_program()?;
+            self.asset_manager.init_gl_program()?;
             let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
             program.use_prog()?;
 
-            let mesh = am.get_mesh(&dd.mesh)?
+            let mesh = self.asset_manager.get_mesh(&dd.mesh)?
                 .as_ref()
                 .unwrap();
 
             // VAO
-            am.init_gl_vao()?;
+            self.asset_manager.init_gl_vao()?;
 
             let textures = material
                 .texture()
@@ -741,23 +772,21 @@ impl RendererCore {
 
         self.set_render_target(0, &specs);
 
-        let mut am = self.asset_manager.lock().unwrap();
-
         // Program
-        let material = am.get_material(&FINAL_PASS_MATERIAL)?
+        let material = self.asset_manager.get_material(&FINAL_PASS_MATERIAL)?
             .as_ref()
             .unwrap();
 
-        am.init_gl_program()?;
+        self.asset_manager.init_gl_program()?;
         let program = material.gl_program.as_ref().ok_or("Couldn't find GlProgram in Material!")?;
         program.use_prog()?;
 
         // VAO
-        let mesh = am.get_mesh(&FINAL_PASS_MESH)?
+        let mesh = self.asset_manager.get_mesh(&FINAL_PASS_MESH)?
             .as_ref()
             .unwrap();
 
-        am.init_gl_vao()?;
+        self.asset_manager.init_gl_vao()?;
         let vao = mesh.gl_vao.as_ref().ok_or("Couldn't find GlVertexArray in Mesh!")?;
         vao.bind()?;
         vao.vertex_buffer().bind()?;

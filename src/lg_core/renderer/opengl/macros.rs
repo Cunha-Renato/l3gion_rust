@@ -22,3 +22,13 @@ macro_rules! gl_check {
         crate::lg_core::renderer::opengl::macros::check_gl_error(stringify!($stmt), file!(), line!(), $desc)
     }};
 }
+
+#[macro_export]
+macro_rules! gl_check_and_print {
+    ($stmt:expr) => {
+        match gl_check!($stmt, "") {
+            Ok(val) => val,
+            Err(e) => sllog::error!("{e}"),
+        }
+    };
+}

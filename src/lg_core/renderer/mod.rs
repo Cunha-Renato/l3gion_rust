@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ffi::CString, sync::{mpsc::{Receiver, Sender}, Arc, Mutex, MutexGuard}};
 use command::{RendererCommand, SendDrawData, SendInstanceDrawData};
 use glutin::{display::GlDisplay, surface::GlSurface};
+use imgui::sys::ImGuiButtonFlags_PressedOnDragDropHold;
 use imgui_config::{imgui_init, ImGuiCore};
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
@@ -8,7 +9,7 @@ use sllog::error;
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
 
-use crate::{glm, profile_function, profile_scope, StdError};
+use crate::{gl_check, gl_check_and_print, glm, profile_function, profile_scope, StdError};
 use super::{asset_manager::AssetManager, uuid::UUID, window::LgWindow};
 
 pub mod mesh;
@@ -368,15 +369,13 @@ impl RendererCore {
             specs.gl_display.get_proc_address(symbol.as_c_str()).cast()
         });
         
-        unsafe {
-            // Debug
-            gl::Enable(gl::DEBUG_OUTPUT);
-            gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
+        // Debug
+        gl_check_and_print!(gl::Enable(gl::DEBUG_OUTPUT));
+        gl_check_and_print!(gl::DebugMessageCallback(Some(debug_callback), std::ptr::null()));
 
-            // Depth, Blend
-            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-            gl::Enable(gl::BLEND);
-        }
+        // Depth, Blend
+        gl_check_and_print!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
+        gl_check_and_print!(gl::Enable(gl::BLEND));
 
         let mut gl_glow = unsafe {
             glow::Context::from_loader_function_cstr(|s| specs.gl_display.get_proc_address(s).cast())
@@ -508,25 +507,25 @@ impl RendererCore {
                 command::TextureOption::UUID(_) => todo!(),
                 command::TextureOption::LG_TEXTURE(_) => todo!(),
                 command::TextureOption::GL_TEXTURE(tex) => {
-                    gl::ActiveTexture(gl::TEXTURE0 + location as u32);
-                    gl::BindTexture(gl::TEXTURE_2D, *tex);
-                    gl::Uniform1i(location as i32, location as i32);
+                    gl_check_and_print!(gl::ActiveTexture(gl::TEXTURE0 + location as u32));
+                    gl_check_and_print!(gl::BindTexture(gl::TEXTURE_2D, *tex));
+                    gl_check_and_print!(gl::Uniform1i(location as i32, location as i32));
                 },
                 command::TextureOption::PREVIOUS_PASS => {
                     let pass = self.render_pipeline.last().unwrap();
                     let tex = self.render_passes.get(pass).unwrap()
                         .color_texture;
                     
-                    gl::ActiveTexture(gl::TEXTURE0 + location as u32);
-                    gl::BindTexture(gl::TEXTURE_2D, tex);
-                    gl::Uniform1i(location as i32, location as i32);
+                    gl_check_and_print!(gl::ActiveTexture(gl::TEXTURE0 + location as u32));
+                    gl_check_and_print!(gl::BindTexture(gl::TEXTURE_2D, tex));
+                    gl_check_and_print!(gl::Uniform1i(location as i32, location as i32));
                 },
             }
         }
         
         {
             profile_scope!("DrawElements");
-            gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+            gl_check_and_print!(gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null()));
         }
         
         vao.unbind_buffers()?;
@@ -576,7 +575,7 @@ impl RendererCore {
                     let location = info.0 + last_location + 1;
                     vao.set_attribute(location, info.1, d.instance_data.1.stride, info.2)?;
                     
-                    gl::VertexAttribDivisor(location, 1);
+                    gl_check_and_print!(gl::VertexAttribDivisor(location, 1));
                 }
 
                 for ubo in &d.uniforms {
@@ -597,13 +596,13 @@ impl RendererCore {
                 
                 {
                     profile_scope!("DrawElementsInstanced");
-                    gl::DrawElementsInstanced(
+                    gl_check_and_print!(gl::DrawElementsInstanced(
                         gl::TRIANGLES, 
                         d.indices_len as i32, 
                         gl::UNSIGNED_INT, 
                         std::ptr::null(), 
                         d.instance_data.0 as i32
-                    );
+                    ));
                 }
                 
                 vao.unbind_buffers()?;
@@ -624,25 +623,26 @@ impl RendererCore {
 
         let viewport = specs.viewport;
         if specs.framebuffer_format == FramebufferFormat::SRGB {
-            gl::Enable(gl::FRAMEBUFFER_SRGB);
+            gl_check_and_print!(gl::Enable(gl::FRAMEBUFFER_SRGB));
         } 
         else {
-            gl::Disable(gl::FRAMEBUFFER_SRGB);
+            gl_check_and_print!(gl::Disable(gl::FRAMEBUFFER_SRGB));
         }
-        gl::BindFramebuffer(gl::FRAMEBUFFER, fb_target);
-        gl::Viewport(viewport.0, viewport.1, viewport.2, viewport.3);
-        gl::ClearColor(specs.clear_color.x, specs.clear_color.y, specs.clear_color.z, specs.clear_color.w);
+
+        gl_check_and_print!(gl::BindFramebuffer(gl::FRAMEBUFFER, fb_target));
+        gl_check_and_print!(gl::Viewport(viewport.0, viewport.1, viewport.2, viewport.3));
+        gl_check_and_print!(gl::ClearColor(specs.clear_color.x, specs.clear_color.y, specs.clear_color.z, specs.clear_color.w));
         
         if specs.clear {
             if specs.depth_test {
-                gl::Enable(gl::DEPTH_TEST);
-                gl::DepthFunc(gl::LESS);
+                gl_check_and_print!(gl::Enable(gl::DEPTH_TEST));
+                gl_check_and_print!(gl::DepthFunc(gl::LESS));
                 
-                gl::ClearDepth(specs.clear_depth);
-                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                gl_check_and_print!(gl::ClearDepth(specs.clear_depth));
+                gl_check_and_print!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
             } else {
-                gl::Disable(gl::DEPTH_TEST);
-                gl::Clear(gl::COLOR_BUFFER_BIT);
+                gl_check_and_print!(gl::Disable(gl::DEPTH_TEST));
+                gl_check_and_print!(gl::Clear(gl::COLOR_BUFFER_BIT));
             }
         }
     }
@@ -764,10 +764,10 @@ impl RendererCore {
         vao.index_buffer().bind()?;
         
         let last_pas = self.render_passes.get(&self.active_pass).unwrap();
-        gl::ActiveTexture(gl::TEXTURE0);
-        gl::BindTexture(gl::TEXTURE_2D, last_pas.color_texture);
+        gl_check_and_print!(gl::ActiveTexture(gl::TEXTURE0));
+        gl_check_and_print!(gl::BindTexture(gl::TEXTURE_2D, last_pas.color_texture));
         
-        gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null());
+        gl_check_and_print!(gl::DrawElements(gl::TRIANGLES, mesh.indices().len() as i32, gl::UNSIGNED_INT, std::ptr::null()));
 
         vao.unbind_buffers()?;
         vao.unbind()?;
@@ -794,13 +794,15 @@ impl RendererCore {
 }
 impl Drop for RendererCore {
     fn drop(&mut self) {
-        loop {
-            let err = unsafe { gl::GetError() };
-            if err == gl::NO_ERROR {
-                break;
+        if cfg!(debug_assertions) {
+            loop {
+                let err = unsafe { gl::GetError() };
+                if err == gl::NO_ERROR {
+                    break;
+                }
+                
+                println!("OpenGL error {:08x}", err)
             }
-            
-            println!("OpenGL error {:08x}", err)
         }
     }
 }

@@ -1,4 +1,6 @@
 type StdError = Box<dyn std::error::Error>;
+extern crate serde;
+extern crate serde_yaml;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

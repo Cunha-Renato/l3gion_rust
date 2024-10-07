@@ -936,6 +936,7 @@ dependencies = [
  "rand",
  "raw-window-handle",
  "rayon",
+ "serde",
  "serializer",
  "sha2",
  "shaderc",

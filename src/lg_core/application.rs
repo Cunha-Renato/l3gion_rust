@@ -10,7 +10,7 @@ pub struct L3gion {
     _event_loop: winit::event_loop::EventLoop<()>,
 }
 impl L3gion {
-    pub fn new(info: ApplicationCreateInfo) -> Result<Self, StdError> {
+    pub fn new(mut info: ApplicationCreateInfo) -> Result<Self, StdError> {
         profile_function!();
         let event_loop = winit::event_loop::EventLoop::new()?;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);

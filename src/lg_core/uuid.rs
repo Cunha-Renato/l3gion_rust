@@ -1,9 +1,10 @@
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
 use crate::StdError;
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct UUID(u128);
 impl UUID {
     pub fn generate() -> Self {

@@ -261,6 +261,8 @@ impl Renderer {
                 imgui_winit,
             ).unwrap()));
 
+            renderer_core.lock().unwrap().set_vsync(window_info.vsync);
+
             // Sending outside this thread.
             core_sender.send(renderer_core).unwrap();
             w_sender.send(window).unwrap();

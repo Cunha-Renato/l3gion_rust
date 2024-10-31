@@ -450,7 +450,7 @@ impl RendererCore {
         gl::load_with(|symbol| {
             let symbol = CString::new(symbol).unwrap();
             warn!("OpenGL symbol: {:?}", symbol);
-            specs.gl_display.get_proc_address(symbol.as_c_str()).cast()
+            specs.gl_display.get_proc_address(symbol.as_c_str()) as *const _
         });
         
         // Debug

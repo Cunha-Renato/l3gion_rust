@@ -42,7 +42,8 @@ pub(crate) fn init_opengl(window: Option<winit::window::Window>, gl_config: glut
     let gl_display = gl_config.display();
 
     let contex_attributes = glutin::context::ContextAttributesBuilder::new()
-        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(4, 2))))
+        // TODO: Make OpenGl version an argument
+        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(2, 1))))
         .with_debug(true)
         .build(Some(raw_window_handle));
 
@@ -51,7 +52,10 @@ pub(crate) fn init_opengl(window: Option<winit::window::Window>, gl_config: glut
 
         let gl_surface = gl_config.display().create_window_surface(&gl_config, &attrs)?;
 
-        (gl_display.create_context(&gl_config, &contex_attributes)?.make_current(&gl_surface)?, gl_surface)
+        (
+            gl_display.create_context(&gl_config, &contex_attributes)?.make_current(&gl_surface)?, 
+            gl_surface
+        )
     };
     
     Ok((window, GlSpecs{
@@ -62,8 +66,7 @@ pub(crate) fn init_opengl(window: Option<winit::window::Window>, gl_config: glut
 }
 
 pub(crate) fn gl_config_picker(configs: Box<dyn Iterator<Item = glutin::config::Config> + '_>) -> glutin::config::Config {
-    configs
-        .reduce(|accum, config| {
+    configs.reduce(|accum, config| {
             if config.num_samples() > accum.num_samples() {
                 config
             } else {

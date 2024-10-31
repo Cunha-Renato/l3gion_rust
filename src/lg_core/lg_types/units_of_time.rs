@@ -129,6 +129,11 @@ impl PartialEq for LgTime {
         (self.value - other.value).abs() < f64::EPSILON
     }
 }
+impl PartialOrd for LgTime {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
 impl From<std::time::Duration> for LgTime {
     fn from(value: std::time::Duration) -> Self {
         todo!()

@@ -7,7 +7,7 @@ use mesh::Mesh;
 use opengl::{gl_buffer::GlBuffer, gl_init::{init_opengl, init_window}, GlSpecs};
 use render_target::{FramebufferFormat, RenderTarget, RenderTargetSpecs};
 use shader::Shader;
-use sllog::error;
+use sllog::{error, warn};
 use texture::{Texture, TextureSpecs};
 use uniform::Uniform;
 use vertex::{LgVertex, VertexInfo};
@@ -449,6 +449,7 @@ impl RendererCore {
     {
         gl::load_with(|symbol| {
             let symbol = CString::new(symbol).unwrap();
+            warn!("OpenGL symbol: {:?}", symbol);
             specs.gl_display.get_proc_address(symbol.as_c_str()).cast()
         });
         

@@ -43,7 +43,7 @@ pub(crate) fn init_opengl(window: Option<winit::window::Window>, gl_config: glut
 
     let contex_attributes = glutin::context::ContextAttributesBuilder::new()
         // TODO: Make OpenGl version an argument
-        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(2, 1))))
+        .with_context_api(glutin::context::ContextApi::OpenGl(Some(glutin::context::Version::new(4, 0))))
         .with_debug(true)
         .build(Some(raw_window_handle));
 

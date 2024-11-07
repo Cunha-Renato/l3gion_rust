@@ -456,6 +456,8 @@ impl RendererCore {
             specs.gl_display.get_proc_address(symbol.as_c_str()) as *const _
         });
         
+        warn!("OpenGL Symbols loaded: {}", _symbol_debug);
+        
         // Debug
         gl_check_and_print!(gl::Enable(gl::DEBUG_OUTPUT));
         gl_check_and_print!(gl::DebugMessageCallback(Some(debug_callback), std::ptr::null()));

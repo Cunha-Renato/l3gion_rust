@@ -38,8 +38,9 @@ impl GlTexture {
             "Failed to load texture!"
         )?;
 
-        gl_check!(gl::GenerateMipmap(gl::TEXTURE_2D), "Failed to generate mip map!")?;
-        gl_check!(gl::GenerateTextureMipmap(self.id), "Failed to generate mip map for texture!")
+        gl_check!(gl::GenerateMipmap(gl::TEXTURE_2D), "Failed to generate mip map!")
+        // TODO: What does the function below does?
+        // gl_check!(gl::GenerateTextureMipmap(self.id), "Failed to generate mip map for texture!")
     }
 }
 impl Drop for GlTexture {

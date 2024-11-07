@@ -447,9 +447,12 @@ impl RendererCore {
         imgui_winit: imgui_winit_support::WinitPlatform,
     ) -> Result<Self, StdError> 
     {
+        let mut _symbol_debug = 0;
+
         gl::load_with(|symbol| {
+            _symbol_debug += 1;
+
             let symbol = CString::new(symbol).unwrap();
-            warn!("OpenGL symbol: {:?}", symbol);
             specs.gl_display.get_proc_address(symbol.as_c_str()) as *const _
         });
         

@@ -17,6 +17,8 @@ impl UUID {
     pub const fn get_value(&self) -> u128 {
         self.0
     }
+    
+    // TODO: This is acting weird. 
     pub const fn is_valid(&self) -> bool {
         self.0 != 0u128
     }
